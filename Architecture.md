@@ -15,7 +15,7 @@ Content/Abandoned/                 Корень собственных ассе�
 Docs/                              Проектные решения и учёт исходников
 ```
 
-В стартовом каркасе один runtime-модуль `Abandoned`. По мере реализации размещать код в `Private/Player`, `Private/Puzzles`, `Private/Progress`, `Private/World` и `Private/Presentation`. Создавать `Public/` при появлении интерфейса для другого модуля. Содержимое организовывать под `/Game/Abandoned/` по назначению (`Maps`, `Devices`, `Environment`, `Characters`, `Cinematics`, `UI`, `Audio`).
+В проекте один runtime-модуль `Abandoned`. `Private/Player` содержит общий контроллер первого лица и профиль движения. `Private/MovementLab` и `Private/TrainingChamber` собирают тестовую геометрию и учебную камеру из общих примитивов `Private/World`. Обычный Play открывает учебную камеру, а стенд движения выбирается параметром карты. Игровой контент организовывать под `/Game/Abandoned/` по назначению (`Maps`, `Devices`, `Environment`, `Characters`, `Cinematics`, `UI`, `Audio`).
 
 ## Игровые системы
 

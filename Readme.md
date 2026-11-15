@@ -12,11 +12,11 @@
 
 ## Текущее состояние
 
-Создан стартовый C++-проект с целями Game и Editor, конфигурацией Vulkan и Enhanced Input. При открытии используется пустая карта движка. Управление, устройства головоломок, игровые карты и интеграция со Steam запланированы.
+В проекте есть две игровые сцены на общем контроллере первого лица. **Play** в редакторе запускает [первую учебную камеру](Docs/TrainingChamber.md) с кубом, нажимной плитой и дверью. Для проверки перемещения есть отдельный [стенд движения с протоколом замеров](Docs/MovementLab.md).
 
 ## Запуск на Windows
 
-1. Установите UE 5.7 через Epic Games Launcher. В Visual Studio 2022 17.14 установите **Game development with C++**, MSVC v143 14.44.35214 и Windows SDK 10.0.22621.0 или новее. [Руководство Epic для UE 5.7](https://dev.epicgames.com/documentation/en-us/unreal-engine/setting-up-visual-studio-development-environment-for-cplusplus-projects-in-unreal-engine?application_version=5.7)
+1. Установите UE 5.7 через Epic Games Launcher. Для сборки нужны MSVC v143 (Visual Studio 2022 17.14, инструментальная цепочка 14.44) и Windows SDK 10.0.22621.0 или новее. Подходит Visual Studio с **Game development with C++** либо Visual Studio Build Tools 2022 с компонентами C++ x64/x86 и Windows SDK. [Руководство Epic для UE 5.7](https://dev.epicgames.com/documentation/en-us/unreal-engine/setting-up-visual-studio-development-environment-for-cplusplus-projects-in-unreal-engine?application_version=5.7)
 2. Клонируйте репозиторий или откройте существующую рабочую копию.
 
    ```powershell
@@ -44,6 +44,7 @@
 
 - [Architecture.md](Architecture.md) описывает структуру проекта и границы игровых систем.
 - [Docs/Design.md](Docs/Design.md) фиксирует требования к ритму, геометрии и первому срезу.
+- [Docs/TrainingChamber.md](Docs/TrainingChamber.md) описывает запуск и проверку первой учебной камеры.
 - [Docs/Assets.md](Docs/Assets.md) описывает проверку и импорт моделей. [Реестр исходников](Docs/AssetInventory.csv)
 - [CONTRIBUTING.md](CONTRIBUTING.md) содержит правила работы и команды проверки Windows-сборки.
 - [AGENTS.md](AGENTS.md) содержит инструкции для агентов, работающих с проектом.

@@ -12,6 +12,8 @@ public class Abandoned : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
+            "EnhancedInput",
+            "InputCore",
         });
     }
 }
