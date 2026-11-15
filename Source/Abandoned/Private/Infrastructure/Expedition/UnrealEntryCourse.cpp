@@ -53,4 +53,10 @@ void TravelToSegment(const UObject* WorldContext, Segment Destination)
     const FString Options = TEXT("game=") + Mode + TEXT("?Chamber=") + WriteSegment(Destination);
     UGameplayStatics::OpenLevel(WorldContext, FName(TEXT("/Engine/Maps/Entry")), true, Options);
 }
+
+void TravelToRadiationPassage(const UObject* WorldContext)
+{
+    UGameplayStatics::OpenLevel(WorldContext, FName(TEXT("/Engine/Maps/Entry")), true,
+        TEXT("game=/Script/Abandoned.VanguardRouteGameMode?Chamber=Passage?RadiationRun=1"));
+}
 }
