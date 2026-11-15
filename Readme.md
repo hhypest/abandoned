@@ -49,6 +49,7 @@
 - [Docs/MechanicsDecisions.md](Docs/MechanicsDecisions.md) фиксирует согласованные правила механик.
 - [Docs/TrainingChamber.md](Docs/TrainingChamber.md) описывает стенд устройств и проверку кубов.
 - [Docs/Testing.md](Docs/Testing.md) содержит ручные сценарии по камерам и команды автопрогонов Vulkan, включая маршрут DEV‑20.
+- [Камера баланса](Docs/Design.md#камера-баланса) доступна в меню **M → Load Balance Chamber**.
 - [Docs/Assets.md](Docs/Assets.md) описывает проверку и импорт моделей. [Реестр исходников](Docs/AssetInventory.csv)
 - [CONTRIBUTING.md](CONTRIBUTING.md) содержит правила работы и команды проверки Windows-сборки.
 - [AGENTS.md](AGENTS.md) содержит инструкции для агентов, работающих с проектом.

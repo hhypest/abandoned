@@ -4,6 +4,7 @@
 #include "Application/Expedition/EntryCourse.h"
 #include "Domain/Expedition/Dev20.h"
 #include "Domain/Puzzles/ChamberCircuit.h"
+#include "Domain/Puzzles/PlateBalance.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
 #include "Player/AbandonedCharacter.h"
@@ -19,6 +20,23 @@ class UPointLightComponent;
 class UStaticMeshComponent;
 class UTrainingChamberLayout;
 
+USTRUCT()
+struct FTrainingPressurePlate
+{
+    GENERATED_BODY()
+
+    UPROPERTY(Transient)
+    TObjectPtr<UBoxComponent> Body;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UStaticMeshComponent> Visual;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UPointLightComponent> Indicator;
+
+    bool bPressed = false;
+};
+
 UCLASS()
 class ATrainingChamberGameMode final : public AGameModeBase
 {
@@ -30,15 +48,17 @@ public:
     void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
     void Tick(float DeltaSeconds) override;
 
-    UBoxComponent* GetPlate() const { return Plate; }
+    UBoxComponent* GetPlate() const { return Plates.IsEmpty() ? nullptr : Plates[0].Body.Get(); }
+    bool IsPressurePlate(const UBoxComponent* Body) const;
     UBoxComponent* GetButton() const { return Button; }
     const UTrainingChamberLayout* GetLayout() const { return Layout; }
     bool IsButtonLatched() const { return Circuit.GetState().ButtonLatched; }
-    float GetMeasuredMass() const { return MeasuredMassKg; }
-    bool IsExitEnabled() const { return Circuit.GetState().ExitEnabled; }
+    float GetMeasuredMass() const { return PlateLoads.IsEmpty() ? 0.0f : PlateLoads[0]; }
+    const TArray<float>& GetPlateLoads() const { return PlateLoads; }
+    bool IsExitEnabled() const;
     bool DidCheckpointFallback() const { return Course.CheckpointFallback; }
     void PressButton();
-    bool IsPlatePressed() const { return Circuit.GetState().PlatePressed; }
+    bool IsPlatePressed() const { return !Plates.IsEmpty() && Plates[0].bPressed; }
     bool IsDoorOpen() const;
     bool HasReachedExit() const { return bReachedExit; }
     bool IsDev20Run() const { return bDev20Run; }
@@ -47,8 +67,9 @@ public:
 
 private:
     void ReturnCube(ATrainingChamberCharacter& Player, int32 Index, bool bUseDispenser = false);
-    float GetPlateMass(const ATrainingChamberCharacter& Player) const;
-    void RefreshPlateVisuals();
+    float GetPlateMass(const ATrainingChamberCharacter& Player, int32 Index) const;
+    void ObserveCircuit(const ATrainingChamberCharacter& Player, float DeltaSeconds);
+    void SetPlatePressed(int32 Index, bool bPressed);
     bool HasStackAtExit() const;
     void SelectLayout(const FString& Options);
     void SaveEntryCheckpoint();
@@ -62,12 +83,14 @@ private:
     };
     void VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
+    void VerifyBalanceChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
     float VerificationElapsed = 0.0f;
     bool bVerifyChamber = false;
     bool bVerificationScreenshotRequested = false;
     bool bVerifyEntryCourse = false;
     bool bVerifyDev20 = false;
+    bool bVerifyBalance = false;
     int32 Dev20TestPhase = 0;
     int32 CourseTestStep = 0;
     float CourseTestTime = 0.0f;
@@ -80,7 +103,7 @@ private:
     TObjectPtr<ADev20Actor> Dev20;
 
     UPROPERTY(Transient)
-    TObjectPtr<UBoxComponent> Plate;
+    TArray<FTrainingPressurePlate> Plates;
 
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> Button;
@@ -97,15 +120,10 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> Door;
 
-    UPROPERTY(Transient)
-    TObjectPtr<UStaticMeshComponent> PlateVisual;
-
-    UPROPERTY(Transient)
-    TObjectPtr<UPointLightComponent> PlateIndicator;
-
-    float MeasuredMassKg = 0.0f;
+    TArray<float> PlateLoads;
     Abandoned::Application::Expedition::CourseStart Course;
     Abandoned::Domain::Puzzles::ChamberCircuit Circuit;
+    Abandoned::Domain::Puzzles::PlateBalance Balance;
     bool bReachedExit = false;
     bool bDev20Run = false;
     bool bDev20Recovering = false;
