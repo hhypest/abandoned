@@ -7,6 +7,36 @@
 class UStaticMesh;
 
 UCLASS(Config=Game, DefaultConfig)
+class UVanguardFlashlightSettings final : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(Config)
+    FVector ShoulderOffset = FVector::ZeroVector;
+
+    UPROPERTY(Config)
+    float IntensityLumens = 0.0f;
+
+    UPROPERTY(Config)
+    float RangeCm = 0.0f;
+
+    UPROPERTY(Config)
+    float InnerConeDegrees = 0.0f;
+
+    UPROPERTY(Config)
+    float OuterConeDegrees = 0.0f;
+
+    bool IsValid() const
+    {
+        return !ShoulderOffset.ContainsNaN() &&
+            FMath::IsFinite(IntensityLumens) && IntensityLumens > 0.0f &&
+            FMath::IsFinite(RangeCm) && RangeCm > 0.0f &&
+            InnerConeDegrees >= 0.0f && OuterConeDegrees > InnerConeDegrees && OuterConeDegrees <= 89.0f;
+    }
+};
+
+UCLASS(Config=Game, DefaultConfig)
 class UVanguardRouteLayout : public UObject
 {
     GENERATED_BODY()

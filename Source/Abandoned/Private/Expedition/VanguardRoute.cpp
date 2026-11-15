@@ -82,6 +82,11 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         return;
     }
+    if (!GetDefault<UVanguardFlashlightSettings>()->IsValid())
+    {
+        ErrorMessage = TEXT("Invalid Vanguard flashlight configuration.");
+        return;
+    }
     Current = ReadSegment(UGameplayStatics::ParseOption(Options, TEXT("Chamber"))) == Segment::Vanguard
         ? Segment::Vanguard : Segment::Passage;
     const auto* Passage = GetDefault<UVanguardPassageLayout>();
@@ -174,9 +179,16 @@ void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerContr
         RestartPlayerAtTransform(Player, FTransform(FRotator::ZeroRotator, Layout->Spawn));
         Player->SetInputMode(FInputModeGameOnly());
         const UVanguardSession* Session = GetSession();
-        if (AVanguardCharacter* Pawn = Cast<AVanguardCharacter>(Player->GetPawn()); Pawn && Session)
+        if (AVanguardCharacter* Pawn = Cast<AVanguardCharacter>(Player->GetPawn()))
         {
-            Pawn->ShoulderLight->SetVisibility(Session->bFlashlightOn);
+            const UVanguardFlashlightSettings& Settings = *GetDefault<UVanguardFlashlightSettings>();
+            USpotLightComponent& Light = *Pawn->ShoulderLight;
+            Light.SetRelativeLocation(Settings.ShoulderOffset);
+            Light.SetIntensity(Settings.IntensityLumens);
+            Light.SetAttenuationRadius(Settings.RangeCm);
+            Light.SetOuterConeAngle(Settings.OuterConeDegrees);
+            Light.SetInnerConeAngle(Settings.InnerConeDegrees);
+            Light.SetVisibility(Session && Session->bFlashlightOn);
         }
     }
 }
@@ -448,13 +460,8 @@ AVanguardCharacter::AVanguardCharacter()
 {
     ShoulderLight = CreateDefaultSubobject<USpotLightComponent>(TEXT("ShoulderFlashlight"));
     ShoulderLight->SetupAttachment(Camera);
-    ShoulderLight->SetRelativeLocation(FVector(4.0, 17.0, -17.0));
     ShoulderLight->SetMobility(EComponentMobility::Movable);
     ShoulderLight->SetIntensityUnits(ELightUnits::Lumens);
-    ShoulderLight->SetIntensity(950.0f);
-    ShoulderLight->SetAttenuationRadius(1350.0f);
-    ShoulderLight->SetInnerConeAngle(15.0f);
-    ShoulderLight->SetOuterConeAngle(30.0f);
     ShoulderLight->SetVisibility(false);
 }
 
