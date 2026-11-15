@@ -1,4 +1,5 @@
 #include "Application/Expedition/EntryCourse.h"
+#include "Application/Expedition/Dev20Transfer.h"
 #include "Application/Puzzles/OpticsCourse.h"
 #include "Domain/Expedition/SuitSupply.h"
 #include "Domain/Puzzles/BallastRules.h"
@@ -179,6 +180,31 @@ void TestPortalTransit()
     static_assert(ObservePortal(false, true, false, true, true, false) == PortalEvent::Interrupted);
     static_assert(ObservePortal(false, true, false, false, true, false) == PortalEvent::None);
 }
+
+void TestDev20Transfer()
+{
+    using Stage = Dev20Stage;
+    static_assert(Dev20Id == "DEV-20");
+    static_assert(Dev20MassKg == 34.0f && Dev20MassKg <= MaximumCarryKg);
+    static_assert(CarrySpeedScale(Dev20MassKg) < CarrySpeedScale(10.0f));
+    Dev20Transfer Transfer;
+    assert(!Transfer.Arrive(Stage::Button));
+    assert(!Transfer.Depart(Stage::Station, false));
+    assert(!Transfer.Depart(Stage::Button, true));
+    assert(Transfer.Depart(Stage::Station, true));
+    assert(!Transfer.Depart(Stage::Station, true));
+    assert(!Transfer.Arrive(Stage::Weight));
+    assert(Transfer.Arrive(Stage::Button));
+    assert(!Transfer.Arrive(Stage::Button));
+    assert(Transfer.Depart(Stage::Button, true));
+    Transfer.RecoverAtStation();
+    assert(!Transfer.Arrive(Stage::Weight));
+    assert(Transfer.Depart(Stage::Station, true));
+    assert(Transfer.Arrive(Stage::Button));
+    assert(Transfer.Depart(Stage::Button, true));
+    assert(Transfer.Arrive(Stage::Weight));
+    assert(!Transfer.Depart(Stage::Weight, true));
+}
 }
 
 int main()
@@ -189,4 +215,5 @@ int main()
     TestPowerSignalsAndOptics();
     TestGravityFields();
     TestPortalTransit();
+    TestDev20Transfer();
 }
