@@ -3,16 +3,19 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformMisc.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "InputCoreTypes.h"
+#include "InputKeyEventArgs.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/CommandLine.h"
@@ -27,6 +30,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogVanguardRoute, Log, All);
 namespace
 {
 using Abandoned::Domain::Expedition::Segment;
+using Abandoned::Domain::Expedition::FallImpact;
 using Abandoned::Infrastructure::Expedition::ReadSegment;
 using Abandoned::Infrastructure::Expedition::TravelToSegment;
 constexpr double DoorTravel = 280.0;
@@ -78,6 +82,11 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         return;
     }
+    if (!GetDefault<UVanguardFlashlightSettings>()->IsValid())
+    {
+        ErrorMessage = TEXT("Invalid Vanguard flashlight configuration.");
+        return;
+    }
     Current = ReadSegment(UGameplayStatics::ParseOption(Options, TEXT("Chamber"))) == Segment::Vanguard
         ? Segment::Vanguard : Segment::Passage;
     const auto* Passage = GetDefault<UVanguardPassageLayout>();
@@ -121,6 +130,7 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         if (UVanguardSession* Session = GetSession())
         {
             Session->Suit.Refill();
+            Session->bFlashlightOn = false;
         }
         const auto DoorVisual = SpawnBlock(Passage->Door, EComponentMobility::Movable);
         Door = DoorVisual.Collision;
@@ -154,6 +164,7 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     bVerifyRoute = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse")) ||
         FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguard"));
     bCaptureRoute = FParse::Param(FCommandLine::Get(), TEXT("CaptureVanguard"));
+    bVerifyFalls = !AtStation() && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardFalls"));
 #endif
     UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard segment ready: %s."), AtStation() ? TEXT("station") : TEXT("passage"));
 }
@@ -162,8 +173,23 @@ void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerContr
 {
     if (Player && (Door || SupplyCabinet))
     {
+        LastGroundHeight.reset();
+        LandingImpact = FallImpact::None;
+        InjuryNoticeSeconds = 0.0f;
         RestartPlayerAtTransform(Player, FTransform(FRotator::ZeroRotator, Layout->Spawn));
         Player->SetInputMode(FInputModeGameOnly());
+        const UVanguardSession* Session = GetSession();
+        if (AVanguardCharacter* Pawn = Cast<AVanguardCharacter>(Player->GetPawn()))
+        {
+            const UVanguardFlashlightSettings& Settings = *GetDefault<UVanguardFlashlightSettings>();
+            USpotLightComponent& Light = *Pawn->ShoulderLight;
+            Light.SetRelativeLocation(Settings.ShoulderOffset);
+            Light.SetIntensity(Settings.IntensityLumens);
+            Light.SetAttenuationRadius(Settings.RangeCm);
+            Light.SetOuterConeAngle(Settings.OuterConeDegrees);
+            Light.SetInnerConeAngle(Settings.InnerConeDegrees);
+            Light.SetVisibility(Session && Session->bFlashlightOn);
+        }
     }
 }
 
@@ -194,8 +220,36 @@ void AVanguardRouteGameMode::Resupply()
     }
 }
 
+void AVanguardRouteGameMode::RecordLanding(double SurfaceHeight)
+{
+    if (AtStation() || !LastGroundHeight)
+    {
+        return;
+    }
+    // Round contact measurements to millimeters so physics noise does not turn a 3 m drop fatal.
+    const double DropCm = FMath::RoundToDouble((*LastGroundHeight - SurfaceHeight) * 10.0) / 10.0;
+    LastGroundHeight.reset();
+    LandingImpact = Abandoned::Domain::Expedition::AssessFall(DropCm);
+    if (LandingImpact != FallImpact::None)
+    {
+        UE_LOG(LogVanguardRoute, Display, TEXT("Passage fall %.1f cm: %s."), DropCm,
+            LandingImpact == FallImpact::Fatal ? TEXT("fatal") : TEXT("minor injury"));
+    }
+}
+
 void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float DeltaSeconds)
 {
+    const UCharacterMovementComponent* Movement = Player.GetCharacterMovement();
+    if (Movement->IsMovingOnGround() && Movement->CurrentFloor.IsWalkableFloor())
+    {
+        LastGroundHeight = Movement->CurrentFloor.HitResult.ImpactPoint.Z;
+    }
+    if (LandingImpact == FallImpact::MinorInjury)
+    {
+        InjuryNoticeSeconds = 2.5f;
+        LandingImpact = FallImpact::None;
+    }
+    InjuryNoticeSeconds = FMath::Max(0.0f, InjuryNoticeSeconds - DeltaSeconds);
     const auto* Passage = GetDefault<UVanguardPassageLayout>();
     const FVector Position = Player.GetActorLocation();
     const bool bNearDoor = FMath::Abs(Position.X - Passage->Door.Center.X) < 385.0 &&
@@ -207,7 +261,8 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
     Door->SetWorldLocation(DoorPosition, true);
 
     UVanguardSession* Session = GetSession();
-    if ((Session && Session->Suit.SpendInPassage(DeltaSeconds)) || Position.Z < -600.0)
+    if (LandingImpact == FallImpact::Fatal || Position.Z < -600.0 ||
+        (Session && Session->Suit.SpendInPassage(DeltaSeconds)))
     {
         bTravelling = true;
         TravelToSegment(this, Segment::Weight);
@@ -237,7 +292,11 @@ void AVanguardRouteGameMode::Tick(float DeltaSeconds)
         TickPassage(*Player, DeltaSeconds);
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyRoute)
+    if (bVerifyFalls && !bTravelling)
+    {
+        VerifyFalls(*Player, DeltaSeconds);
+    }
+    else if (bVerifyRoute && !bTravelling)
     {
         Verify(*Player, DeltaSeconds);
     }
@@ -245,6 +304,73 @@ void AVanguardRouteGameMode::Tick(float DeltaSeconds)
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
+void AVanguardRouteGameMode::VerifyFalls(AVanguardCharacter& Player, float DeltaSeconds)
+{
+    constexpr double DropHeights[] = {250.0, 300.0, 325.0};
+    constexpr double TestPlatformX = 1550.0;
+    VerificationSeconds += DeltaSeconds;
+    if (VerificationSeconds > 15.0f)
+    {
+        UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard fall verification timed out at step %d."), FallTestStep);
+        FPlatformMisc::RequestExitWithStatus(false, 1);
+        bVerifyFalls = false;
+        return;
+    }
+    if (!bPlacedAtTestPlatform)
+    {
+        const double X = TestPlatformX + FallTestStep * 500.0;
+        const FVector FloorProbe(X, 0.0, 0.0);
+        FHitResult Floor;
+        const FCollisionQueryParams Query(SCENE_QUERY_STAT(VanguardTestFloor), false, &Player);
+        UStaticMesh* Cube = Abandoned::Blockout::LoadCube();
+        if (!Cube || !GetWorld()->LineTraceSingleByChannel(Floor, FloorProbe + FVector(0, 0, 50),
+            FloorProbe - FVector(0, 0, 50), ECC_Visibility, Query))
+        {
+            UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard fall verification could not place a test platform."));
+            FPlatformMisc::RequestExitWithStatus(false, 1);
+            bVerifyFalls = false;
+            return;
+        }
+        const double Top = Floor.ImpactPoint.Z + DropHeights[FallTestStep];
+        const auto Platform = Abandoned::Blockout::SpawnBox(*GetWorld(), *Cube, FVector(X, 0, Top - 10.0),
+            FVector(120.0, 140.0, 20.0));
+        if (!IsValid(Platform.Collision))
+        {
+            FPlatformMisc::RequestExitWithStatus(false, 1);
+            bVerifyFalls = false;
+            return;
+        }
+        InjuryNoticeSeconds = 0.0f;
+        LastGroundHeight.reset();
+        Player.PlaceAt(FTransform(FRotator::ZeroRotator,
+            FVector(X, 0, Top + Abandoned::MovementProfile::StandingHalfHeight + 2.0)));
+        bPlacedAtTestPlatform = true;
+        return;
+    }
+    if (Player.GetCharacterMovement()->IsFalling())
+    {
+        const double X = TestPlatformX + FallTestStep * 500.0;
+        bWalkedOffTestPlatform |= Player.GetActorLocation().X > X + 60.0;
+    }
+    else if (bWalkedOffTestPlatform)
+    {
+        if (HasMinorInjuryNotice() != (FallTestStep == 1) || FallTestStep >= 2)
+        {
+            UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard fall verification got the wrong outcome at %.0f cm."),
+                DropHeights[FallTestStep]);
+            FPlatformMisc::RequestExitWithStatus(false, 1);
+            bVerifyFalls = false;
+            return;
+        }
+        UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard fall verified at %.0f cm."), DropHeights[FallTestStep]);
+        ++FallTestStep;
+        bPlacedAtTestPlatform = false;
+        bWalkedOffTestPlatform = false;
+        return;
+    }
+    Player.AddMovementInput(FVector::ForwardVector);
+}
+
 void AVanguardRouteGameMode::Verify(AVanguardCharacter& Player, float DeltaSeconds)
 {
     VerificationSeconds += DeltaSeconds;
@@ -266,6 +392,28 @@ void AVanguardRouteGameMode::Verify(AVanguardCharacter& Player, float DeltaSecon
         if (VerificationSeconds < 0.9f)
         {
             return;
+        }
+        if (FlashlightInputStep < 7)
+        {
+            constexpr bool ExpectedOn[] = {false, true, true, false, false, true, true};
+            auto* PC = Cast<APlayerController>(Player.GetController());
+            if (!PC || Player.IsFlashlightOn() != ExpectedOn[FlashlightInputStep])
+            {
+                UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard shoulder flashlight failed to toggle."));
+                FPlatformMisc::RequestExitWithStatus(false, 1);
+                bVerifyRoute = false;
+                return;
+            }
+            if (FlashlightInputStep == 6)
+            {
+                UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard shoulder flashlight switched on, off and on with F."));
+            }
+            else
+            {
+                const EInputEvent Event = FlashlightInputStep % 2 == 0 ? IE_Pressed : IE_Released;
+                PC->InputKey(FInputKeyEventArgs(nullptr, INPUTDEVICEID_NONE, EKeys::F, Event, FPlatformTime::Cycles64()));
+            }
+            ++FlashlightInputStep;
         }
         Player.AddMovementInput(FVector::ForwardVector);
         const FVector Closed = GetDefault<UVanguardPassageLayout>()->Door.Center;
@@ -291,8 +439,9 @@ void AVanguardRouteGameMode::Verify(AVanguardCharacter& Player, float DeltaSecon
         const float Prior = GetOxygenPercent();
         Player.Interact();
         bMovedToSupply = true;
-        if (Prior < 100.0f && HasResupplied() && GetOxygenPercent() == 100.0f)
+        if (Prior < 100.0f && HasResupplied() && GetOxygenPercent() == 100.0f && Player.IsFlashlightOn())
         {
+            UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard shoulder flashlight stayed on across world travel."));
             UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard verification passed: passage transit and station resupply."));
             FPlatformMisc::RequestExitWithStatus(false, 0);
         }
@@ -307,9 +456,46 @@ void AVanguardRouteGameMode::Verify(AVanguardCharacter& Player, float DeltaSecon
 }
 #endif
 
+AVanguardCharacter::AVanguardCharacter()
+{
+    ShoulderLight = CreateDefaultSubobject<USpotLightComponent>(TEXT("ShoulderFlashlight"));
+    ShoulderLight->SetupAttachment(Camera);
+    ShoulderLight->SetMobility(EComponentMobility::Movable);
+    ShoulderLight->SetIntensityUnits(ELightUnits::Lumens);
+    ShoulderLight->SetVisibility(false);
+}
+
 void AVanguardCharacter::BindAdditionalInput(UEnhancedInputComponent& Input)
 {
     Input.BindAction(MapAction(EKeys::E), ETriggerEvent::Started, this, &AVanguardCharacter::Interact);
+    Input.BindAction(MapAction(EKeys::F), ETriggerEvent::Started, this, &AVanguardCharacter::ToggleFlashlight);
+}
+
+bool AVanguardCharacter::IsFlashlightOn() const
+{
+    return ShoulderLight->IsVisible();
+}
+
+void AVanguardCharacter::ToggleFlashlight()
+{
+    const bool bOn = !IsFlashlightOn();
+    ShoulderLight->SetVisibility(bOn);
+    if (const auto* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>())
+    {
+        if (UVanguardSession* Session = Mode->GetSession())
+        {
+            Session->bFlashlightOn = bOn;
+        }
+    }
+}
+
+void AVanguardCharacter::Landed(const FHitResult& Hit)
+{
+    Super::Landed(Hit);
+    if (AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>())
+    {
+        Mode->RecordLanding(Hit.ImpactPoint.Z);
+    }
 }
 
 bool AVanguardCharacter::CanReachSupply() const
@@ -353,5 +539,11 @@ void AVanguardHUD::DrawHUD()
     else if (Mode->HasResupplied())
     {
         DrawText(TEXT("Supply restored"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 80.0f);
+    }
+    DrawText(Player->IsFlashlightOn() ? TEXT("[F] Shoulder light on") : TEXT("[F] Shoulder light off"),
+        FLinearColor::White, 24.0f, 106.0f);
+    if (Mode->HasMinorInjuryNotice())
+    {
+        DrawText(TEXT("Suit: minor impact injury"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 132.0f);
     }
 }

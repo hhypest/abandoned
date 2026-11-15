@@ -1328,9 +1328,9 @@ bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacemen
             }
         }
         const FCollisionShape Shape = FCollisionShape::MakeBox(FVector(Half));
-        FCollisionQueryParams Clearance(SCENE_QUERY_STAT(CubePlacementClearance), false, &Cube);
-        Clearance.AddIgnoredComponent(Surface);
-        if (GetWorld()->OverlapBlockingTestByProfile(Target, Rotation.Quaternion(), TEXT("PhysicsActor"), Shape, Clearance))
+        FCollisionQueryParams PlacementQuery(SCENE_QUERY_STAT(CubePlacementClearance), false, &Cube);
+        PlacementQuery.AddIgnoredComponent(Surface);
+        if (GetWorld()->OverlapBlockingTestByProfile(Target, Rotation.Quaternion(), TEXT("PhysicsActor"), Shape, PlacementQuery))
         {
             Placement.BlockReason = TEXT("Not enough room for the cube");
             return false;
@@ -1338,7 +1338,7 @@ bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacemen
         // Sweep a small inset so a cube already touching the floor can slide clear of it.
         FHitResult Obstruction;
         if (GetWorld()->SweepSingleByProfile(Obstruction, Current, Target, Rotation.Quaternion(),
-            TEXT("PhysicsActor"), FCollisionShape::MakeBox(FVector(Half - 1.0)), Clearance))
+            TEXT("PhysicsActor"), FCollisionShape::MakeBox(FVector(Half - 1.0)), PlacementQuery))
         {
             Placement.BlockReason = TEXT("Something blocks the placement path");
             return false;
