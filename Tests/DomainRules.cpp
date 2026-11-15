@@ -1,7 +1,9 @@
 #include "Application/Expedition/EntryCourse.h"
 #include "Application/Expedition/Dev20Transfer.h"
+#include "Application/Expedition/PassageProgress.h"
 #include "Application/Puzzles/OpticsCourse.h"
 #include "Domain/Expedition/FallImpact.h"
+#include "Domain/Expedition/RadiationExposure.h"
 #include "Domain/Expedition/SuitSupply.h"
 #include "Domain/Puzzles/BallastRules.h"
 #include "Domain/Puzzles/ChamberCircuit.h"
@@ -111,6 +113,43 @@ void TestFallImpact()
     assert(AssessFall(300.0) == FallImpact::MinorInjury);
     assert(AssessFall(300.1) == FallImpact::Fatal);
     assert(AssessFall(std::numeric_limits<double>::quiet_NaN()) == FallImpact::None);
+}
+
+void TestRadiationExposure()
+{
+    using Position = RadiationPosition;
+    const FlarePattern Pattern{4.0, 2.0, 2.0, 30.0};
+    assert(Pattern.IsValid());
+    const FlarePattern Invalid{0.0, 2.0, 2.0, 30.0};
+    assert(!Invalid.IsValid());
+    RadiationExposure Radiation{Pattern};
+    assert(Radiation.Read(Position::Outside).SecondsToChange == 4.0);
+    assert(!Radiation.Advance(3.0, Position::Outside));
+    assert(Radiation.Read(Position::Outside).DosePercent == 0.0);
+    assert(!Radiation.Advance(1.5, Position::Exposed));
+    const auto Flare = Radiation.Read(Position::Exposed);
+    assert(Flare.FlareActive && Flare.DosePercent == 17.0 && Flare.DosePerSecond == 30.0 && Flare.SecondsToChange == 1.5);
+    assert(!Radiation.Advance(2.0, Position::Sheltered));
+    const auto Shelter = Radiation.Read(Position::Sheltered);
+    assert(!Shelter.FlareActive && Shelter.DosePercent == 17.0 && Shelter.DosePerSecond == 0.0);
+    assert(Shelter.SecondsToChange == 3.5);
+    assert(!Radiation.Advance(std::numeric_limits<double>::quiet_NaN(), Position::Exposed));
+    assert(Radiation.Advance(12.0, Position::Exposed));
+    assert(Radiation.Read(Position::Exposed).DosePercent == RadiationExposure::DoseLimit);
+
+    RadiationExposure Stepwise{Pattern};
+    RadiationExposure Batched{Pattern};
+    for (int Index = 0; Index < 112; ++Index)
+    {
+        assert(!Stepwise.Advance(0.0625, Position::Exposed));
+    }
+    assert(!Batched.Advance(7.0, Position::Exposed));
+    assert(Stepwise.Read(Position::Exposed).DosePercent == Batched.Read(Position::Exposed).DosePercent);
+
+    static_assert(ResolvePassage({}) == PassageOutcome::Continue);
+    static_assert(ResolvePassage({.ReachedExit = true}) == PassageOutcome::EnterSanctuary);
+    static_assert(ResolvePassage({.ReachedExit = true, .RadiationLimitReached = true}) == PassageOutcome::ReturnToCheckpoint);
+    static_assert(ResolvePassage({.Impact = FallImpact::Fatal}) == PassageOutcome::ReturnToCheckpoint);
 }
 
 void TestPowerSignalsAndOptics()
@@ -257,6 +296,7 @@ int main()
     TestCircuitAndBallast();
     TestSupply();
     TestFallImpact();
+    TestRadiationExposure();
     TestPowerSignalsAndOptics();
     TestGravityFields();
     TestPortalTransit();

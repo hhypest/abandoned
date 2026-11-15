@@ -56,7 +56,7 @@ public:
 };
 
 UCLASS(Config=Game, DefaultConfig)
-class UVanguardPassageLayout final : public UVanguardRouteLayout
+class UVanguardPassageLayout : public UVanguardRouteLayout
 {
     GENERATED_BODY()
 
@@ -91,4 +91,29 @@ class UVanguardStationLayout final : public UVanguardRouteLayout
 public:
     UPROPERTY(Config)
     FSceneBlock SupplyCabinet;
+};
+
+UCLASS(Config=Game, DefaultConfig)
+class UVanguardRadiationLayout final : public UVanguardPassageLayout
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(Config)
+    FSceneBlock ExposureBounds;
+
+    UPROPERTY(Config)
+    TArray<FSceneBlock> ShelterBounds;
+
+    UPROPERTY(Config)
+    double QuietSeconds = 0.0;
+
+    UPROPERTY(Config)
+    double FlareSeconds = 0.0;
+
+    UPROPERTY(Config)
+    double QuietDosePerSecond = 0.0;
+
+    UPROPERTY(Config)
+    double FlareDosePerSecond = 0.0;
 };
