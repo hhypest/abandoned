@@ -156,7 +156,9 @@ void AMovementLabGameMode::InitGame(const FString& MapName, const FString& Optio
     ADirectionalLight* Sun = World.SpawnActor<ADirectionalLight>(FVector::ZeroVector, FRotator(-50.0, -35.0, 0.0));
     if (Sun)
     {
-        Sun->GetLightComponent()->SetIntensity(4.0f);
+        ULightComponent* Light = Sun->GetLightComponent();
+        Light->SetMobility(EComponentMobility::Movable);
+        Light->SetIntensity(4.0f);
     }
 
     UE_LOG(LogMovementLab, Display, TEXT("Movement Lab ready: %d trials, gravity %.0f cm/s^2."), TrialCount, World.GetGravityZ());
