@@ -16,7 +16,7 @@ protected:
     void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
-    enum class EMenuAction { Resume, TrainingChamber, MovementLab, PowerLab, GravityLab, Fullscreen, Quit };
+    enum class EMenuAction { Resume, TrainingChamber, MovementLab, PowerLab, GravityLab, PortalLab, Fullscreen, Quit };
 
     void ToggleMenu();
     void CloseMenu();

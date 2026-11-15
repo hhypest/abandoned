@@ -1224,6 +1224,36 @@ UBoxComponent* ATrainingChamberCharacter::GetHeldBody() const
     return Cast<UBoxComponent>(Grip->GetGrabbedComponent());
 }
 
+bool ATrainingChamberCharacter::TransitHeldBody(const FTransform& Through)
+{
+    UBoxComponent* Body = GetHeldBody();
+    if (!Body)
+    {
+        return true;
+    }
+    const float Mass = Body->GetMass();
+    const FTransform Original = Body->GetComponentTransform();
+    const FVector Linear = Body->GetPhysicsLinearVelocity();
+    const FVector Angular = Body->GetPhysicsAngularVelocityInRadians();
+    Grip->ReleaseComponent();
+    Body->SetWorldTransform(Original * Through, false, nullptr, ETeleportType::TeleportPhysics);
+    if (GrabBody(*Body, Mass))
+    {
+        Body->SetPhysicsLinearVelocity(Through.TransformVectorNoScale(Linear));
+        Body->SetPhysicsAngularVelocityInRadians(Through.TransformVectorNoScale(Angular));
+        return true;
+    }
+    Body->SetWorldTransform(Original, false, nullptr, ETeleportType::TeleportPhysics);
+    Body->SetPhysicsLinearVelocity(Linear);
+    Body->SetPhysicsAngularVelocityInRadians(Angular);
+    if (!GrabBody(*Body, Mass))
+    {
+        Body->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+        SetMovementLoad(0.0f);
+    }
+    return false;
+}
+
 APuzzleCube* ATrainingChamberCharacter::GetHeldCube() const
 {
     const UBoxComponent* Held = GetHeldBody();

@@ -138,6 +138,12 @@ void AAbandonedTestController::ToggleMenu()
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
                         [
                             SNew(SButton)
+                            .Text(NSLOCTEXT("TestMenu", "PortalLab", "Load Portal Lab"))
+                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::PortalLab)
+                        ]
+                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                        [
+                            SNew(SButton)
                             .Text_UObject(this, &AAbandonedTestController::GetFullscreenLabel)
                             .IsEnabled_UObject(this, &AAbandonedTestController::CanToggleFullscreen)
                             .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Fullscreen)
@@ -243,6 +249,10 @@ FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
     case EMenuAction::GravityLab:
         CloseMenu();
         UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.GravityLabGameMode"));
+        break;
+    case EMenuAction::PortalLab:
+        CloseMenu();
+        UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.PortalLabGameMode"));
         break;
     case EMenuAction::Fullscreen:
         ToggleFullscreen();

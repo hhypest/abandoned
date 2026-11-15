@@ -125,6 +125,7 @@ protected:
     UPrimitiveComponent* TraceInteractable() const;
     UBoxComponent* GetHeldBody() const;
     bool GrabBody(UBoxComponent& Body, float MassKg);
+    bool TransitHeldBody(const FTransform& Through);
 
 private:
     friend class ATrainingChamberGameMode;

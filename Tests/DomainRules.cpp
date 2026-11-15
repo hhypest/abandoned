@@ -4,6 +4,7 @@
 #include "Domain/Puzzles/BallastRules.h"
 #include "Domain/Puzzles/ChamberCircuit.h"
 #include "Domain/Puzzles/GravityField.h"
+#include "Domain/Puzzles/PortalTransit.h"
 
 #include <cassert>
 #include <limits>
@@ -162,6 +163,22 @@ void TestGravityFields()
     assert(GravityRollDegrees(GravityDirection::Right) == 90.0f);
     assert(GravityRollDegrees(GravityDirection::Up) == 180.0f);
 }
+
+void TestPortalTransit()
+{
+    assert(FitsPortal(0, -53, 118, 145, 30, 90));
+    assert(!FitsPortal(96, 0, 118, 145, 30, 90));
+    assert(!FitsPortal(0, 75, 118, 145, 30, 90));
+    static_assert(ObservePortal(false, false, true, false, true, false) == PortalEvent::None);
+    static_assert(ObservePortal(true, false, true, false, true, false) == PortalEvent::Approach);
+    static_assert(ObservePortal(true, true, false, true, true, true) == PortalEvent::Transfer);
+    static_assert(ObservePortal(true, false, false, true, true, true) == PortalEvent::Transfer);
+    static_assert(ObservePortal(true, true, false, true, false, true) == PortalEvent::Blocked);
+    static_assert(ObservePortal(true, true, false, true, true, false) == PortalEvent::Blocked);
+    static_assert(ObservePortal(false, true, true, false, true, false) == PortalEvent::Interrupted);
+    static_assert(ObservePortal(false, true, false, true, true, false) == PortalEvent::Interrupted);
+    static_assert(ObservePortal(false, true, false, false, true, false) == PortalEvent::None);
+}
 }
 
 int main()
@@ -171,4 +188,5 @@ int main()
     TestSupply();
     TestPowerSignalsAndOptics();
     TestGravityFields();
+    TestPortalTransit();
 }
