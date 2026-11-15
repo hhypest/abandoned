@@ -1,6 +1,7 @@
 #include "Application/Expedition/EntryCourse.h"
 #include "Application/Expedition/Dev20Transfer.h"
 #include "Application/Puzzles/OpticsCourse.h"
+#include "Domain/Expedition/FallImpact.h"
 #include "Domain/Expedition/SuitSupply.h"
 #include "Domain/Puzzles/BallastRules.h"
 #include "Domain/Puzzles/ChamberCircuit.h"
@@ -101,6 +102,15 @@ void TestSupply()
     assert(Supply.Percent() == 100);
     assert(Supply.SpendInPassage(600));
     assert(Supply.Percent() == 0);
+}
+
+void TestFallImpact()
+{
+    assert(AssessFall(0.0) == FallImpact::None);
+    assert(AssessFall(299.9) == FallImpact::None);
+    assert(AssessFall(300.0) == FallImpact::MinorInjury);
+    assert(AssessFall(300.1) == FallImpact::Fatal);
+    assert(AssessFall(std::numeric_limits<double>::quiet_NaN()) == FallImpact::None);
 }
 
 void TestPowerSignalsAndOptics()
@@ -246,6 +256,7 @@ int main()
     TestRouteAndCheckpoint();
     TestCircuitAndBallast();
     TestSupply();
+    TestFallImpact();
     TestPowerSignalsAndOptics();
     TestGravityFields();
     TestPortalTransit();
