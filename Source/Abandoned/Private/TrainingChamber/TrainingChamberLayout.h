@@ -95,6 +95,15 @@ public:
     float PlateActivationMassKg = 0.0f;
 
     UPROPERTY(Config)
+    float PlayerMassKg = 85.0f;
+
+    UPROPERTY(Config)
+    float ThrowImpulse = 4200.0f;
+
+    UPROPERTY(Config)
+    FLinearColor PlacementGhostTint = FLinearColor(0.10, 0.82, 1.0, 0.42);
+
+    UPROPERTY(Config)
     FTrainingBlock ExitZone;
 
     UPROPERTY(Config)
@@ -111,7 +120,9 @@ public:
             [](const FTrainingLight& Light) { return !Light.IsValid(); }) && PlateLight.IsValid() &&
             FMath::IsFinite(PressedLightIntensity) && PressedLightIntensity >= 0.0f &&
             Door.IsValid() && Plate.IsValid() && !Spawn.ContainsNaN() && ExitZone.IsValid() && CubeBounds.IsValid() &&
-            FMath::IsFinite(PlateActivationMassKg) && PlateActivationMassKg > 0.0f && !CubeSpawns.IsEmpty() &&
+            FMath::IsFinite(PlateActivationMassKg) && PlateActivationMassKg > 0.0f &&
+            FMath::IsFinite(PlayerMassKg) && PlayerMassKg > 0.0f &&
+            FMath::IsFinite(ThrowImpulse) && ThrowImpulse > 0.0f && !CubeSpawns.IsEmpty() &&
             !CubeSpawns.ContainsByPredicate([this](const FTrainingCubeSpawn& Cube)
             {
                 return Cube.Center.ContainsNaN() || !GetCubeBounds().IsInside(Cube.Center) ||

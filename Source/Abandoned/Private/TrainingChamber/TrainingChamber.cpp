@@ -6,18 +6,22 @@
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Canvas.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/PointLight.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformMisc.h"
 #include "InputCoreTypes.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "PhysicsEngine/PhysicsHandleComponent.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
+#include "UObject/ConstructorHelpers.h"
 #include "World/Blockout.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTrainingChamber, Log, All);
@@ -195,7 +199,18 @@ float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Pl
     const UTrainingChamberLayout* Layout = GetDefault<UTrainingChamberLayout>();
     const FVector AllowedOffset = Layout->Plate.Size * 0.5 - FVector(10.0);
     const APuzzleCube* Held = Player.GetHeldCube();
-    float MassKg = 0.0f;
+    const UPrimitiveComponent* PlayerSupport = Player.GetCharacterMovement()->IsMovingOnGround()
+        ? Player.GetMovementBase() : nullptr;
+    while (PlayerSupport)
+    {
+        const APuzzleCube* Cube = Cast<APuzzleCube>(PlayerSupport->GetOwner());
+        if (!Cube || !Cube->GetSupport())
+        {
+            break;
+        }
+        PlayerSupport = Cube->GetSupport();
+    }
+    float MassKg = PlayerSupport == Plate ? Layout->PlayerMassKg : 0.0f;
     for (const APuzzleCube* Cube : Cubes)
     {
         if (!IsValid(Cube) || Cube == Held)
@@ -216,6 +231,10 @@ float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Pl
             FMath::Abs(Body->GetPhysicsLinearVelocity().Z) < 30.0)
         {
             MassKg += Cube->GetStackMass();
+            if (PlayerSupport == Body)
+            {
+                MassKg += Layout->PlayerMassKg;
+            }
         }
     }
     return MassKg;
@@ -345,9 +364,30 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
                 Fail(TEXT("Cube collision dimensions or Chaos masses are incorrect"));
                 return;
             }
-            Controller->SetControlRotation(FRotator::ZeroRotator);
+            Player.PlaceAt(FTransform(FRotator::ZeroRotator, FVector(Layout->Plate.Center.X, Layout->Plate.Center.Y,
+                Layout->GetPlateTop() + Abandoned::MovementProfile::StandingHalfHeight + 2.0)));
+            Advance(EVerificationPhase::StandOnPlate, TEXT("Closed door confirmed. Standing on the plate."));
+        }
+        break;
+    case EVerificationPhase::StandOnPlate:
+        if (bPlatePressed)
+        {
+            if (Player.GetMovementBase() != Plate || !FMath::IsNearlyEqual(GetPlateMass(Player), Layout->PlayerMassKg))
+            {
+                Fail(TEXT("The grounded player should be the only load on the plate"));
+                return;
+            }
+            Player.Jump();
+            Advance(EVerificationPhase::JumpOffPlate, TEXT("Player weight pressed the plate."));
+        }
+        break;
+    case EVerificationPhase::JumpOffPlate:
+        if (Player.GetCharacterMovement()->IsFalling() && !bPlatePressed)
+        {
+            Player.StopJumping();
+            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
             Controller->ConsoleCommand(TEXT("Input.+key Mouse2D X=0 Y=1"), false);
-            Advance(EVerificationPhase::LookUp, TEXT("Closed door confirmed. Testing upward mouse movement."));
+            Advance(EVerificationPhase::LookUp, TEXT("Jumping unloaded the plate. Testing upward mouse movement."));
         }
         break;
     case EVerificationPhase::LookUp:
@@ -398,13 +438,27 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
             Cube->GetComponentLocation().Z > Layout->GetPlateTop() + Small.GetHalfSize() &&
             Cube->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(30.0))
         {
+            if (!Player.PlacementGhost->IsVisible() || Player.PreviewSupport.Get() != Plate ||
+                Player.PlacementGhost->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+            {
+                Fail(TEXT("Expected a collision-free placement ghost on the plate"));
+                return;
+            }
+            if (!bGhostScreenshotRequested && FParse::Param(FCommandLine::Get(), TEXT("CapturePlacementGhost")))
+            {
+                FScreenshotRequest::RequestScreenshot(TEXT("PlacementGhost"), false, false);
+                bGhostScreenshotRequested = true;
+                break;
+            }
+            const FVector Expected = Player.PlacementGhost->GetComponentLocation();
             Player.Interact();
-            if (Small.GetSupport() != Plate || Cube->IsSimulatingPhysics())
+            if (Small.GetSupport() != Plate || Cube->IsSimulatingPhysics() ||
+                !Small.GetActorLocation().Equals(Expected, 0.1) || Player.PlacementGhost->IsVisible())
             {
                 Fail(TEXT("Released cube did not snap to the plate"));
                 return;
             }
-            Advance(EVerificationPhase::Open, TEXT("Held cube snapped to the plate."));
+            Advance(EVerificationPhase::Open, TEXT("Held cube snapped to the plate at the ghost position."));
         }
         break;
     case EVerificationPhase::Open:
@@ -436,6 +490,21 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
     case EVerificationPhase::Close:
         if (!bPlatePressed && FMath::IsNearlyEqual(Door->GetComponentLocation().Z, Layout->Door.Center.Z, 0.1))
         {
+            Controller->SetControlRotation(FRotator::ZeroRotator);
+            Controller->ConsoleCommand(TEXT("Input.+key LeftMouseButton"), false);
+            Advance(EVerificationPhase::Throw, TEXT("Removing the cube closed the door. Testing left mouse throw."));
+        }
+        break;
+    case EVerificationPhase::Throw:
+        if (!Player.GetHeldCube())
+        {
+            Controller->ConsoleCommand(TEXT("Input.-key LeftMouseButton"), false);
+            if (Small.GetSupport() || Player.PlacementGhost->IsVisible() ||
+                Cube->GetPhysicsLinearVelocity().X < Layout->ThrowImpulse / Small.GetMassKg() * 0.75)
+            {
+                Fail(TEXT("Left mouse did not throw the free cube forward"));
+                return;
+            }
             Player.ResetChamber();
             if (bReachedExit || Player.GetHeldCube() || FVector::DistSquared(SmallStart, Cube->GetComponentLocation()) > 1.0)
             {
@@ -443,7 +512,7 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
                 return;
             }
             Small.SetActorLocation(FVector(SmallStart.X, SmallStart.Y, -420.0), false, nullptr, ETeleportType::TeleportPhysics);
-            Advance(EVerificationPhase::Return, TEXT("Removing the cube closed the door. Reset restored player and cube."));
+            Advance(EVerificationPhase::Return, TEXT("Left mouse threw the cube forward. Reset restored player and cube."));
         }
         break;
     case EVerificationPhase::Return:
@@ -467,6 +536,11 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
         if (FVector::DistSquared2D(Small.GetActorLocation(), Large.GetActorLocation()) < FMath::Square(14.0) &&
             Cube->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(25.0))
         {
+            if (!Player.PlacementGhost->IsVisible() || Player.PreviewSupport.Get() != Large.GetBody())
+            {
+                Fail(TEXT("Expected a placement ghost on the stack"));
+                return;
+            }
             Player.Interact();
             if (Small.GetSupport() != Large.GetBody() || Large.GetStackMass() != 15.0f)
             {
@@ -528,7 +602,8 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
                     return;
                 }
             }
-            UE_LOG(LogTrainingChamber, Display, TEXT("Verification passed: both cube sizes, plate, staircase, detach and reset."));
+            UE_LOG(LogTrainingChamber, Display,
+                TEXT("Verification passed: player weight, placement ghost, throw, staircase, detach and reset."));
             bVerifyChamber = false;
             FPlatformMisc::RequestExitWithStatus(false, 0);
         }
@@ -543,11 +618,45 @@ ATrainingChamberCharacter::ATrainingChamberCharacter()
     Grip->SetLinearStiffness(1800.0f);
     Grip->SetLinearDamping(180.0f);
     Grip->SetInterpolationSpeed(18.0f);
+
+    PlacementGhost = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PlacementGhost"));
+    PlacementGhost->SetupAttachment(GetRootComponent());
+    PlacementGhost->SetAbsolute(true, true, true);
+    PlacementGhost->SetCollisionProfileName(TEXT("NoCollision"));
+    PlacementGhost->SetGenerateOverlapEvents(false);
+    PlacementGhost->SetCanEverAffectNavigation(false);
+    PlacementGhost->SetCastShadow(false);
+    PlacementGhost->SetReceivesDecals(false);
+    PlacementGhost->SetVisibility(false);
+
+    static const ConstructorHelpers::FObjectFinder<UStaticMesh> PreviewMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
+    static const ConstructorHelpers::FObjectFinder<UMaterialInterface> PreviewMaterial(
+        TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Translucent_OneSided.Widget3DPassThrough_Translucent_OneSided"));
+    if (PreviewMesh.Succeeded() && PreviewMaterial.Succeeded())
+    {
+        PlacementGhost->SetStaticMesh(PreviewMesh.Object);
+        PlacementGhost->SetMaterial(0, PreviewMaterial.Object);
+    }
+}
+
+void ATrainingChamberCharacter::BeginPlay()
+{
+    Super::BeginPlay();
+    if (PlacementGhost->GetStaticMesh())
+    {
+        UMaterialInstanceDynamic* PreviewMaterial = PlacementGhost->CreateDynamicMaterialInstance(0);
+        if (PreviewMaterial)
+        {
+            PreviewMaterial->SetVectorParameterValue(TEXT("TintColorAndOpacity"),
+                GetDefault<UTrainingChamberLayout>()->PlacementGhostTint);
+        }
+    }
 }
 
 void ATrainingChamberCharacter::BindAdditionalInput(UEnhancedInputComponent& Input)
 {
     Input.BindAction(MapAction(EKeys::E), ETriggerEvent::Started, this, &ATrainingChamberCharacter::Interact);
+    Input.BindAction(MapAction(EKeys::LeftMouseButton), ETriggerEvent::Started, this, &ATrainingChamberCharacter::ThrowHeldObject);
     Input.BindAction(MapAction(EKeys::R), ETriggerEvent::Started, this, &ATrainingChamberCharacter::ResetChamber);
 }
 
@@ -626,12 +735,11 @@ bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacemen
 
 const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
 {
-    if (const APuzzleCube* Cube = GetHeldCube())
+    if (GetHeldCube())
     {
-        FPlacement Placement;
-        if (FindPlacement(*Cube, Placement))
+        if (const UBoxComponent* Support = PreviewSupport.Get())
         {
-            return Cast<APuzzleCube>(Placement.Support->GetOwner()) ? TEXT("[E] Snap to cube") : TEXT("[E] Snap to plate");
+            return Cast<APuzzleCube>(Support->GetOwner()) ? TEXT("[E] Snap to cube") : TEXT("[E] Snap to plate");
         }
         return TEXT("[E] Drop cube");
     }
@@ -641,6 +749,21 @@ const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
         return nullptr;
     }
     return Cube->GetMassKg() == 5.0f ? TEXT("[E] Pick up small cube (5 kg)") : TEXT("[E] Pick up large cube (10 kg)");
+}
+
+void ATrainingChamberCharacter::UpdatePlacementGhost(const APuzzleCube* Held)
+{
+    FPlacement Placement;
+    if (IsValid(Held) && FindPlacement(*Held, Placement))
+    {
+        PreviewSupport = Placement.Support;
+        PlacementGhost->SetWorldTransform(FTransform(Placement.Rotation, Placement.Center,
+            FVector(Held->GetHalfSize() / 50.0)));
+        PlacementGhost->SetVisibility(PlacementGhost->GetStaticMesh() != nullptr);
+        return;
+    }
+    PreviewSupport.Reset();
+    PlacementGhost->SetVisibility(false);
 }
 
 void ATrainingChamberCharacter::Interact()
@@ -677,6 +800,7 @@ APuzzleCube* ATrainingChamberCharacter::GetHeldCube() const
 
 void ATrainingChamberCharacter::ReleaseCube()
 {
+    UpdatePlacementGhost(nullptr);
     UPrimitiveComponent* Held = Grip->GetGrabbedComponent();
     if (IsValid(Held))
     {
@@ -686,12 +810,28 @@ void ATrainingChamberCharacter::ReleaseCube()
     }
 }
 
+void ATrainingChamberCharacter::ThrowHeldObject()
+{
+    UPrimitiveComponent* Held = Grip->GetGrabbedComponent();
+    if (!IsValid(Held) || !Held->IsSimulatingPhysics())
+    {
+        return;
+    }
+
+    const FVector Direction = GetViewRotation().Vector();
+    const FVector CarryVelocity = GetVelocity();
+    ReleaseCube();
+    Held->SetPhysicsLinearVelocity(CarryVelocity);
+    Held->AddImpulse(Direction * GetDefault<UTrainingChamberLayout>()->ThrowImpulse);
+}
+
 void ATrainingChamberCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     const APuzzleCube* Held = GetHeldCube();
     if (!IsValid(Held))
     {
+        UpdatePlacementGhost(nullptr);
         return;
     }
 
@@ -708,6 +848,7 @@ void ATrainingChamberCharacter::Tick(float DeltaSeconds)
         return;
     }
     Grip->SetTargetLocationAndRotation(Origin + Direction * Distance, FRotator(0.0, GetViewRotation().Yaw, 0.0));
+    UpdatePlacementGhost(Held);
 }
 
 void ATrainingChamberCharacter::ResetChamber()
@@ -741,10 +882,10 @@ void ATrainingChamberHUD::DrawHUD()
     }
 
     DrawText(TEXT("TRAINING CHAMBER"), FLinearColor::White, 24.0f, 24.0f, nullptr, 1.2f);
-    DrawText(TEXT("WASD / mouse   Space jump   E pick up / place   R reset   M test menu"), FLinearColor::White, 24.0f, 52.0f);
+    DrawText(TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   M test menu"), FLinearColor::White, 24.0f, 52.0f);
     const TCHAR* Status = Chamber->HasReachedExit() ? TEXT("Exit reached") :
         (Chamber->IsDoorOpen() ? TEXT("Exit open") :
-        (Chamber->IsPlatePressed() ? TEXT("Exit opening") : TEXT("Put the cube on the pressure plate")));
+        (Chamber->IsPlatePressed() ? TEXT("Exit opening") : TEXT("Weigh down the pressure plate")));
     DrawText(Status, FLinearColor(1.0, 0.68, 0.23), 24.0f, 76.0f);
 
     const float CenterX = Canvas->ClipX * 0.5f;

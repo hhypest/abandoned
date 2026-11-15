@@ -6,6 +6,7 @@
 #include "GameFramework/GameUserSettings.h"
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
@@ -129,6 +130,12 @@ void AAbandonedTestController::ToggleMenu()
                             .IsEnabled_UObject(this, &AAbandonedTestController::CanToggleFullscreen)
                             .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Fullscreen)
                         ]
+                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                        [
+                            SNew(SButton)
+                            .Text(NSLOCTEXT("TestMenu", "Quit", "Quit Game"))
+                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Quit)
+                        ]
                     ]
                 ]
             ]
@@ -219,6 +226,10 @@ FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
         break;
     case EMenuAction::Fullscreen:
         ToggleFullscreen();
+        break;
+    case EMenuAction::Quit:
+        CloseMenu();
+        UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
         break;
     }
     return FReply::Handled();
