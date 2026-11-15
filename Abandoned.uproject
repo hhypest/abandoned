@@ -15,6 +15,10 @@
   ],
   "Plugins": [
     {
+      "Name": "AndroidFileServer",
+      "Enabled": false
+    },
+    {
       "Name": "EnhancedInput",
       "Enabled": true
     }
