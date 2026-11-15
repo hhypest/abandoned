@@ -61,26 +61,24 @@ void APuzzleCube::SetVisualMaterial(UMaterialInterface& Material)
 
 ECubeStackBlock APuzzleCube::GetStackBlock(const APuzzleCube& Upper) const
 {
-    if (Upper.GetHalfSize() > GetHalfSize())
-    {
-        return ECubeStackBlock::Size;
-    }
-    if (StackedCube.IsValid())
-    {
-        return ECubeStackBlock::Occupied;
-    }
-    if (GetActorUpVector().Z < 0.995 ||
-        Body->GetPhysicsLinearVelocity().SizeSquared() > FMath::Square(25.0) ||
-        Body->GetPhysicsAngularVelocityInDegrees().SizeSquared() > FMath::Square(10.0))
-    {
-        return ECubeStackBlock::Unstable;
-    }
-    const UBoxComponent* Below = Support.Get();
-    if (Below)
+    const bool bSettled = GetActorUpVector().Z >= 0.995 &&
+        Body->GetPhysicsLinearVelocity().SizeSquared() <= FMath::Square(25.0) &&
+        Body->GetPhysicsAngularVelocityInDegrees().SizeSquared() <= FMath::Square(10.0);
+    int Depth = 1;
+    for (const UBoxComponent* Below = Support.Get(); Below && Depth < 3; ++Depth)
     {
         const APuzzleCube* LowerCube = Cast<APuzzleCube>(Below->GetOwner());
-        const UBoxComponent* LowerSupport = LowerCube ? LowerCube->GetSupport() : nullptr;
-        return LowerSupport && Cast<APuzzleCube>(LowerSupport->GetOwner()) ? ECubeStackBlock::Height : ECubeStackBlock::None;
+        if (!LowerCube)
+        {
+            break;
+        }
+        Below = LowerCube->GetSupport();
+    }
+    const auto Block = Abandoned::Domain::Puzzles::AssessStack(GetHalfSize(), Upper.GetHalfSize(),
+        StackedCube.IsValid(), bSettled, Depth);
+    if (Block != ECubeStackBlock::None || Support.IsValid())
+    {
+        return Block;
     }
 
     const FVector Center = GetActorLocation();

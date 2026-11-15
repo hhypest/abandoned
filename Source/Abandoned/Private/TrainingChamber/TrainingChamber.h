@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Application/Expedition/EntryCourse.h"
+#include "Domain/Puzzles/ChamberCircuit.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
 #include "Player/AbandonedCharacter.h"
@@ -29,12 +31,12 @@ public:
     UBoxComponent* GetPlate() const { return Plate; }
     UBoxComponent* GetButton() const { return Button; }
     const UTrainingChamberLayout* GetLayout() const { return Layout; }
-    bool IsButtonLatched() const { return bButtonLatched; }
+    bool IsButtonLatched() const { return Circuit.GetState().ButtonLatched; }
     float GetMeasuredMass() const { return MeasuredMassKg; }
-    bool IsExitEnabled() const { return bExitEnabled; }
-    bool DidCheckpointFallback() const { return bCheckpointFallback; }
+    bool IsExitEnabled() const { return Circuit.GetState().ExitEnabled; }
+    bool DidCheckpointFallback() const { return Course.CheckpointFallback; }
     void PressButton();
-    bool IsPlatePressed() const { return bPlatePressed; }
+    bool IsPlatePressed() const { return Circuit.GetState().PlatePressed; }
     bool IsDoorOpen() const;
     bool HasReachedExit() const { return bReachedExit; }
     void ResetChamber(ATrainingChamberCharacter& Player);
@@ -92,13 +94,9 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UPointLightComponent> PlateIndicator;
 
-    float PlateContactSeconds = 0.0f;
     float MeasuredMassKg = 0.0f;
-    FString ChamberId;
-    bool bButtonLatched = false;
-    bool bExitEnabled = false;
-    bool bCheckpointFallback = false;
-    bool bPlatePressed = false;
+    Abandoned::Application::Expedition::CourseStart Course;
+    Abandoned::Domain::Puzzles::ChamberCircuit Circuit;
     bool bReachedExit = false;
 };
 

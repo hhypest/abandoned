@@ -2,59 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Puzzles/PuzzleCube.h"
+#include "World/SceneLayout.h"
 #include "TrainingChamberLayout.generated.h"
-
-USTRUCT()
-struct FTrainingBlock
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    FVector Center = FVector::ZeroVector;
-
-    UPROPERTY()
-    FVector Size = FVector::ZeroVector;
-
-    UPROPERTY()
-    bool bCollision = true;
-
-    UPROPERTY()
-    FName Finish = NAME_None;
-
-    bool IsValid() const
-    {
-        return !Center.ContainsNaN() && !Size.ContainsNaN() && Size.GetMin() > 0.0;
-    }
-};
-
-USTRUCT()
-struct FTrainingFinish
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    FName Name = NAME_None;
-
-    UPROPERTY()
-    FLinearColor Tint = FLinearColor::White;
-
-    UPROPERTY()
-    float Roughness = 0.5f;
-
-    UPROPERTY()
-    float Metallic = 0.0f;
-
-    UPROPERTY()
-    float Glow = 0.0f;
-
-    bool IsValid() const
-    {
-        return !Name.IsNone() && FMath::IsFinite(Roughness) && FMath::IsWithinInclusive(Roughness, 0.0f, 1.0f) &&
-            FMath::IsFinite(Metallic) && FMath::IsWithinInclusive(Metallic, 0.0f, 1.0f) &&
-            FMath::IsFinite(Glow) && Glow >= 0.0f && FMath::IsFinite(Tint.R) && FMath::IsFinite(Tint.G) &&
-            FMath::IsFinite(Tint.B) && FMath::IsFinite(Tint.A);
-    }
-};
 
 USTRUCT()
 struct FTrainingCubeSpawn
@@ -71,31 +20,6 @@ struct FTrainingCubeSpawn
     FVector Outlet = FVector::ZeroVector;
 };
 
-USTRUCT()
-struct FTrainingLight
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    FVector Position = FVector::ZeroVector;
-
-    UPROPERTY()
-    float Intensity = 0.0f;
-
-    UPROPERTY()
-    float Radius = 0.0f;
-
-    UPROPERTY()
-    FLinearColor Color = FLinearColor::White;
-
-    bool IsValid() const
-    {
-        return !Position.ContainsNaN() && FMath::IsFinite(Intensity) && Intensity >= 0.0f &&
-            FMath::IsFinite(Radius) && Radius > 0.0f &&
-            FMath::IsFinite(Color.R) && FMath::IsFinite(Color.G) && FMath::IsFinite(Color.B) && FMath::IsFinite(Color.A);
-    }
-};
-
 UCLASS(Config=Game, DefaultConfig)
 class UTrainingChamberLayout : public UObject
 {
@@ -103,13 +27,13 @@ class UTrainingChamberLayout : public UObject
 
 public:
     UPROPERTY(Config)
-    TArray<FTrainingBlock> Room;
+    TArray<FSceneBlock> Room;
 
     UPROPERTY(Config)
-    TArray<FTrainingLight> Lights;
+    TArray<FSceneLight> Lights;
 
     UPROPERTY(Config)
-    TArray<FTrainingFinish> Finishes;
+    TArray<FSceneFinish> Finishes;
 
     UPROPERTY(Config)
     FString Title = TEXT("TRAINING CHAMBER");
@@ -124,22 +48,22 @@ public:
     bool bRequiresButton = false;
 
     UPROPERTY(Config)
-    FTrainingBlock Button;
+    FSceneBlock Button;
 
     UPROPERTY(Config)
-    FTrainingBlock StackZone;
+    FSceneBlock StackZone;
 
     UPROPERTY(Config)
-    FTrainingLight PlateLight;
+    FSceneLight PlateLight;
 
     UPROPERTY(Config)
     float PressedLightIntensity = 0.0f;
 
     UPROPERTY(Config)
-    FTrainingBlock Door;
+    FSceneBlock Door;
 
     UPROPERTY(Config)
-    FTrainingBlock Plate;
+    FSceneBlock Plate;
 
     UPROPERTY(Config)
     FVector Spawn = FVector::ZeroVector;
@@ -166,10 +90,10 @@ public:
     FLinearColor BlockedGhostTint = FLinearColor(0.90, 0.10, 0.14, 0.48);
 
     UPROPERTY(Config)
-    FTrainingBlock ExitZone;
+    FSceneBlock ExitZone;
 
     UPROPERTY(Config)
-    FTrainingBlock CubeBounds;
+    FSceneBlock CubeBounds;
 
     UPROPERTY(Config)
     bool bDispenseCubes = false;
@@ -182,9 +106,9 @@ public:
     bool IsValid() const
     {
         return !Room.IsEmpty() && !Room.ContainsByPredicate(
-            [](const FTrainingBlock& Block) { return !Block.IsValid(); }) && !Lights.ContainsByPredicate(
-            [](const FTrainingLight& Light) { return !Light.IsValid(); }) && PlateLight.IsValid() &&
-            !Finishes.ContainsByPredicate([](const FTrainingFinish& Finish) { return !Finish.IsValid(); }) &&
+            [](const FSceneBlock& Block) { return !Block.IsValid(); }) && !Lights.ContainsByPredicate(
+            [](const FSceneLight& Light) { return !Light.IsValid(); }) && PlateLight.IsValid() &&
+            !Finishes.ContainsByPredicate([](const FSceneFinish& Finish) { return !Finish.IsValid(); }) &&
             FMath::IsFinite(PressedLightIntensity) && PressedLightIntensity >= 0.0f &&
             Door.IsValid() && Plate.IsValid() && !Spawn.ContainsNaN() && ExitZone.IsValid() && CubeBounds.IsValid() &&
             FMath::IsFinite(PlateActivationMassKg) && PlateActivationMassKg > 0.0f &&
@@ -201,7 +125,7 @@ public:
     }
 
 private:
-    static FBox MakeBounds(const FTrainingBlock& Block)
+    static FBox MakeBounds(const FSceneBlock& Block)
     {
         return FBox(Block.Center - Block.Size * 0.5, Block.Center + Block.Size * 0.5);
     }
