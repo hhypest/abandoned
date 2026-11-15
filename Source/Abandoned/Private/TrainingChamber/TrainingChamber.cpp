@@ -256,7 +256,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         Layout->bRequiresStack && HasStackAtExit(), DeltaSeconds);
     if (bPreviouslyPressed != IsPlatePressed())
     {
-        SetPlatePressed(IsPlatePressed());
+        RefreshPlateVisuals();
     }
     FVector DoorPosition = Door->GetComponentLocation();
     const bool bClosing = DoorPosition.Z > Layout->Door.Center.Z && !IsExitEnabled();
@@ -362,14 +362,15 @@ bool ATrainingChamberGameMode::IsDoorOpen() const
     return IsValid(Door) && Door->GetComponentLocation().Z >= Layout->Door.Center.Z + DoorTravel - 2.0;
 }
 
-void ATrainingChamberGameMode::SetPlatePressed(bool bPressed)
+void ATrainingChamberGameMode::RefreshPlateVisuals()
 {
-    PlateVisual->SetRelativeLocation(FVector(0.0, 0.0, IsPlatePressed() ? -4.0 : 0.0));
+    const bool bPressed = IsPlatePressed();
+    PlateVisual->SetRelativeLocation(FVector(0.0, 0.0, bPressed ? -4.0 : 0.0));
     if (PlateIndicator)
     {
-        PlateIndicator->SetIntensity(IsPlatePressed() ? Layout->PressedLightIntensity : Layout->PlateLight.Intensity);
+        PlateIndicator->SetIntensity(bPressed ? Layout->PressedLightIntensity : Layout->PlateLight.Intensity);
     }
-    UE_LOG(LogTrainingChamber, Display, TEXT("Pressure plate %s."), IsPlatePressed() ? TEXT("pressed") : TEXT("released"));
+    UE_LOG(LogTrainingChamber, Display, TEXT("Pressure plate %s."), bPressed ? TEXT("pressed") : TEXT("released"));
 }
 
 void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int32 Index, bool bUseDispenser)
@@ -394,15 +395,16 @@ void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
     {
         ReturnCube(Player, Index);
     }
-    if (IsPlatePressed() && IsValid(PlateVisual))
+    const bool bWasPressed = IsPlatePressed();
+    Circuit.Reset();
+    if (bWasPressed && IsValid(PlateVisual))
     {
-        SetPlatePressed(false);
+        RefreshPlateVisuals();
     }
     if (IsValid(Door))
     {
         Door->SetWorldLocation(Layout->Door.Center, false, nullptr, ETeleportType::TeleportPhysics);
     }
-    Circuit.Reset();
     if (ButtonVisual)
     {
         ButtonVisual->SetRelativeLocation(FVector::ZeroVector);
@@ -700,8 +702,23 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
                 Fail(TEXT("The grounded player should be the only load on the plate"));
                 return;
             }
+            const FVector OnPlate = Player.GetActorLocation();
+            Player.ResetChamber();
+            if (IsPlatePressed() || IsExitEnabled() || !PlateVisual->GetRelativeLocation().IsNearlyZero() ||
+                (PlateIndicator && !FMath::IsNearlyEqual(PlateIndicator->Intensity, Layout->PlateLight.Intensity)))
+            {
+                Fail(TEXT("Reset left the pressure plate active"));
+                return;
+            }
+            Player.PlaceAt(FTransform(FRotator::ZeroRotator, OnPlate + FVector(0.0, 0.0, 2.0)));
+            Advance(EVerificationPhase::StandAfterReset, TEXT("Reset released the loaded plate and restored its visual and indicator."));
+        }
+        break;
+    case EVerificationPhase::StandAfterReset:
+        if (IsPlatePressed())
+        {
             Player.Jump();
-            Advance(EVerificationPhase::JumpOffPlate, TEXT("Player weight pressed the plate."));
+            Advance(EVerificationPhase::JumpOffPlate, TEXT("The plate can be pressed again after reset."));
         }
         break;
     case EVerificationPhase::JumpOffPlate:

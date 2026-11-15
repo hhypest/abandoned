@@ -44,7 +44,7 @@ public:
 private:
     void ReturnCube(ATrainingChamberCharacter& Player, int32 Index, bool bUseDispenser = false);
     float GetPlateMass(const ATrainingChamberCharacter& Player) const;
-    void SetPlatePressed(bool bPressed);
+    void RefreshPlateVisuals();
     bool HasStackAtExit() const;
     void SelectLayout(const FString& Options);
     void SaveEntryCheckpoint();
@@ -53,7 +53,7 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
     enum class EVerificationPhase
     {
-        Initial, StandOnPlate, JumpOffPlate, LookUp, LookDown, Carry, Open, Cross, Close, Throw,
+        Initial, StandOnPlate, StandAfterReset, JumpOffPlate, LookUp, LookDown, Carry, Open, Cross, Close, Throw,
         Return, CarryToStack, StartAscent, JumpToStack, JumpToLedge, RemoveSupport
     };
     void VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
