@@ -7,6 +7,7 @@
 #include "TrainingChamber.generated.h"
 
 class ATrainingChamberCharacter;
+class APuzzleCube;
 class UBoxComponent;
 class UPhysicsHandleComponent;
 class UPointLightComponent;
@@ -23,19 +24,23 @@ public:
     void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
     void Tick(float DeltaSeconds) override;
 
-    UBoxComponent* GetCube() const { return Cube; }
+    UBoxComponent* GetPlate() const { return Plate; }
     bool IsPlatePressed() const { return bPlatePressed; }
     bool IsDoorOpen() const;
     bool HasReachedExit() const { return bReachedExit; }
     void ResetChamber(ATrainingChamberCharacter& Player);
 
 private:
-    void ReturnCube(ATrainingChamberCharacter& Player);
-    bool CubeIsOnPlate(const ATrainingChamberCharacter& Player) const;
+    void ReturnCube(ATrainingChamberCharacter& Player, int32 Index);
+    float GetPlateMass(const ATrainingChamberCharacter& Player) const;
     void SetPlatePressed(bool bPressed);
 
 #if WITH_DEV_AUTOMATION_TESTS
-    enum class EVerificationPhase { Initial, LookUp, LookDown, Carry, Open, Cross, Close, Return };
+    enum class EVerificationPhase
+    {
+        Initial, LookUp, LookDown, Carry, Open, Cross, Close, Return, CarryToStack, StartAscent,
+        JumpToStack, JumpToLedge, RemoveSupport
+    };
     void VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
     float VerificationElapsed = 0.0f;
@@ -43,7 +48,10 @@ private:
 #endif
 
     UPROPERTY(Transient)
-    TObjectPtr<UBoxComponent> Cube;
+    TArray<TObjectPtr<APuzzleCube>> Cubes;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UBoxComponent> Plate;
 
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> Door;
@@ -66,8 +74,9 @@ class ATrainingChamberCharacter final : public AAbandonedCharacter
 
 public:
     ATrainingChamberCharacter();
-    bool IsHoldingCube() const;
-    UBoxComponent* FindReachableCube() const;
+    APuzzleCube* GetHeldCube() const;
+    APuzzleCube* FindReachableCube() const;
+    const TCHAR* GetPlacementPrompt() const;
     void ReleaseCube();
 
 protected:
@@ -78,6 +87,13 @@ protected:
 
 private:
     friend class ATrainingChamberGameMode;
+    struct FPlacement
+    {
+        UBoxComponent* Support = nullptr;
+        FVector Center;
+        FRotator Rotation;
+    };
+    bool FindPlacement(const APuzzleCube& Cube, FPlacement& Placement) const;
     void Interact();
     void ResetChamber();
     ATrainingChamberGameMode* GetChamber() const;

@@ -1,4 +1,5 @@
 #include "MovementLab.h"
+#include "Player/AbandonedTestController.h"
 
 #include "Player/MovementProfile.h"
 #include "World/Blockout.h"
@@ -88,6 +89,7 @@ void AddPlatform(UWorld& World, UStaticMesh& Cube, double StartX, double EndX, d
 
 AMovementLabGameMode::AMovementLabGameMode()
 {
+    PlayerControllerClass = AAbandonedTestController::StaticClass();
     DefaultPawnClass = AMovementLabCharacter::StaticClass();
     HUDClass = AMovementLabHUD::StaticClass();
 }
@@ -323,7 +325,7 @@ void AMovementLabHUD::DrawHUD()
     const FVector Location = Player->GetActorLocation();
     DrawText(FString::Printf(TEXT("Movement Lab   %d/%d   %s"), Index + 1, TrialCount, Trials[Index].Title),
         FLinearColor::White, 24.0f, 24.0f, nullptr, 1.4f);
-    DrawText(TEXT("WASD / mouse   Space jump   Shift sprint   Alt slow   Ctrl crouch   Q / E trial   R reset"),
+    DrawText(TEXT("WASD / mouse   Space jump   Shift sprint   Alt slow   Ctrl crouch   Q / E trial   R reset   M test menu"),
         FLinearColor::White, 24.0f, 56.0f);
     FString Measurements = FString::Printf(TEXT("Speed %.0f cm/s   Capsule center Z %.1f cm"),
         Player->GetVelocity().Size2D(), Location.Z);

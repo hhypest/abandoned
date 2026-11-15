@@ -14,6 +14,8 @@ public class Abandoned : ModuleRules
             "Engine",
             "EnhancedInput",
             "InputCore",
+            "Slate",
+            "SlateCore",
         });
     }
 }
