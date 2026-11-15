@@ -5,7 +5,7 @@
 
 namespace Abandoned::Domain::Expedition
 {
-enum class Segment { Stairs, Button, Weight, Passage, Vanguard, Sandbox };
+enum class Segment { Stairs, Button, Weight, Passage, Vanguard, Sandbox, Balance };
 
 constexpr std::string_view SegmentKey(Segment Value)
 {
@@ -17,6 +17,7 @@ constexpr std::string_view SegmentKey(Segment Value)
     case Segment::Passage: return "Passage";
     case Segment::Vanguard: return "Vanguard";
     case Segment::Sandbox: return "Sandbox";
+    case Segment::Balance: return "Balance";
     }
     return {};
 }
@@ -24,7 +25,7 @@ constexpr std::string_view SegmentKey(Segment Value)
 constexpr std::optional<Segment> ParseSegment(std::string_view Key)
 {
     constexpr Segment Route[] = {Segment::Stairs, Segment::Button, Segment::Weight,
-        Segment::Passage, Segment::Vanguard, Segment::Sandbox};
+        Segment::Passage, Segment::Vanguard, Segment::Sandbox, Segment::Balance};
     for (Segment Value : Route)
     {
         if (Key == SegmentKey(Value))

@@ -6,6 +6,7 @@
 #include "Domain/Puzzles/ChamberCircuit.h"
 #include "Domain/Puzzles/GravityField.h"
 #include "Domain/Puzzles/PortalTransit.h"
+#include "Domain/Puzzles/PlateBalance.h"
 
 #include <cassert>
 #include <limits>
@@ -205,6 +206,39 @@ void TestDev20Transfer()
     assert(Transfer.Arrive(Stage::Weight));
     assert(!Transfer.Depart(Stage::Weight, true));
 }
+
+void TestPlateBalance()
+{
+    constexpr PlateBalanceRules Rules{30.0f, 0.01f};
+    constexpr float Underload[] = {5, 5, 5};
+    constexpr float Uneven[] = {20, 10, 0};
+    constexpr float Target[] = {10, 10, 10};
+    constexpr float PlayerLoad[] = {10, 100, 10};
+    const float Invalid[] = {10, std::numeric_limits<float>::quiet_NaN(), 10};
+    PlateBalance Balance;
+    Balance.Observe(Rules, {}, 1.0f);
+    assert(!Balance.IsBalanced());
+    Balance.Observe(Rules, Underload, 1.0f);
+    assert(!Balance.IsBalanced());
+    Balance.Observe(Rules, Uneven, 1.0f);
+    assert(!Balance.IsBalanced());
+    Balance.Observe(Rules, Target, 0.15f);
+    assert(!Balance.IsBalanced());
+    Balance.Observe(Rules, Target, 0.10f);
+    assert(Balance.IsBalanced());
+    Balance.Observe(Rules, PlayerLoad, 0.0f);
+    assert(!Balance.IsBalanced());
+    Balance.Observe(Rules, Target, 0.15f);
+    Balance.Observe(Rules, Invalid, 0.0f);
+    Balance.Observe(Rules, Target, 0.15f);
+    assert(!Balance.IsBalanced());
+    Balance.Observe(Rules, Target, 1.0f);
+    assert(Balance.IsBalanced());
+    Balance.Reset();
+    assert(!Balance.IsBalanced());
+    static_assert(ParseSegment("Balance") == Segment::Balance);
+    static_assert(!IsCheckpoint(Segment::Balance) && !NextSegment(Segment::Balance));
+}
 }
 
 int main()
@@ -216,4 +250,5 @@ int main()
     TestGravityFields();
     TestPortalTransit();
     TestDev20Transfer();
+    TestPlateBalance();
 }

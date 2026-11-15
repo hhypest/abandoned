@@ -121,6 +121,12 @@ void AAbandonedTestController::ToggleMenu()
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
                         [
                             SNew(SButton)
+                            .Text(NSLOCTEXT("TestMenu", "Balance", "Load Balance Chamber"))
+                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Balance)
+                        ]
+                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                        [
+                            SNew(SButton)
                             .Text(NSLOCTEXT("TestMenu", "Lab", "Load Movement Lab"))
                             .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::MovementLab)
                         ]
@@ -244,6 +250,10 @@ FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
     case EMenuAction::TrainingChamber:
         CloseMenu();
         UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.TrainingChamberGameMode"));
+        break;
+    case EMenuAction::Balance:
+        CloseMenu();
+        UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.TrainingChamberGameMode?Chamber=Balance"));
         break;
     case EMenuAction::MovementLab:
         CloseMenu();
