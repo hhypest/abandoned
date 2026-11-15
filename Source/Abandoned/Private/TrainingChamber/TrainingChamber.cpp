@@ -1197,7 +1197,7 @@ void ATrainingChamberCharacter::Interact()
     if (APuzzleCube* Candidate = Target ? Cast<APuzzleCube>(Target->GetOwner()) : nullptr;
         Candidate && Candidate->GetMassKg() <= Abandoned::Domain::Puzzles::MaximumCarryKg)
     {
-        Candidate->DetachForPickup();
+        Candidate->ReleaseSnapConstraints();
         GrabBody(*Candidate->GetBody(), Candidate->GetMassKg());
     }
 }

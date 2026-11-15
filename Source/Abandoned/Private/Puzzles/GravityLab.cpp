@@ -204,6 +204,18 @@ void AGravityLabGameMode::Tick(float Delta)
     const FVector Here = Player->GetActorLocation();
     const bool bInField = Active && Bounds(Layout->Field).IsInsideOrOn(Here);
     Player->ChangeGravity(bInField ? Selected : Direction::Down, bInField ? Field.CharacterScale : 1.0f);
+    // Snap constraints represent support along world Z. Clear them for the entire stack
+    // before applying forces, including when the active volume only contains one cube.
+    if (Active && Active->Direction != Direction::Down)
+    {
+        for (APuzzleCube* Cube : {Small.Get(), Large.Get()})
+        {
+            if (Cube->HasSnapConstraints() && Bounds(Layout->Field).IsInsideOrOn(Cube->GetActorLocation()))
+            {
+                Cube->ReleaseSnapConstraints();
+            }
+        }
+    }
     ApplyField(*Small, Active);
     ApplyField(*Large, Active);
     if (bInField && Selected == Direction::Left && Player->GetCharacterMovement()->IsMovingOnGround() &&
@@ -269,10 +281,18 @@ void AGravityLabGameMode::Verify(AGravityLabCharacter& Player, float Delta)
     case 0:
         if (StepTime >= 0.15f)
         {
+            const double ContactZ = Large->GetHalfSize() + 0.2;
+            const FVector Base(Layout->LargeStart.X, Layout->LargeStart.Y, ContactZ);
+            Large->ResetPosition(Base);
+            const FVector Top = Base + FVector(0, 0, Large->GetHalfSize() + Small->GetHalfSize() + 0.2);
+            if (!Small->SnapTo(*Large->GetBody(), Top, FRotator::ZeroRotator) ||
+                Small->GetBody()->IsSimulatingPhysics() || Large->GetBody()->IsSimulatingPhysics())
+            {
+                Fail(TEXT("Could not set up a snapped stack under ordinary gravity"));
+                return;
+            }
             SetDirectionAtTerminal(Direction::Left);
             UsePowerSwitch();
-            Small->ResetPosition(Layout->SmallStart + FVector(0, 0, 250));
-            Large->ResetPosition(Layout->LargeStart + FVector(0, 0, 250));
             if (!IsPowered() || Selected != Direction::Left)
             {
                 Fail(TEXT("The terminal and power switch were unreachable"));
@@ -282,6 +302,17 @@ void AGravityLabGameMode::Verify(AGravityLabCharacter& Player, float Delta)
         }
         break;
     case 1:
+        if (Small->HasSnapConstraints() || Large->HasSnapConstraints() ||
+            !Small->GetBody()->IsSimulatingPhysics() || !Large->GetBody()->IsSimulatingPhysics())
+        {
+            Fail(TEXT("Sideways gravity did not release the snapped stack"));
+            return;
+        }
+        Small->ResetPosition(Layout->SmallStart + FVector(0, 0, 250));
+        Large->ResetPosition(Layout->LargeStart + FVector(0, 0, 250));
+        Next(TEXT("Sideways gravity released the stack and restored physics to both cubes."));
+        break;
+    case 2:
         if (StepTime >= 0.26f)
         {
             const double LightSpeed = -Small->GetVelocity().Y;
@@ -299,7 +330,7 @@ void AGravityLabGameMode::Verify(AGravityLabCharacter& Player, float Delta)
             Next(TEXT("Crossed the field boundary with the character."));
         }
         break;
-    case 2:
+    case 3:
         if (Player.GetCharacterMovement()->IsMovingOnGround() &&
             Player.GetActorLocation().Y < Layout->Goal.Center.Y + 110.0)
         {
@@ -312,7 +343,7 @@ void AGravityLabGameMode::Verify(AGravityLabCharacter& Player, float Delta)
             Next(TEXT("Landed on the wall with the capsule aligned."));
         }
         break;
-    case 3:
+    case 4:
         if (Player.GetActorLocation().X < Layout->Goal.Center.X - 20.0)
         {
             Player.Move(FVector::ForwardVector);
@@ -344,7 +375,7 @@ void AGravityLabGameMode::Verify(AGravityLabCharacter& Player, float Delta)
             Next(TEXT("Reached the marked target using gravity-relative movement."));
         }
         break;
-    case 4:
+    case 5:
         if (StepTime >= 0.15f)
         {
             Player.ResetChamber();
@@ -360,7 +391,7 @@ void AGravityLabGameMode::Verify(AGravityLabCharacter& Player, float Delta)
             Next(TEXT("Reset and selected ceiling gravity with instant horizon."));
         }
         break;
-    case 5:
+    case 6:
         if (Player.GetCharacterMovement()->IsMovingOnGround() && Player.GetActorLocation().Z > 490.0)
         {
             if (Player.GetCharacterMovement()->GetGravityDirection().Z < 0.99 || Player.Camera->GetUpVector().Z > -0.99)
@@ -375,7 +406,7 @@ void AGravityLabGameMode::Verify(AGravityLabCharacter& Player, float Delta)
             Next(TEXT("Ceiling gravity and instant horizon passed. Entered the right-wall field."));
         }
         break;
-    case 6:
+    case 7:
         if (Player.GetCharacterMovement()->IsMovingOnGround() && Player.GetActorLocation().Y > 240.0)
         {
             if (Player.GetCharacterMovement()->GetGravityDirection().Y < 0.99)
@@ -386,7 +417,7 @@ void AGravityLabGameMode::Verify(AGravityLabCharacter& Player, float Delta)
             Next(TEXT("Landed on the right wall."));
         }
         break;
-    case 7:
+    case 8:
         Player.Move(FVector::ForwardVector);
         if (Player.GetActorLocation().X > Bounds(Layout->Field).Max.X + 10.0)
         {

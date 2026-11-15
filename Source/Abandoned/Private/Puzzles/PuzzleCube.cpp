@@ -162,7 +162,7 @@ void APuzzleCube::ReleaseStack()
     StackedCube.Reset();
 }
 
-void APuzzleCube::DetachForPickup()
+void APuzzleCube::ReleaseSnapConstraints()
 {
     ReleaseStack();
     ReleaseSupport();
@@ -171,7 +171,7 @@ void APuzzleCube::DetachForPickup()
 
 void APuzzleCube::ResetPosition(const FVector& Center)
 {
-    DetachForPickup();
+    ReleaseSnapConstraints();
     SetActorLocationAndRotation(Center, FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
 }
 
@@ -189,6 +189,6 @@ void APuzzleCube::OnSupportEndPlay(AActor* Actor, EEndPlayReason::Type Reason)
 {
     if (Reason == EEndPlayReason::Destroyed || Reason == EEndPlayReason::RemovedFromWorld)
     {
-        DetachForPickup();
+        ReleaseSnapConstraints();
     }
 }
