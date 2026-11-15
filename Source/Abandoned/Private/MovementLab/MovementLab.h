@@ -1,16 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Character.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
+#include "Player/AbandonedCharacter.h"
 #include "MovementLab.generated.h"
-
-class UCameraComponent;
-class UEnhancedInputLocalPlayerSubsystem;
-class UInputAction;
-class UInputMappingContext;
-struct FInputActionValue;
 
 UCLASS()
 class AMovementLabGameMode final : public AGameModeBase
@@ -24,56 +18,42 @@ public:
 };
 
 UCLASS()
-class AMovementLabCharacter final : public ACharacter
+class AMovementLabCharacter final : public AAbandonedCharacter
 {
     GENERATED_BODY()
 
 public:
-    AMovementLabCharacter();
-
     int32 GetTrialIndex() const { return TrialIndex; }
     const FString& GetResult() const { return Result; }
 
 protected:
-    void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
-    void UnPossessed() override;
-    void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+    void BeginPlay() override;
+    void BindAdditionalInput(UEnhancedInputComponent& Input) override;
     void Tick(float DeltaSeconds) override;
-    void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
-    void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
     void OnJumped_Implementation() override;
     void Landed(const FHitResult& Hit) override;
 
 private:
-    void Move(FVector LocalDirection);
-    void Look(const FInputActionValue& Value);
-    void SetSprint(bool bHeld);
-    void SetSlow(bool bHeld);
-    void UpdateSpeed();
-    void StartCrouch();
-    void StopCrouch();
     void ChangeTrial(int32 Offset);
     void ResetTrial();
-    void RemoveInputMapping();
     void ReportJump(const TCHAR* Outcome);
-
-    UPROPERTY()
-    TObjectPtr<UCameraComponent> Camera;
-
-    UPROPERTY(Transient)
-    TObjectPtr<UInputMappingContext> InputMapping;
-
-    TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> InputSubsystem;
+    void MeasureTrial(float DeltaSeconds);
+    void AdvanceMeasurement();
 
     int32 TrialIndex = 0;
-    bool bSprintHeld = false;
-    bool bSlowHeld = false;
     bool bJumpInProgress = false;
     bool bReachedTarget = false;
     FVector LaunchPosition = FVector::ZeroVector;
     double LaunchSpeed = 0.0;
     double PeakZ = 0.0;
     FString Result;
+
+    bool bMeasuring = false;
+    bool bRequestedJump = false;
+    bool bMeasuredTakeoff = false;
+    bool bCrouchedInAir = false;
+    int32 Variant = 0;
+    float Elapsed = 0.0f;
 };
 
 UCLASS()

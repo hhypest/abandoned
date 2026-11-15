@@ -1,69 +1,66 @@
 #include "MovementLab.h"
 
-#include "Camera/CameraComponent.h"
+#include "Player/MovementProfile.h"
+#include "World/Blockout.h"
+
 #include "Components/BoxComponent.h"
-#include "Components/CapsuleComponent.h"
 #include "Components/DirectionalLightComponent.h"
-#include "Components/StaticMeshComponent.h"
 #include "EnhancedInputComponent.h"
-#include "EnhancedInputSubsystems.h"
 #include "Engine/DirectionalLight.h"
-#include "Engine/LocalPlayer.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/WorldSettings.h"
-#include "InputAction.h"
-#include "InputActionValue.h"
+#include "HAL/PlatformMisc.h"
 #include "InputCoreTypes.h"
-#include "InputMappingContext.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+
+using namespace Abandoned::MovementProfile;
 
 DEFINE_LOG_CATEGORY_STATIC(LogMovementLab, Log, All);
 
 namespace
 {
-constexpr float CapsuleRadius = 30.0f;
-constexpr float StandingHalfHeight = 90.0f;
-constexpr float CrouchedHalfHeight = 55.0f;
-constexpr float CameraHeight = 75.0f;
-constexpr float WalkSpeed = 510.0f;
-constexpr float SprintSpeed = 800.0f;
-constexpr float SlowSpeed = 250.0f;
-constexpr float GravityZ = -2000.0f;
-constexpr float JumpSpeed = 600.0f;
 constexpr double RunwayEnd = 1200.0;
 constexpr double LaneSpacing = 2200.0;
 constexpr double FallResetZ = -600.0;
+constexpr double DiagonalDegrees = 12.0;
 
+enum class ETrialKind { Flat, Step, Ledge, Gap };
 struct FTrial
 {
     const TCHAR* Title;
     int32 GapCm = 0;
     int32 LandingHeightCm = 0;
+    ETrialKind Kind = ETrialKind::Ledge;
 };
 
 constexpr FTrial Trials[] = {
-    {TEXT("Flat ground / jump height")},
-    {TEXT("Step 25 cm"), 0, 25},
-    {TEXT("Step 30 cm"), 0, 30},
-    {TEXT("Step 35 cm"), 0, 35},
+    {TEXT("Flat ground / jump height"), 0, 0, ETrialKind::Flat},
+    {TEXT("Step 25 cm"), 0, 25, ETrialKind::Step},
+    {TEXT("Step 30 cm"), 0, 30, ETrialKind::Step},
+    {TEXT("Step 35 cm"), 0, 35, ETrialKind::Step},
     {TEXT("Ledge 50 cm"), 0, 50},
     {TEXT("Ledge 70 cm"), 0, 70},
     {TEXT("Ledge 80 cm"), 0, 80},
     {TEXT("Ledge 90 cm"), 0, 90},
     {TEXT("Ledge 100 cm"), 0, 100},
+    {TEXT("Ledge 110 cm"), 0, 110},
     {TEXT("Ledge 120 cm"), 0, 120},
     {TEXT("Ledge 135 cm"), 0, 135},
     {TEXT("Ledge 150 cm"), 0, 150},
-    {TEXT("Gap 400 cm"), 400},
-    {TEXT("Gap 450 cm"), 450},
-    {TEXT("Gap 500 cm"), 500},
-    {TEXT("Gap 550 cm"), 550},
-    {TEXT("Gap 600 cm"), 600},
-    {TEXT("Gap 650 cm"), 650},
-    {TEXT("Gap 700 cm"), 700},
-    {TEXT("Gap 600 cm / landing -100 cm"), 600, -100},
+    {TEXT("Ledge 160 cm"), 0, 160},
+    {TEXT("Ledge 170 cm"), 0, 170},
+    {TEXT("Ledge 180 cm"), 0, 180},
+    {TEXT("Gap 400 cm"), 400, 0, ETrialKind::Gap},
+    {TEXT("Gap 450 cm"), 450, 0, ETrialKind::Gap},
+    {TEXT("Gap 500 cm"), 500, 0, ETrialKind::Gap},
+    {TEXT("Gap 550 cm"), 550, 0, ETrialKind::Gap},
+    {TEXT("Gap 600 cm"), 600, 0, ETrialKind::Gap},
+    {TEXT("Gap 650 cm"), 650, 0, ETrialKind::Gap},
+    {TEXT("Gap 700 cm"), 700, 0, ETrialKind::Gap},
+    {TEXT("Gap 600 cm / landing -100 cm"), 600, -100, ETrialKind::Gap},
 };
 constexpr int32 TrialCount = UE_ARRAY_COUNT(Trials);
 
@@ -81,33 +78,10 @@ void AddPlatform(UWorld& World, UStaticMesh& Cube, double StartX, double EndX, d
     const FVector Size(EndX - StartX, Width, Thickness);
     const FVector Center((StartX + EndX) * 0.5, Y, TopZ - Thickness * 0.5);
 
-    AActor* Platform = World.SpawnActor<AActor>();
-    if (!ensure(Platform))
+    const Abandoned::Blockout::FBox Platform = Abandoned::Blockout::SpawnBox(World, Cube, Center, Size);
+    if (bLanding && Platform.Collision)
     {
-        return;
-    }
-
-    UBoxComponent* Box = NewObject<UBoxComponent>(Platform);
-    Platform->SetRootComponent(Box);
-    Platform->AddInstanceComponent(Box);
-    Box->InitBoxExtent(Size * 0.5);
-    Box->SetWorldLocation(Center);
-    Box->SetMobility(EComponentMobility::Static);
-    Box->SetCollisionProfileName(TEXT("BlockAll"));
-    Box->RegisterComponent();
-
-    UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Platform);
-    Platform->AddInstanceComponent(Visual);
-    Visual->SetupAttachment(Box);
-    Visual->SetMobility(EComponentMobility::Static);
-    Visual->SetStaticMesh(&Cube);
-    Visual->SetCollisionProfileName(TEXT("NoCollision"));
-    Visual->SetRelativeScale3D(Size / 100.0);
-    Visual->RegisterComponent();
-
-    if (bLanding)
-    {
-        Platform->Tags.Add(LandingTag);
+        Platform.Collision->GetOwner()->Tags.Add(LandingTag);
     }
 }
 }
@@ -126,7 +100,7 @@ void AMovementLabGameMode::InitGame(const FString& MapName, const FString& Optio
         return;
     }
 
-    UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+    UStaticMesh* Cube = Abandoned::Blockout::LoadCube();
     if (!Cube)
     {
         ErrorMessage = TEXT("Movement Lab requires the Engine BasicShapes cube.");
@@ -134,10 +108,7 @@ void AMovementLabGameMode::InitGame(const FString& MapName, const FString& Optio
     }
 
     UWorld& World = *GetWorld();
-    AWorldSettings* Settings = World.GetWorldSettings();
-    Settings->bGlobalGravitySet = true;
-    Settings->GlobalGravityZ = GravityZ;
-    Settings->bWorldGravitySet = false;
+    Abandoned::Blockout::ApplyGravity(World);
 
     for (int32 Index = 0; Index < TrialCount; ++Index)
     {
@@ -173,159 +144,20 @@ void AMovementLabGameMode::HandleStartingNewPlayer_Implementation(APlayerControl
     }
 }
 
-AMovementLabCharacter::AMovementLabCharacter()
+void AMovementLabCharacter::BeginPlay()
 {
-    PrimaryActorTick.bCanEverTick = true;
-    bUseControllerRotationYaw = true;
-    GetCapsuleComponent()->InitCapsuleSize(CapsuleRadius, StandingHalfHeight);
-
-    Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
-    Camera->SetupAttachment(GetCapsuleComponent());
-    Camera->SetRelativeLocation(FVector(0.0, 0.0, CameraHeight));
-    Camera->bUsePawnControlRotation = true;
-
-    UCharacterMovementComponent* Movement = GetCharacterMovement();
-    Movement->MaxWalkSpeed = WalkSpeed;
-    Movement->MaxWalkSpeedCrouched = SlowSpeed;
-    Movement->MaxStepHeight = 30.0f;
-    Movement->JumpZVelocity = JumpSpeed;
-    Movement->AirControl = 0.25f;
-    Movement->SetCrouchedHalfHeight(CrouchedHalfHeight);
-    Movement->GetNavAgentPropertiesRef().bCanCrouch = true;
-    Movement->bOrientRotationToMovement = false;
+    Super::BeginPlay();
+#if !UE_BUILD_SHIPPING
+    bMeasuring = FParse::Param(FCommandLine::Get(), TEXT("MeasureMovementLab"));
+#endif
 }
 
-void AMovementLabCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+void AMovementLabCharacter::BindAdditionalInput(UEnhancedInputComponent& Input)
 {
-    Super::SetupPlayerInputComponent(PlayerInputComponent);
-
-    UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(PlayerInputComponent);
-    APlayerController* PC = Cast<APlayerController>(GetController());
-    ULocalPlayer* LocalPlayer = PC ? PC->GetLocalPlayer() : nullptr;
-    UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer ? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
-    if (!ensure(Input && Subsystem))
-    {
-        return;
-    }
-
-    RemoveInputMapping();
-    InputMapping = NewObject<UInputMappingContext>(this);
-    const auto MapAction = [this](FKey Key, EInputActionValueType Type = EInputActionValueType::Boolean)
-    {
-        UInputAction* Action = NewObject<UInputAction>(InputMapping.Get());
-        Action->ValueType = Type;
-        InputMapping->MapKey(Action, Key);
-        return Action;
-    };
-
     using EEvent = ETriggerEvent;
-    Input->BindAction(MapAction(EKeys::W), EEvent::Triggered, this, &AMovementLabCharacter::Move, FVector::ForwardVector);
-    Input->BindAction(MapAction(EKeys::S), EEvent::Triggered, this, &AMovementLabCharacter::Move, -FVector::ForwardVector);
-    Input->BindAction(MapAction(EKeys::D), EEvent::Triggered, this, &AMovementLabCharacter::Move, FVector::RightVector);
-    Input->BindAction(MapAction(EKeys::A), EEvent::Triggered, this, &AMovementLabCharacter::Move, -FVector::RightVector);
-    Input->BindAction(MapAction(EKeys::Mouse2D, EInputActionValueType::Axis2D), EEvent::Triggered, this, &AMovementLabCharacter::Look);
-
-    const UInputAction* JumpAction = MapAction(EKeys::SpaceBar);
-    Input->BindAction(JumpAction, EEvent::Started, this, &AMovementLabCharacter::Jump);
-    Input->BindAction(JumpAction, EEvent::Completed, this, &AMovementLabCharacter::StopJumping);
-    Input->BindAction(JumpAction, EEvent::Canceled, this, &AMovementLabCharacter::StopJumping);
-
-    const UInputAction* SprintAction = MapAction(EKeys::LeftShift);
-    Input->BindAction(SprintAction, EEvent::Started, this, &AMovementLabCharacter::SetSprint, true);
-    Input->BindAction(SprintAction, EEvent::Completed, this, &AMovementLabCharacter::SetSprint, false);
-    Input->BindAction(SprintAction, EEvent::Canceled, this, &AMovementLabCharacter::SetSprint, false);
-
-    const UInputAction* SlowAction = MapAction(EKeys::LeftAlt);
-    Input->BindAction(SlowAction, EEvent::Started, this, &AMovementLabCharacter::SetSlow, true);
-    Input->BindAction(SlowAction, EEvent::Completed, this, &AMovementLabCharacter::SetSlow, false);
-    Input->BindAction(SlowAction, EEvent::Canceled, this, &AMovementLabCharacter::SetSlow, false);
-
-    const UInputAction* CrouchAction = MapAction(EKeys::LeftControl);
-    Input->BindAction(CrouchAction, EEvent::Started, this, &AMovementLabCharacter::StartCrouch);
-    Input->BindAction(CrouchAction, EEvent::Completed, this, &AMovementLabCharacter::StopCrouch);
-    Input->BindAction(CrouchAction, EEvent::Canceled, this, &AMovementLabCharacter::StopCrouch);
-
-    Input->BindAction(MapAction(EKeys::Q), EEvent::Started, this, &AMovementLabCharacter::ChangeTrial, int32{-1});
-    Input->BindAction(MapAction(EKeys::E), EEvent::Started, this, &AMovementLabCharacter::ChangeTrial, int32{1});
-    Input->BindAction(MapAction(EKeys::R), EEvent::Started, this, &AMovementLabCharacter::ResetTrial);
-
-    Subsystem->AddMappingContext(InputMapping, 0);
-    InputSubsystem = Subsystem;
-}
-
-void AMovementLabCharacter::UnPossessed()
-{
-    RemoveInputMapping();
-    Super::UnPossessed();
-}
-
-void AMovementLabCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-    RemoveInputMapping();
-    Super::EndPlay(EndPlayReason);
-}
-
-void AMovementLabCharacter::RemoveInputMapping()
-{
-    if (UEnhancedInputLocalPlayerSubsystem* Subsystem = InputSubsystem.Get(); Subsystem && InputMapping)
-    {
-        Subsystem->RemoveMappingContext(InputMapping);
-    }
-    InputSubsystem.Reset();
-    InputMapping = nullptr;
-}
-
-void AMovementLabCharacter::Move(FVector LocalDirection)
-{
-    const FRotator Yaw(0.0, GetControlRotation().Yaw, 0.0);
-    AddMovementInput(Yaw.RotateVector(LocalDirection));
-}
-
-void AMovementLabCharacter::Look(const FInputActionValue& Value)
-{
-    const FVector2D Delta = Value.Get<FVector2D>();
-    AddControllerYawInput(Delta.X);
-    AddControllerPitchInput(Delta.Y);
-}
-
-void AMovementLabCharacter::SetSprint(bool bHeld)
-{
-    bSprintHeld = bHeld;
-    UpdateSpeed();
-}
-
-void AMovementLabCharacter::SetSlow(bool bHeld)
-{
-    bSlowHeld = bHeld;
-    UpdateSpeed();
-}
-
-void AMovementLabCharacter::UpdateSpeed()
-{
-    const float NormalSpeed = bSprintHeld ? SprintSpeed : WalkSpeed;
-    GetCharacterMovement()->MaxWalkSpeed = bSlowHeld ? SlowSpeed : NormalSpeed;
-}
-
-void AMovementLabCharacter::StartCrouch()
-{
-    Crouch();
-}
-
-void AMovementLabCharacter::StopCrouch()
-{
-    UnCrouch();
-}
-
-void AMovementLabCharacter::OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
-{
-    Super::OnStartCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
-    Camera->SetRelativeLocation(FVector(0.0, 0.0, CameraHeight - HalfHeightAdjust));
-}
-
-void AMovementLabCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
-{
-    Super::OnEndCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
-    Camera->SetRelativeLocation(FVector(0.0, 0.0, CameraHeight));
+    Input.BindAction(MapAction(EKeys::Q), EEvent::Started, this, &AMovementLabCharacter::ChangeTrial, int32{-1});
+    Input.BindAction(MapAction(EKeys::E), EEvent::Started, this, &AMovementLabCharacter::ChangeTrial, int32{1});
+    Input.BindAction(MapAction(EKeys::R), EEvent::Started, this, &AMovementLabCharacter::ResetTrial);
 }
 
 void AMovementLabCharacter::ChangeTrial(int32 Offset)
@@ -339,28 +171,20 @@ void AMovementLabCharacter::ResetTrial()
 {
     bJumpInProgress = false;
     bReachedTarget = false;
-    StopJumping();
-    ConsumeMovementInputVector();
-    SetBase(nullptr);
-
-    const FTransform Start = TrialStart(TrialIndex);
-    SetActorLocationAndRotation(Start.GetLocation(), Start.GetRotation(), false, nullptr, ETeleportType::TeleportPhysics);
-    if (AController* PC = GetController())
+    FTransform Start = TrialStart(TrialIndex);
+    if (bMeasuring && Variant >= 2)
     {
-        PC->SetControlRotation(Start.Rotator());
+        Start.SetRotation(FRotator(0.0, DiagonalDegrees, 0.0).Quaternion());
+        Start.AddToTranslation(FVector(0.0, -RunwayEnd * FMath::Tan(FMath::DegreesToRadians(DiagonalDegrees)), 0.0));
     }
-
-    UCharacterMovementComponent* Movement = GetCharacterMovement();
-    Movement->StopMovementImmediately();
-    Movement->SetMovementMode(MOVE_Falling);
-    UnCrouch();
-    Movement->UnCrouch(false);
+    PlaceAt(Start);
 }
 
 void AMovementLabCharacter::OnJumped_Implementation()
 {
     Super::OnJumped_Implementation();
     bJumpInProgress = true;
+    bMeasuredTakeoff = bMeasuring;
     LaunchPosition = GetActorLocation();
     LaunchSpeed = GetVelocity().Size2D();
     PeakZ = LaunchPosition.Z;
@@ -408,6 +232,74 @@ void AMovementLabCharacter::Tick(float DeltaSeconds)
         }
         ResetTrial();
     }
+    if (bMeasuring)
+    {
+        MeasureTrial(DeltaSeconds);
+    }
+}
+
+void AMovementLabCharacter::MeasureTrial(float DeltaSeconds)
+{
+    const ETrialKind Kind = Trials[TrialIndex].Kind;
+    Elapsed += DeltaSeconds;
+    if (!Result.IsEmpty() || Elapsed >= 5.0f)
+    {
+        static constexpr const TCHAR* Variants[] = {
+            TEXT("straight"), TEXT("duck"), TEXT("diagonal"), TEXT("diagonal-duck")
+        };
+        const TCHAR* Technique = Kind == ETrialKind::Step ? TEXT("walk") : Variants[Variant];
+        const TCHAR* Outcome = Result.IsEmpty() ? TEXT("Blocked / no target within five seconds") : *Result;
+        const FString EdgeMargin = bMeasuredTakeoff && Kind != ETrialKind::Flat
+            ? FString::Printf(TEXT("%.1f cm"), RunwayEnd - LaunchPosition.X) : TEXT("n/a");
+        UE_LOG(LogMovementLab, Display, TEXT("Measurement | trial %02d | %s | %s | edge margin %s | airborne crouch %s | step %.4f s"),
+            TrialIndex + 1, Technique, Outcome, *EdgeMargin, bCrouchedInAir ? TEXT("yes") : TEXT("no"), DeltaSeconds);
+        AdvanceMeasurement();
+        return;
+    }
+
+    if (Kind != ETrialKind::Flat)
+    {
+        Move(FVector::ForwardVector);
+    }
+    const UCharacterMovementComponent* Movement = GetCharacterMovement();
+    const double TakeoffX = RunwayEnd - (Kind == ETrialKind::Gap ? 14.0 : 115.0);
+    if (Kind != ETrialKind::Step && !bRequestedJump && Movement->IsMovingOnGround() &&
+        (Kind == ETrialKind::Flat || GetActorLocation().X >= TakeoffX))
+    {
+        Jump();
+        bRequestedJump = true;
+    }
+    if (bJumpInProgress && Variant % 2 == 1 && Movement->IsFalling())
+    {
+        Crouch();
+        bCrouchedInAir |= bIsCrouched;
+    }
+}
+
+void AMovementLabCharacter::AdvanceMeasurement()
+{
+    const ETrialKind Kind = Trials[TrialIndex].Kind;
+    const int32 VariantCount = Kind == ETrialKind::Gap ? 4 : (Kind == ETrialKind::Ledge ? 2 : 1);
+    if (++Variant == VariantCount)
+    {
+        Variant = 0;
+        ++TrialIndex;
+    }
+    if (TrialIndex == TrialCount)
+    {
+        --TrialIndex;
+        bMeasuring = false;
+        UE_LOG(LogMovementLab, Display, TEXT("Movement Lab measurements complete."));
+        FPlatformMisc::RequestExit(false);
+        return;
+    }
+    Elapsed = 0.0f;
+    bRequestedJump = false;
+    bMeasuredTakeoff = false;
+    bCrouchedInAir = false;
+    Result.Reset();
+    SetSprint(Trials[TrialIndex].Kind == ETrialKind::Gap);
+    ResetTrial();
 }
 
 void AMovementLabCharacter::ReportJump(const TCHAR* Outcome)
