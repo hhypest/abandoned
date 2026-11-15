@@ -27,6 +27,7 @@ protected:
     void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 
     virtual void BindAdditionalInput(UEnhancedInputComponent&) {}
+    void SetMovementLoad(float MassKg);
     UInputAction* MapAction(const FKey& Key, EInputActionValueType Type = EInputActionValueType::Boolean);
     void Move(FVector LocalDirection);
     void SetSprint(bool bHeld);
@@ -39,6 +40,7 @@ protected:
 private:
     void Look(const FInputActionValue& Value);
     void UpdateSpeed();
+    float LoadSpeedScale = 1.0f;
     void StartCrouch();
     void StopCrouch();
     void RemoveInputMapping();

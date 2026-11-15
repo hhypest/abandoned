@@ -142,7 +142,14 @@ void AAbandonedCharacter::SetSlow(bool bHeld)
 void AAbandonedCharacter::UpdateSpeed()
 {
     const float NormalSpeed = bSprintHeld ? SprintSpeed : WalkSpeed;
-    GetCharacterMovement()->MaxWalkSpeed = bSlowHeld ? SlowSpeed : NormalSpeed;
+    GetCharacterMovement()->MaxWalkSpeed = (bSlowHeld ? SlowSpeed : NormalSpeed) * LoadSpeedScale;
+    GetCharacterMovement()->MaxWalkSpeedCrouched = SlowSpeed * LoadSpeedScale;
+}
+
+void AAbandonedCharacter::SetMovementLoad(float MassKg)
+{
+    LoadSpeedScale = 1.0f - 0.45f * FMath::Clamp(MassKg / 40.0f, 0.0f, 1.0f);
+    UpdateSpeed();
 }
 
 void AAbandonedCharacter::StartCrouch()

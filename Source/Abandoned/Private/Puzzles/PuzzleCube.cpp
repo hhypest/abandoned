@@ -54,17 +54,33 @@ float APuzzleCube::GetStackMass() const
     return TotalMass;
 }
 
-bool APuzzleCube::CanSupportCube() const
+void APuzzleCube::SetVisualMaterial(UMaterialInterface& Material)
 {
-    if (StackedCube.IsValid() || GetActorUpVector().Z < 0.995 ||
+    Visual->SetMaterial(0, &Material);
+}
+
+ECubeStackBlock APuzzleCube::GetStackBlock(const APuzzleCube& Upper) const
+{
+    if (Upper.GetHalfSize() > GetHalfSize())
+    {
+        return ECubeStackBlock::Size;
+    }
+    if (StackedCube.IsValid())
+    {
+        return ECubeStackBlock::Occupied;
+    }
+    if (GetActorUpVector().Z < 0.995 ||
         Body->GetPhysicsLinearVelocity().SizeSquared() > FMath::Square(25.0) ||
         Body->GetPhysicsAngularVelocityInDegrees().SizeSquared() > FMath::Square(10.0))
     {
-        return false;
+        return ECubeStackBlock::Unstable;
     }
-    if (Support.IsValid())
+    const UBoxComponent* Below = Support.Get();
+    if (Below)
     {
-        return true;
+        const APuzzleCube* LowerCube = Cast<APuzzleCube>(Below->GetOwner());
+        const UBoxComponent* LowerSupport = LowerCube ? LowerCube->GetSupport() : nullptr;
+        return LowerSupport && Cast<APuzzleCube>(LowerSupport->GetOwner()) ? ECubeStackBlock::Height : ECubeStackBlock::None;
     }
 
     const FVector Center = GetActorLocation();
@@ -73,17 +89,18 @@ bool APuzzleCube::CanSupportCube() const
     if (!GetWorld()->LineTraceSingleByChannel(Hit, Center,
         Center - FVector(0.0, 0.0, GetHalfSize() + 4.0), ECC_Visibility, Query))
     {
-        return false;
+        return ECubeStackBlock::Unstable;
     }
     const UPrimitiveComponent* Floor = Hit.GetComponent();
-    return IsValid(Floor) && Floor->GetCollisionObjectType() == ECC_WorldStatic && Hit.ImpactNormal.Z > 0.9;
+    return IsValid(Floor) && Floor->GetCollisionObjectType() == ECC_WorldStatic && Hit.ImpactNormal.Z > 0.9
+        ? ECubeStackBlock::None : ECubeStackBlock::Unstable;
 }
 
 bool APuzzleCube::SnapTo(UBoxComponent& NewSupport, const FVector& Center, const FRotator& Rotation)
 {
     APuzzleCube* LowerCube = Cast<APuzzleCube>(NewSupport.GetOwner());
     if (&NewSupport == Body || Support.IsValid() || StackedCube.IsValid() ||
-        (LowerCube && !LowerCube->CanSupportCube()))
+        (LowerCube && !LowerCube->CanSupportCube(*this)))
     {
         return false;
     }

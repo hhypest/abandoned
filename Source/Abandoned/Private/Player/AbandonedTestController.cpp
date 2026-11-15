@@ -114,7 +114,7 @@ void AAbandonedTestController::ToggleMenu()
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
                         [
                             SNew(SButton)
-                            .Text(NSLOCTEXT("TestMenu", "Training", "Load Training Chamber"))
+                            .Text(NSLOCTEXT("TestMenu", "EntryCourse", "Load Entry Course"))
                             .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::TrainingChamber)
                         ]
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)

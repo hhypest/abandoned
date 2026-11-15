@@ -9,9 +9,11 @@
 class ATrainingChamberCharacter;
 class APuzzleCube;
 class UBoxComponent;
+class UMaterialInterface;
 class UPhysicsHandleComponent;
 class UPointLightComponent;
 class UStaticMeshComponent;
+class UTrainingChamberLayout;
 
 UCLASS()
 class ATrainingChamberGameMode final : public AGameModeBase
@@ -25,15 +27,26 @@ public:
     void Tick(float DeltaSeconds) override;
 
     UBoxComponent* GetPlate() const { return Plate; }
+    UBoxComponent* GetButton() const { return Button; }
+    const UTrainingChamberLayout* GetLayout() const { return Layout; }
+    bool IsButtonLatched() const { return bButtonLatched; }
+    float GetMeasuredMass() const { return MeasuredMassKg; }
+    bool IsExitEnabled() const { return bExitEnabled; }
+    bool DidCheckpointFallback() const { return bCheckpointFallback; }
+    void PressButton();
     bool IsPlatePressed() const { return bPlatePressed; }
     bool IsDoorOpen() const;
     bool HasReachedExit() const { return bReachedExit; }
     void ResetChamber(ATrainingChamberCharacter& Player);
 
 private:
-    void ReturnCube(ATrainingChamberCharacter& Player, int32 Index);
+    void ReturnCube(ATrainingChamberCharacter& Player, int32 Index, bool bUseDispenser = false);
     float GetPlateMass(const ATrainingChamberCharacter& Player) const;
     void SetPlatePressed(bool bPressed);
+    bool HasStackAtExit() const;
+    void SelectLayout(const FString& Options);
+    void SaveEntryCheckpoint();
+    void AdvanceCourse();
 
 #if WITH_DEV_AUTOMATION_TESTS
     enum class EVerificationPhase
@@ -42,10 +55,14 @@ private:
         Return, CarryToStack, StartAscent, JumpToStack, JumpToLedge, RemoveSupport
     };
     void VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
+    void VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
     float VerificationElapsed = 0.0f;
     bool bVerifyChamber = false;
-    bool bGhostScreenshotRequested = false;
+    bool bVerificationScreenshotRequested = false;
+    bool bVerifyEntryCourse = false;
+    int32 CourseTestStep = 0;
+    float CourseTestTime = 0.0f;
 #endif
 
     UPROPERTY(Transient)
@@ -53,6 +70,18 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> Plate;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UBoxComponent> Button;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UStaticMeshComponent> ButtonVisual;
+
+    UPROPERTY(Transient)
+    TObjectPtr<const UTrainingChamberLayout> Layout;
+
+    UPROPERTY()
+    TObjectPtr<UMaterialInterface> SurfaceMaterial;
 
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> Door;
@@ -64,6 +93,11 @@ private:
     TObjectPtr<UPointLightComponent> PlateIndicator;
 
     float PlateContactSeconds = 0.0f;
+    float MeasuredMassKg = 0.0f;
+    FString ChamberId;
+    bool bButtonLatched = false;
+    bool bExitEnabled = false;
+    bool bCheckpointFallback = false;
     bool bPlatePressed = false;
     bool bReachedExit = false;
 };
@@ -94,8 +128,10 @@ private:
         UBoxComponent* Support = nullptr;
         FVector Center;
         FRotator Rotation;
+        const TCHAR* BlockReason = nullptr;
     };
     bool FindPlacement(const APuzzleCube& Cube, FPlacement& Placement) const;
+    UPrimitiveComponent* TraceInteractable() const;
     void UpdatePlacementGhost(const APuzzleCube* Held);
     void Interact();
     void ThrowHeldObject();
@@ -109,6 +145,8 @@ private:
     TObjectPtr<UStaticMeshComponent> PlacementGhost;
 
     TWeakObjectPtr<UBoxComponent> PreviewSupport;
+    bool bPreviewBlocked = false;
+    const TCHAR* PreviewBlockReason = nullptr;
 };
 
 UCLASS()
