@@ -61,6 +61,7 @@ private:
     APuzzleCube* SpawnCube(int32 Index);
     void ResetLab(APortalLabCharacter& Player, bool bInterrupted = false);
     void ToggleSupply();
+    void RecoverDev20();
     bool UseConsole(const UPrimitiveComponent& Target);
     void UpdateMouths();
     void CaptureView(const APortalLabCharacter& Player);
@@ -71,8 +72,11 @@ private:
 
 #if WITH_DEV_AUTOMATION_TESTS
     void Verify(APortalLabCharacter& Player, float DeltaSeconds);
+    void VerifyDev20(APortalLabCharacter& Player, float DeltaSeconds);
     void InspectTransfer(const FVector& Before, const FVector& After);
     bool bVerify = false;
+    bool bVerifyDev20 = false;
+    bool bVerifyDev20RecoveryArrival = false;
     bool bCapture = false;
     int32 VerificationStep = 0;
     float VerificationTime = 0.0f;
@@ -81,6 +85,7 @@ private:
     FVector LastBefore = FVector::ZeroVector;
     FVector LastAfter = FVector::ZeroVector;
     TWeakObjectPtr<APuzzleCube> VerifyItem;
+    TWeakObjectPtr<ADev20Actor> VerifyDev20Item;
 #endif
 
     UPROPERTY()
@@ -111,6 +116,9 @@ private:
     TArray<TObjectPtr<APuzzleCube>> Cubes;
 
     UPROPERTY()
+    TObjectPtr<ADev20Actor> Dev20;
+
+    UPROPERTY()
     TObjectPtr<USceneCaptureComponent2D> Capture;
 
     UPROPERTY()
@@ -118,10 +126,15 @@ private:
 
     FTraveler PlayerState;
     FTraveler CubeStates[2];
+    FTraveler Dev20State;
     Abandoned::Domain::Puzzles::SignalOutput Supply{Abandoned::Domain::Puzzles::SignalMode::Toggle};
     bool bCrossedWithItem = false;
     bool bInterrupted = false;
     bool bExitOccupied = false;
+    bool bDev20Run = false;
+    bool bDev20Crossed = false;
+    bool bDev20Departed = false;
+    bool bDev20Recovered = false;
 };
 
 UCLASS()

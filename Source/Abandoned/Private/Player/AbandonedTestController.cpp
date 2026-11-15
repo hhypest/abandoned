@@ -5,6 +5,7 @@
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/GameUserSettings.h"
 #include "InputCoreTypes.h"
+#include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Styling/CoreStyle.h"
@@ -144,6 +145,12 @@ void AAbandonedTestController::ToggleMenu()
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
                         [
                             SNew(SButton)
+                            .Text(NSLOCTEXT("TestMenu", "Dev20", "Load DEV-20 Route"))
+                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Dev20)
+                        ]
+                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                        [
+                            SNew(SButton)
                             .Text_UObject(this, &AAbandonedTestController::GetFullscreenLabel)
                             .IsEnabled_UObject(this, &AAbandonedTestController::CanToggleFullscreen)
                             .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Fullscreen)
@@ -253,6 +260,10 @@ FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
     case EMenuAction::PortalLab:
         CloseMenu();
         UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.PortalLabGameMode"));
+        break;
+    case EMenuAction::Dev20:
+        CloseMenu();
+        Abandoned::Infrastructure::Expedition::ReturnToDev20Station(this);
         break;
     case EMenuAction::Fullscreen:
         ToggleFullscreen();

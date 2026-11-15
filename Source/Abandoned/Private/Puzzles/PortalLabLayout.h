@@ -35,6 +35,12 @@ public:
     FVector LargeCube = FVector::ZeroVector;
 
     UPROPERTY(Config)
+    FVector Dev20Station = FVector::ZeroVector;
+
+    UPROPERTY(Config)
+    FSceneBlock Dev20Exit;
+
+    UPROPERTY(Config)
     FPortalMouthLayout Arrival;
 
     UPROPERTY(Config)

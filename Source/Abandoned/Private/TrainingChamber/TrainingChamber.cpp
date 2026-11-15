@@ -12,16 +12,19 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
+#include "Expedition/Dev20Actor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformMisc.h"
 #include "InputCoreTypes.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
+#include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "PhysicsEngine/PhysicsHandleComponent.h"
+#include "Puzzles/PuzzleCube.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
 #include "UObject/ConstructorHelpers.h"
@@ -34,6 +37,8 @@ namespace
 {
 
 using Abandoned::Domain::Expedition::Segment;
+using Abandoned::Domain::Expedition::Dev20MassKg;
+using Dev20Step = Abandoned::Domain::Expedition::Dev20Stage;
 using Abandoned::Domain::Puzzles::CircuitRules;
 using Abandoned::Infrastructure::Expedition::UnrealCheckpointStore;
 using Abandoned::Infrastructure::Expedition::WriteSegment;
@@ -66,10 +71,21 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
     {
         Requested.reset();
     }
-    bool bReadCheckpoint = GetWorld()->WorldType == EWorldType::Game;
+    bDev20Run = UGameplayStatics::HasOption(Options, TEXT("Dev20Run"));
+    if (bDev20Run && (Requested == Segment::Button || Requested == Segment::Weight))
+    {
+        const Dev20Step Stage = Requested == Segment::Button ? Dev20Step::Button : Dev20Step::Weight;
+        if (const auto* Session = Abandoned::Infrastructure::Expedition::Dev20Session(this);
+            Session && Session->Transfer.IsExpected(Stage))
+        {
+            Dev20Stage = Stage;
+        }
+    }
+    bool bReadCheckpoint = !bDev20Run && GetWorld()->WorldType == EWorldType::Game;
 #if WITH_DEV_AUTOMATION_TESTS
     bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
-    bVerifyEntryCourse = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
+    bVerifyDev20 = Dev20Stage.has_value() && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
+    bVerifyEntryCourse = bVerifyDev20 || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
     if (bVerifyChamber)
     {
         Requested = Segment::Sandbox;
@@ -105,6 +121,10 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
 
 void ATrainingChamberGameMode::SaveEntryCheckpoint()
 {
+    if (bDev20Run)
+    {
+        return;
+    }
 #if WITH_DEV_AUTOMATION_TESTS
     if (bVerifyChamber || bVerifyEntryCourse)
     {
@@ -118,8 +138,24 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
     }
 }
 
-void ATrainingChamberGameMode::AdvanceCourse()
+void ATrainingChamberGameMode::AdvanceCourse(const ATrainingChamberCharacter& Player)
 {
+    if (bDev20Run)
+    {
+        if (Dev20Stage == Dev20Step::Button)
+        {
+            bReachedExit = Abandoned::Infrastructure::Expedition::TravelWithDev20(
+                this, Dev20Step::Button, IsValid(Dev20) && Player.GetHeldDev20() == Dev20);
+        }
+#if WITH_DEV_AUTOMATION_TESTS
+        else if (bVerifyDev20 && Dev20Stage == Dev20Step::Weight)
+        {
+            UE_LOG(LogTrainingChamber, Display, TEXT("DEV-20 verification passed: portal, Button, Weight and final exit."));
+            FPlatformMisc::RequestExitWithStatus(false, 0);
+        }
+#endif
+        return;
+    }
 #if WITH_DEV_AUTOMATION_TESTS
     if (Course.Current == Segment::Weight && bVerifyEntryCourse)
     {
@@ -220,6 +256,35 @@ void ATrainingChamberGameMode::HandleStartingNewPlayer_Implementation(APlayerCon
     {
         RestartPlayerAtTransform(NewPlayer, FTransform(FRotator::ZeroRotator, Layout->Spawn));
         NewPlayer->SetInputMode(FInputModeGameOnly());
+        if (Dev20Stage && !Dev20)
+        {
+            auto* Player = Cast<ATrainingChamberCharacter>(NewPlayer->GetPawn());
+            auto* Session = Abandoned::Infrastructure::Expedition::Dev20Session(this);
+            if (Player && Session && Session->Transfer.IsExpected(*Dev20Stage))
+            {
+                Dev20 = GetWorld()->SpawnActor<ADev20Actor>(
+                    Layout->Spawn + FVector(150.0, 0.0, Abandoned::MovementProfile::CameraHeight),
+                    FRotator::ZeroRotator);
+                if (IsValid(Dev20) && Player->GrabBody(*Dev20->GetBody(), Dev20MassKg) &&
+                    Session->Transfer.Arrive(*Dev20Stage))
+                {
+                    UE_LOG(LogTrainingChamber, Display, TEXT("DEV-20 arrived in %s, %.0f kg, grip restored."),
+                        *WriteSegment(Course.Current), Dev20->GetBody()->GetMass());
+                    return;
+                }
+            }
+            if (IsValid(Dev20))
+            {
+                if (Player)
+                {
+                    Player->ReleaseHeldObject();
+                }
+                Dev20->Destroy();
+                Dev20 = nullptr;
+            }
+            Dev20Stage.reset();
+            UE_LOG(LogTrainingChamber, Error, TEXT("Could not restore DEV-20 hand-off."));
+        }
     }
 }
 
@@ -228,7 +293,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     const APlayerController* Controller = GetWorld()->GetFirstPlayerController();
     ATrainingChamberCharacter* Player = Controller ? Cast<ATrainingChamberCharacter>(Controller->GetPawn()) : nullptr;
-    if (!Player || !IsValid(Plate) || !IsValid(Door))
+    if (!Player || !IsValid(Plate) || !IsValid(Door) || bDev20Recovering)
     {
         return;
     }
@@ -240,6 +305,11 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         return;
     }
     const FBox CubeBounds = Layout->GetCubeBounds();
+    if (Dev20Stage && (!IsValid(Dev20) || !CubeBounds.IsInside(Dev20->GetActorLocation())))
+    {
+        ResetChamber(*Player);
+        return;
+    }
     for (int32 Index = 0; Index < Cubes.Num(); ++Index)
     {
         if (IsValid(Cubes[Index]) && !CubeBounds.IsInside(Cubes[Index]->GetActorLocation()))
@@ -271,11 +341,12 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         return;
     }
 
-    if (!bReachedExit && IsDoorOpen() && Layout->GetExitBounds().IsInside(Location))
+    const bool bCanLeave = !bDev20Run || (IsValid(Dev20) && Player->GetHeldDev20() == Dev20);
+    if (!bReachedExit && IsDoorOpen() && Layout->GetExitBounds().IsInside(Location) && bCanLeave)
     {
         bReachedExit = true;
         UE_LOG(LogTrainingChamber, Display, TEXT("Player reached the exit."));
-        AdvanceCourse();
+        AdvanceCourse(*Player);
         return;
     }
 
@@ -289,6 +360,20 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         VerifyEntryChamber(*Player, DeltaSeconds);
     }
 #endif
+}
+
+const TCHAR* ATrainingChamberGameMode::GetDev20Status(const ATrainingChamberCharacter& Player) const
+{
+    if (!IsValid(Dev20))
+    {
+        return TEXT("DEV-20 transfer expired. Restart Load DEV-20 Route from the test menu.");
+    }
+    if (bReachedExit && Dev20Stage == Dev20Step::Weight)
+    {
+        return TEXT("DEV-20 delivered. Route complete.");
+    }
+    return Player.GetHeldDev20() == Dev20 ? TEXT("DEV-20 in hand (34 kg). Carry through the exit.")
+        : TEXT("Solve the chamber, then bring DEV-20 through the exit.");
 }
 
 bool ATrainingChamberGameMode::HasStackAtExit() const
@@ -314,7 +399,7 @@ void ATrainingChamberGameMode::PressButton()
 float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Player) const
 {
     const FVector AllowedOffset = Layout->Plate.Size * 0.5 - FVector(10.0);
-    const APuzzleCube* Held = Player.GetHeldCube();
+    const UBoxComponent* Held = Player.GetHeldBody();
     const UPrimitiveComponent* PlayerSupport = Player.GetCharacterMovement()->IsMovingOnGround()
         ? Player.GetMovementBase() : nullptr;
     while (PlayerSupport)
@@ -326,11 +411,20 @@ float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Pl
         }
         PlayerSupport = Cube->GetSupport();
     }
-    const float PlayerLoad = Layout->PlayerMassKg + (Held && Course.Current != Segment::Sandbox ? Held->GetMassKg() : 0.0f);
+    const float PlayerLoad = Layout->PlayerMassKg + (Held && Course.Current != Segment::Sandbox ? Held->GetMass() : 0.0f);
+    const auto OnPlate = [&](UBoxComponent& Body)
+    {
+        const FBoxSphereBounds& Bounds = Body.Bounds;
+        const FVector Offset = Bounds.Origin - Layout->Plate.Center;
+        const double BottomZ = Bounds.Origin.Z - Bounds.BoxExtent.Z;
+        return FMath::Abs(Offset.X) < AllowedOffset.X && FMath::Abs(Offset.Y) < AllowedOffset.Y &&
+            FMath::IsNearlyEqual(BottomZ, Layout->GetPlateTop(), 4.0) &&
+            FMath::Abs(Body.GetPhysicsLinearVelocity().Z) < 30.0;
+    };
     float MassKg = PlayerSupport == Plate ? PlayerLoad : 0.0f;
     for (const APuzzleCube* Cube : Cubes)
     {
-        if (!IsValid(Cube) || Cube == Held)
+        if (!IsValid(Cube) || Cube->GetBody() == Held)
         {
             continue;
         }
@@ -340,12 +434,7 @@ float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Pl
             continue;
         }
         UBoxComponent* Body = Cube->GetBody();
-        const FBoxSphereBounds& Bounds = Body->Bounds;
-        const FVector Offset = Bounds.Origin - Layout->Plate.Center;
-        const double BottomZ = Bounds.Origin.Z - Bounds.BoxExtent.Z;
-        if (!Cube->GetSupport() && FMath::Abs(Offset.X) < AllowedOffset.X && FMath::Abs(Offset.Y) < AllowedOffset.Y &&
-            FMath::IsNearlyEqual(BottomZ, Layout->GetPlateTop(), 4.0) &&
-            FMath::Abs(Body->GetPhysicsLinearVelocity().Z) < 30.0)
+        if (!Cube->GetSupport() && OnPlate(*Body))
         {
             MassKg += Cube->GetStackMass();
             if (PlayerSupport == Body)
@@ -353,6 +442,10 @@ float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Pl
                 MassKg += PlayerLoad;
             }
         }
+    }
+    if (IsValid(Dev20) && Dev20->GetBody() != Held && OnPlate(*Dev20->GetBody()))
+    {
+        MassKg += Dev20MassKg + (PlayerSupport == Dev20->GetBody() ? PlayerLoad : 0.0f);
     }
     return MassKg;
 }
@@ -389,6 +482,15 @@ void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int
 
 void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
 {
+    if (bDev20Run)
+    {
+        if (!bDev20Recovering)
+        {
+            bDev20Recovering = true;
+            Abandoned::Infrastructure::Expedition::ReturnToDev20Station(this, true);
+        }
+        return;
+    }
     Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
     Player.ReleaseHeldObject();
     for (int32 Index = 0; Index < Cubes.Num(); ++Index)
@@ -455,6 +557,49 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
         const FVector Eye = From + FVector(0.0, 0.0, Abandoned::MovementProfile::CameraHeight);
         Player.PlaceAt(FTransform((Target - Eye).Rotation(), From));
     };
+    if (bVerifyDev20 && Dev20TestPhase < 2)
+    {
+        if (Dev20TestPhase == 0 && CourseTestTime >= 0.25f)
+        {
+            TArray<AActor*> Units;
+            UGameplayStatics::GetAllActorsOfClass(this, ADev20Actor::StaticClass(), Units);
+            if (Units.Num() != 1 || Player.GetHeldDev20() != Dev20 ||
+                !FMath::IsNearlyEqual(Dev20->GetBody()->GetMass(), Dev20MassKg, 0.05f))
+            {
+                Fail(TEXT("Exactly one 34 kg DEV-20 must arrive in the grip"));
+                return;
+            }
+            Player.Interact();
+            if (Dev20Stage == Dev20Step::Button && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20Recovery")))
+            {
+                const FVector Below = Layout->GetCubeBounds().Min - FVector(0, 0, 100);
+                Dev20->RestoreAt(Below);
+                UE_LOG(LogTrainingChamber, Display, TEXT("DEV-20: exercising loss outside the Button chamber bounds."));
+                return;
+            }
+            Dev20->RestoreAt(FVector(Layout->Plate.Center.X, Layout->Plate.Center.Y,
+                Layout->GetPlateTop() + Dev20->GetBody()->GetUnscaledBoxExtent().Z + 0.2));
+            const FVector ButtonStart = Layout->Button.Center - FVector(156.0, 0.0, 0.0);
+            AimFrom(FVector(ButtonStart.X, ButtonStart.Y, Layout->Spawn.Z), Layout->Button.Center);
+            Player.Interact();
+            Dev20TestPhase = 1;
+            CourseTestTime = 0.0f;
+        }
+        else if (Dev20TestPhase == 1 && CourseTestTime >= 0.35f)
+        {
+            if (!IsButtonLatched() || !FMath::IsNearlyEqual(MeasuredMassKg, Dev20MassKg, 0.05f) || IsExitEnabled())
+            {
+                Fail(TEXT("The armed chamber must weigh and reject a 34 kg DEV-20"));
+                return;
+            }
+            UE_LOG(LogTrainingChamber, Display, TEXT("DEV-20: %s measured and rejected 34 kg."),
+                *WriteSegment(Course.Current));
+            Dev20->RestoreAt(FVector(Layout->Door.Center.X - 360.0, Layout->Door.Center.Y, 20.0));
+            Dev20TestPhase = 2;
+            CourseTestTime = 0.0f;
+        }
+        return;
+    }
     const auto Pickup = [&Player, &AimFrom, this](APuzzleCube& Cube, FVector Approach)
     {
         const FVector Body = Cube.GetActorLocation();
@@ -613,6 +758,33 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
     }
     else if (CourseTestStep == 5)
     {
+        Player.AddMovementInput(FVector::ForwardVector);
+        if (bVerifyDev20 && Layout->GetExitBounds().IsInside(Player.GetActorLocation()))
+        {
+            const FVector Item = Dev20->GetActorLocation();
+            AimFrom(FVector(Item.X - 140.0, Item.Y, Layout->Spawn.Z), Item);
+            Player.Interact();
+            if (Player.GetHeldDev20() != Dev20)
+            {
+                Fail(TEXT("Could not retrieve DEV-20 after solving the chamber"));
+                return;
+            }
+            if (AController* Controller = Player.GetController())
+            {
+                Controller->SetControlRotation(FRotator(-14, 0, 0));
+            }
+            UE_LOG(LogTrainingChamber, Display, TEXT("DEV-20: %s held the player at the exit until the unit was retrieved."),
+                *WriteSegment(Course.Current));
+            Step(8);
+        }
+    }
+    else if (CourseTestStep == 8 && bVerifyDev20)
+    {
+        if (Player.GetHeldDev20() != Dev20)
+        {
+            Fail(TEXT("Lost DEV-20 on the final approach to the exit"));
+            return;
+        }
         Player.AddMovementInput(FVector::ForwardVector);
     }
 }
@@ -1102,6 +1274,10 @@ bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacemen
 
 const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
 {
+    if (GetHeldDev20())
+    {
+        return TEXT("[E] Set down DEV-20");
+    }
     if (GetHeldCube())
     {
         if (bPreviewBlocked)
@@ -1117,6 +1293,11 @@ const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
     const APuzzleCube* Cube = FindReachableCube();
     if (!Cube)
     {
+        const UPrimitiveComponent* Target = TraceInteractable();
+        if (Target && Cast<ADev20Actor>(Target->GetOwner()))
+        {
+            return TEXT("[E] Pick up DEV-20 (34 kg)");
+        }
         const ATrainingChamberGameMode* Chamber = GetChamber();
         if (Chamber && Chamber->GetButton() && TraceInteractable() == Chamber->GetButton())
         {
@@ -1194,6 +1375,11 @@ void ATrainingChamberCharacter::Interact()
     {
         return;
     }
+    if (ADev20Actor* Unit = Target ? Cast<ADev20Actor>(Target->GetOwner()) : nullptr)
+    {
+        GrabBody(*Unit->GetBody(), Dev20MassKg);
+        return;
+    }
     if (APuzzleCube* Candidate = Target ? Cast<APuzzleCube>(Target->GetOwner()) : nullptr;
         Candidate && Candidate->GetMassKg() <= Abandoned::Domain::Puzzles::MaximumCarryKg)
     {
@@ -1258,6 +1444,12 @@ APuzzleCube* ATrainingChamberCharacter::GetHeldCube() const
 {
     const UBoxComponent* Held = GetHeldBody();
     return IsValid(Held) ? Cast<APuzzleCube>(Held->GetOwner()) : nullptr;
+}
+
+ADev20Actor* ATrainingChamberCharacter::GetHeldDev20() const
+{
+    const UBoxComponent* Held = GetHeldBody();
+    return IsValid(Held) ? Cast<ADev20Actor>(Held->GetOwner()) : nullptr;
 }
 
 void ATrainingChamberCharacter::ReleaseHeldObject()
@@ -1361,6 +1553,10 @@ void ATrainingChamberHUD::DrawHUD()
     if (Chamber->DidCheckpointFallback())
     {
         DrawText(TEXT("Incompatible checkpoint. Starting from chamber 01."), FLinearColor::White, 24.0f, 125.0f);
+    }
+    if (Chamber->IsDev20Run())
+    {
+        DrawText(Chamber->GetDev20Status(*Player), FLinearColor::White, 24.0f, 147.0f);
     }
 
     const float CenterX = Canvas->ClipX * 0.5f;

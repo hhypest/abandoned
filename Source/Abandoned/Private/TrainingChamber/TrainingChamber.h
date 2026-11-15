@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Application/Expedition/EntryCourse.h"
+#include "Domain/Expedition/Dev20.h"
 #include "Domain/Puzzles/ChamberCircuit.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
@@ -9,6 +10,7 @@
 #include "TrainingChamber.generated.h"
 
 class ATrainingChamberCharacter;
+class ADev20Actor;
 class APuzzleCube;
 class UBoxComponent;
 class UMaterialInterface;
@@ -39,6 +41,8 @@ public:
     bool IsPlatePressed() const { return Circuit.GetState().PlatePressed; }
     bool IsDoorOpen() const;
     bool HasReachedExit() const { return bReachedExit; }
+    bool IsDev20Run() const { return bDev20Run; }
+    const TCHAR* GetDev20Status(const ATrainingChamberCharacter& Player) const;
     void ResetChamber(ATrainingChamberCharacter& Player);
 
 private:
@@ -48,7 +52,7 @@ private:
     bool HasStackAtExit() const;
     void SelectLayout(const FString& Options);
     void SaveEntryCheckpoint();
-    void AdvanceCourse();
+    void AdvanceCourse(const ATrainingChamberCharacter& Player);
 
 #if WITH_DEV_AUTOMATION_TESTS
     enum class EVerificationPhase
@@ -63,12 +67,17 @@ private:
     bool bVerifyChamber = false;
     bool bVerificationScreenshotRequested = false;
     bool bVerifyEntryCourse = false;
+    bool bVerifyDev20 = false;
+    int32 Dev20TestPhase = 0;
     int32 CourseTestStep = 0;
     float CourseTestTime = 0.0f;
 #endif
 
     UPROPERTY(Transient)
     TArray<TObjectPtr<APuzzleCube>> Cubes;
+
+    UPROPERTY(Transient)
+    TObjectPtr<ADev20Actor> Dev20;
 
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> Plate;
@@ -98,6 +107,9 @@ private:
     Abandoned::Application::Expedition::CourseStart Course;
     Abandoned::Domain::Puzzles::ChamberCircuit Circuit;
     bool bReachedExit = false;
+    bool bDev20Run = false;
+    bool bDev20Recovering = false;
+    std::optional<Abandoned::Domain::Expedition::Dev20Stage> Dev20Stage;
 };
 
 UCLASS()
@@ -108,6 +120,7 @@ class ATrainingChamberCharacter : public AAbandonedCharacter
 public:
     ATrainingChamberCharacter();
     APuzzleCube* GetHeldCube() const;
+    ADev20Actor* GetHeldDev20() const;
     APuzzleCube* FindReachableCube() const;
     const TCHAR* GetPlacementPrompt() const;
     void ReleaseHeldObject();
