@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Puzzles/PuzzleCube.h"
 #include "TrainingChamberLayout.generated.h"
 
 USTRUCT()
@@ -21,6 +22,18 @@ struct FTrainingBlock
     {
         return !Center.ContainsNaN() && !Size.ContainsNaN() && Size.GetMin() > 0.0;
     }
+};
+
+USTRUCT()
+struct FTrainingCubeSpawn
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FVector Center = FVector::ZeroVector;
+
+    UPROPERTY()
+    EPuzzleCubeType Type = EPuzzleCubeType::Small;
 };
 
 USTRUCT()
@@ -76,7 +89,10 @@ public:
     FVector Spawn = FVector::ZeroVector;
 
     UPROPERTY(Config)
-    FVector CubeSpawn = FVector::ZeroVector;
+    TArray<FTrainingCubeSpawn> CubeSpawns;
+
+    UPROPERTY(Config)
+    float PlateActivationMassKg = 0.0f;
 
     UPROPERTY(Config)
     FTrainingBlock ExitZone;
@@ -94,8 +110,13 @@ public:
             [](const FTrainingBlock& Block) { return !Block.IsValid(); }) && !Lights.ContainsByPredicate(
             [](const FTrainingLight& Light) { return !Light.IsValid(); }) && PlateLight.IsValid() &&
             FMath::IsFinite(PressedLightIntensity) && PressedLightIntensity >= 0.0f &&
-            Door.IsValid() && Plate.IsValid() && !Spawn.ContainsNaN() && !CubeSpawn.ContainsNaN() &&
-            ExitZone.IsValid() && CubeBounds.IsValid() && GetCubeBounds().IsInside(CubeSpawn);
+            Door.IsValid() && Plate.IsValid() && !Spawn.ContainsNaN() && ExitZone.IsValid() && CubeBounds.IsValid() &&
+            FMath::IsFinite(PlateActivationMassKg) && PlateActivationMassKg > 0.0f && !CubeSpawns.IsEmpty() &&
+            !CubeSpawns.ContainsByPredicate([this](const FTrainingCubeSpawn& Cube)
+            {
+                return Cube.Center.ContainsNaN() || !GetCubeBounds().IsInside(Cube.Center) ||
+                    !APuzzleCube::IsValidType(Cube.Type);
+            });
     }
 
 private:
