@@ -3,6 +3,7 @@
 #include "Domain/Expedition/SuitSupply.h"
 #include "Domain/Puzzles/BallastRules.h"
 #include "Domain/Puzzles/ChamberCircuit.h"
+#include "Domain/Puzzles/GravityField.h"
 
 #include <cassert>
 #include <limits>
@@ -142,6 +143,25 @@ void TestPowerSignalsAndOptics()
     Optics.Reset();
     assert(!Optics.GetPower().DirectEmitter && !Optics.GetPower().ReflectionEmitter);
 }
+
+void TestGravityFields()
+{
+    const GravityField Contact[] = {
+        {GravityDirection::Up, 1.0f, 9000.0f, 3, false},
+        {GravityDirection::Down, 1.0f, 9000.0f, 0, true},
+        {GravityDirection::Left, 0.8f, 9000.0f, 2, true},
+        {GravityDirection::Right, 4.0f, 9000.0f, 2, true},
+    };
+    const GravityField* Field = SelectGravityField(Contact);
+    assert(Field == &Contact[2]);
+    assert(!SelectGravityField({}));
+    assert(!SelectGravityField(std::span(Contact, 1)));
+    assert(GravityForceForBody(*Field, 5.0f) / 5.0f == 2.0f * GravityForceForBody(*Field, 10.0f) / 10.0f);
+    assert(GravityForceForBody(*Field, 0.0f) == 0.0f);
+    assert(GravityRollDegrees(GravityDirection::Left) == -90.0f);
+    assert(GravityRollDegrees(GravityDirection::Right) == 90.0f);
+    assert(GravityRollDegrees(GravityDirection::Up) == 180.0f);
+}
 }
 
 int main()
@@ -150,4 +170,5 @@ int main()
     TestCircuitAndBallast();
     TestSupply();
     TestPowerSignalsAndOptics();
+    TestGravityFields();
 }

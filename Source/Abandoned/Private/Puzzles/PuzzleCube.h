@@ -34,10 +34,11 @@ public:
     float GetStackMass() const;
     void SetVisualMaterial(UMaterialInterface& Material);
     UBoxComponent* GetSupport() const { return Support.Get(); }
+    bool HasSnapConstraints() const { return Support.IsValid() || StackedCube.IsValid(); }
     ECubeStackBlock GetStackBlock(const APuzzleCube& Upper) const;
     bool CanSupportCube(const APuzzleCube& Upper) const { return GetStackBlock(Upper) == ECubeStackBlock::None; }
     bool SnapTo(UBoxComponent& NewSupport, const FVector& Center, const FRotator& Rotation);
-    void DetachForPickup();
+    void ReleaseSnapConstraints();
     void ResetPosition(const FVector& Center);
 
 protected:

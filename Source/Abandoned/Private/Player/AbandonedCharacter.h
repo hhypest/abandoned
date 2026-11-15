@@ -29,7 +29,7 @@ protected:
     virtual void BindAdditionalInput(UEnhancedInputComponent&) {}
     void SetMovementLoad(float MassKg);
     UInputAction* MapAction(const FKey& Key, EInputActionValueType Type = EInputActionValueType::Boolean);
-    void Move(FVector LocalDirection);
+    virtual void Move(FVector LocalDirection);
     void SetSprint(bool bHeld);
     void SetSlow(bool bHeld);
     void PlaceAt(const FTransform& Transform);
