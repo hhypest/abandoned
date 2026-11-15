@@ -8,9 +8,14 @@
 
 Публичная версия воспроизводит маршрут, коллизии, свет и базовые материалы. Рама и створка импортируются из `Sci_Fi_Industrial_Doo.zip` и `Sci_Fi_Sliding_Door_L.zip` в `Content/AbandonedLocal/Vanguard`. C++ подгоняет визуальные габариты к размерам, указанным в `VanguardPassageLayout`. В материале рамы маска открывает центральный проём 200 × 260 см. Створка связана с отдельным простым коллайдером, который движется вместе с ней. Оригинальные архивы сохраняются без правок. Права на публичное распространение исходников уточняются по записи провайдера.
 
-Для чистового покрытия пролёта предусмотрены две позиции Fab Standard от Quixel. Пол использует [Industrial Concrete Floor](https://www.fab.com/listings/2dece1ec-0941-406c-a7de-ae9fe08085a1). Стены используют [Cast In Situ Concrete](https://www.fab.com/listings/fbfef28c-7e86-4f01-bc49-e3cb21bee1d0). Fab требует подтвердить условия перед загрузкой. Архивы и созданные из них Unreal-пакеты хранятся в локальном каталоге. [Fab EULA](https://www.fab.com/eula)
+Чистовой пролёт использует два набора текстур 8K от Quixel по стандартной лицензии Fab. Архивы храните в `AssetSource/FabVanguard/Archives`, а созданные Unreal-пакеты — в `Content/AbandonedLocal/Vanguard`. Оба каталога исключены из Git. [Fab EULA](https://www.fab.com/eula)
 
-Распакуйте выбранные наборы текстур в папки `IndustrialFloor` и `CastConcrete` внутри `AssetSource/FabVanguard`. В каждой папке оставьте по одному комплекту карт base color, normal и roughness. Карта AO поддерживается дополнительно. Скрипт импортирует карты и создаёт материалы под путями из [DefaultGame.ini](../Config/DefaultGame.ini).
+| Поверхность | Архив в разделе «Набор текстур» | Папка для карт в `AssetSource/FabVanguard` |
+| --- | --- | --- |
+| Пол | `industrial_concrete_floor_sl2qedtp_8k.zip` ([Industrial Concrete Floor](https://www.fab.com/listings/2dece1ec-0941-406c-a7de-ae9fe08085a1)) | `IndustrialFloor` |
+| Стены | `cast_in_situ_concrete_uhwnbdoew_8k.zip` ([Cast In Situ Concrete](https://www.fab.com/listings/fbfef28c-7e86-4f01-bc49-e3cb21bee1d0)) | `CastConcrete` |
+
+Из каждого архива извлеките карты `*_BaseColor.jpg`, `*_Normal.jpg`, `*_Roughness.jpg` и `*_AO.jpg` в указанную папку. Скрипт создаёт или обновляет материалы под путями из [DefaultGame.ini](../Config/DefaultGame.ini). Проекция по мировым координатам сохраняет размер скана 2 × 2 м на полу, стенах и длинных секциях перехода.
 
 ```powershell
 $ueRoot = 'C:\Program Files\Epic Games\UE_5.7'
@@ -27,4 +32,4 @@ $env:ABANDONED_FAB_SOURCES = (Resolve-Path .\AssetSource\FabVanguard).Path
 
 - Начало обычного маршрута — **Play**. Для сквозного автопрогона используйте `-game -vulkan -benchmark -fps=60 -VerifyEntryCourse -CaptureVanguard`. Прогон проходит три камеры, движущуюся дверь перехода, загружает станцию и пользуется её стойкой снабжения.
 - Для прогона от перехода используйте карту `/Engine/Maps/Entry?game=/Script/Abandoned.VanguardRouteGameMode?Chamber=Passage` и флаги `-game -vulkan -benchmark -fps=60 -VerifyVanguard`.
-- В журнале ищите активный Vulkan SM5, `Verification crossed the moving passage airlock` и `Vanguard verification passed`. Кадры с флагом захвата сохраняются в `Saved/Screenshots`.
+- В журнале ищите активный Vulkan SM5, `Passage artwork: frame=loaded, leaf=loaded, Fab floor=loaded, Fab walls=loaded.`, `Verification crossed the moving passage airlock` и `Vanguard verification passed`. Кадры с флагом захвата сохраняются в `Saved/Screenshots`.

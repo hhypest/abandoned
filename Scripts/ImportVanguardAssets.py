@@ -12,6 +12,7 @@ ROOT = "/Game/AbandonedLocal/Vanguard"
 ASSETS = unreal.EditorAssetLibrary
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 MATERIALS = unreal.MaterialEditingLibrary
+TEXTURING = "/Engine/Functions/Engine_MaterialFunctions01/Texturing"
 ARCHIVES = {
     "Frame": "Sci_Fi_Industrial_Doo.zip",
     "Leaf": "Sci_Fi_Sliding_Door_L.zip",
@@ -42,14 +43,35 @@ def import_asset(file, name, options=None):
     return asset
 
 
-def material(name, files, tiles=1.0):
+def world_texture(material_asset, texture, sampler, size, row):
+    texture_object = MATERIALS.create_material_expression(
+        material_asset, unreal.MaterialExpressionTextureObject, -900, row)
+    texture_object.set_editor_property("texture", texture)
+    texture_object.set_editor_property("sampler_type", sampler)
+    function_name = ("WorldAlignedNormal" if sampler == unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL
+                     else "WorldAlignedTexture")
+    projection = MATERIALS.create_material_expression(
+        material_asset, unreal.MaterialExpressionMaterialFunctionCall, -550, row)
+    if not projection.set_material_function(ASSETS.load_asset(f"{TEXTURING}/{function_name}")):
+        raise RuntimeError(f"Could not load {function_name}")
+    if not (MATERIALS.connect_material_expressions(texture_object, "", projection, "TextureObject")
+            and MATERIALS.connect_material_expressions(size, "", projection, "TextureSize")):
+        raise RuntimeError(f"Could not configure {function_name} projection")
+    return projection
+
+
+def material(name, files, world_tile_cm=None):
     path = f"{ROOT}/M_{name}"
-    if ASSETS.does_asset_exist(path):
-        return ASSETS.load_asset(path)
-    result = TOOLS.create_asset(f"M_{name}", ROOT, unreal.Material, unreal.MaterialFactoryNew())
-    uv = MATERIALS.create_material_expression(result, unreal.MaterialExpressionTextureCoordinate, -920, 0)
-    uv.set_editor_property("u_tiling", tiles)
-    uv.set_editor_property("v_tiling", tiles)
+    result = ASSETS.load_asset(path) if ASSETS.does_asset_exist(path) else None
+    if result and world_tile_cm is None:
+        return result
+    if result:
+        MATERIALS.delete_all_material_expressions(result)
+    else:
+        result = TOOLS.create_asset(f"M_{name}", ROOT, unreal.Material, unreal.MaterialFactoryNew())
+    if world_tile_cm is not None:
+        size = MATERIALS.create_material_expression(result, unreal.MaterialExpressionConstant3Vector, -900, -220)
+        size.set_editor_property("constant", unreal.LinearColor(world_tile_cm, world_tile_cm, world_tile_cm, 1.0))
     properties = {
         "BaseColor": unreal.MaterialProperty.MP_BASE_COLOR,
         "Metallic": unreal.MaterialProperty.MP_METALLIC,
@@ -64,16 +86,20 @@ def material(name, files, tiles=1.0):
         if channel == "Normal":
             texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
         ASSETS.save_loaded_asset(texture)
-        sample = MATERIALS.create_material_expression(result, unreal.MaterialExpressionTextureSample, -550, 270 * i)
-        sample.set_editor_property("texture", texture)
         sampler = unreal.MaterialSamplerType.SAMPLERTYPE_COLOR if channel == "BaseColor" else (
             unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL if channel == "Normal"
             else unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR
         )
-        sample.set_editor_property("sampler_type", sampler)
-        if not MATERIALS.connect_material_expressions(uv, "", sample, "UVs"):
-            raise RuntimeError(f"Could not connect UVs for {channel}")
-        if not MATERIALS.connect_material_property(sample, "", properties[channel]):
+        row = 270 * i
+        if world_tile_cm is not None:
+            sample = world_texture(result, texture, sampler, size, row)
+            output = "XYZ Texture"
+        else:
+            sample = MATERIALS.create_material_expression(result, unreal.MaterialExpressionTextureSample, -550, row)
+            sample.set_editor_property("texture", texture)
+            sample.set_editor_property("sampler_type", sampler)
+            output = ""
+        if not MATERIALS.connect_material_property(sample, output, properties[channel]):
             raise RuntimeError(f"Could not connect {channel}")
     MATERIALS.recompile_material(result)
     ASSETS.save_loaded_asset(result)
@@ -192,7 +218,7 @@ def import_fab(name, folder):
             raise RuntimeError(f"Choose one {channel} map in {folder}")
     if not {"BaseColor", "Normal", "Roughness"} <= files.keys():
         raise RuntimeError(f"Missing base color, normal or roughness in {folder}")
-    material(name, files)
+    material(name, files, world_tile_cm=200.0)
     unreal.log(f"VANGUARD_FAB_READY {name}")
 
 
