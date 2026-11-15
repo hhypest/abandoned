@@ -44,6 +44,7 @@
 
 - [Architecture.md](Architecture.md) описывает структуру проекта и границы игровых систем.
 - [Docs/Design.md](Docs/Design.md) фиксирует требования к ритму, геометрии и первому срезу.
+- [Docs/MechanicsQuestions.md](Docs/MechanicsQuestions.md) содержит открытые вопросы для согласования механик.
 - [Docs/TrainingChamber.md](Docs/TrainingChamber.md) описывает запуск и проверку первой учебной камеры.
 - [Docs/Assets.md](Docs/Assets.md) описывает проверку и импорт моделей. [Реестр исходников](Docs/AssetInventory.csv)
 - [CONTRIBUTING.md](CONTRIBUTING.md) содержит правила работы и команды проверки Windows-сборки.

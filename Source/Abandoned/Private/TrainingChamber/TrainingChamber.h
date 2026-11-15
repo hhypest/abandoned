@@ -38,13 +38,14 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
     enum class EVerificationPhase
     {
-        Initial, LookUp, LookDown, Carry, Open, Cross, Close, Return, CarryToStack, StartAscent,
-        JumpToStack, JumpToLedge, RemoveSupport
+        Initial, StandOnPlate, JumpOffPlate, LookUp, LookDown, Carry, Open, Cross, Close, Throw,
+        Return, CarryToStack, StartAscent, JumpToStack, JumpToLedge, RemoveSupport
     };
     void VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
     float VerificationElapsed = 0.0f;
     bool bVerifyChamber = false;
+    bool bGhostScreenshotRequested = false;
 #endif
 
     UPROPERTY(Transient)
@@ -80,6 +81,7 @@ public:
     void ReleaseCube();
 
 protected:
+    void BeginPlay() override;
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;
     void Tick(float DeltaSeconds) override;
     void UnPossessed() override;
@@ -94,12 +96,19 @@ private:
         FRotator Rotation;
     };
     bool FindPlacement(const APuzzleCube& Cube, FPlacement& Placement) const;
+    void UpdatePlacementGhost(const APuzzleCube* Held);
     void Interact();
+    void ThrowHeldObject();
     void ResetChamber();
     ATrainingChamberGameMode* GetChamber() const;
 
     UPROPERTY()
     TObjectPtr<UPhysicsHandleComponent> Grip;
+
+    UPROPERTY(VisibleAnywhere)
+    TObjectPtr<UStaticMeshComponent> PlacementGhost;
+
+    TWeakObjectPtr<UBoxComponent> PreviewSupport;
 };
 
 UCLASS()
