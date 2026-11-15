@@ -1,0 +1,23 @@
+# Unreal Engine generated files
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+/.vs/
+/.idea/
+*.sln
+*.slnx
+*.vcxproj*
+*.suo
+*.user
+
+# Local inputs, build output and credentials
+/AssetSource/
+/Artifacts/
+.env
+.env.*
+/steam_appid.txt
+
+# OS files
+Thumbs.db
+.DS_Store
