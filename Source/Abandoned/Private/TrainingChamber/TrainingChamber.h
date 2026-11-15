@@ -101,7 +101,7 @@ private:
 };
 
 UCLASS()
-class ATrainingChamberCharacter final : public AAbandonedCharacter
+class ATrainingChamberCharacter : public AAbandonedCharacter
 {
     GENERATED_BODY()
 
@@ -110,7 +110,7 @@ public:
     APuzzleCube* GetHeldCube() const;
     APuzzleCube* FindReachableCube() const;
     const TCHAR* GetPlacementPrompt() const;
-    void ReleaseCube();
+    void ReleaseHeldObject();
 
 protected:
     void BeginPlay() override;
@@ -118,6 +118,13 @@ protected:
     void Tick(float DeltaSeconds) override;
     void UnPossessed() override;
     void EndPlay(const EEndPlayReason::Type Reason) override;
+    virtual void Interact();
+    virtual void ResetChamber();
+    virtual bool InteractWithDevice(UPrimitiveComponent&) { return false; }
+    virtual void PlaceHeldDevice(UBoxComponent&) {}
+    UPrimitiveComponent* TraceInteractable() const;
+    UBoxComponent* GetHeldBody() const;
+    bool GrabBody(UBoxComponent& Body, float MassKg);
 
 private:
     friend class ATrainingChamberGameMode;
@@ -129,11 +136,8 @@ private:
         const TCHAR* BlockReason = nullptr;
     };
     bool FindPlacement(const APuzzleCube& Cube, FPlacement& Placement) const;
-    UPrimitiveComponent* TraceInteractable() const;
     void UpdatePlacementGhost(const APuzzleCube* Held);
-    void Interact();
     void ThrowHeldObject();
-    void ResetChamber();
     ATrainingChamberGameMode* GetChamber() const;
 
     UPROPERTY()
