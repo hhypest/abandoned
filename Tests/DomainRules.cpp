@@ -1,4 +1,5 @@
 #include "Application/Expedition/EntryCourse.h"
+#include "Application/Puzzles/OpticsCourse.h"
 #include "Domain/Expedition/SuitSupply.h"
 #include "Domain/Puzzles/BallastRules.h"
 #include "Domain/Puzzles/ChamberCircuit.h"
@@ -97,6 +98,50 @@ void TestSupply()
     assert(Supply.SpendInPassage(600));
     assert(Supply.Percent() == 0);
 }
+
+void TestPowerSignalsAndOptics()
+{
+    const bool Mixed[] = {false, true};
+    const bool Live[] = {true, true};
+    assert(AnyPowered(Mixed) && !AllPowered(Mixed) && AllPowered(Live));
+    assert(!AnyPowered({}) && !AllPowered({}) && !InvertPower(true));
+
+    SignalOutput Toggle{SignalMode::Toggle};
+    assert(Toggle.Observe(true, 0.0f));
+    assert(Toggle.Observe(true, 10.0f));
+    assert(Toggle.Observe(false, 0.0f));
+    assert(!Toggle.Observe(true, 0.0f));
+
+    SignalOutput Pulse{SignalMode::Pulse, 0.25f};
+    assert(Pulse.Observe(true, 0.1f));
+    assert(Pulse.Observe(true, 0.2f));
+    assert(!Pulse.Observe(true, 0.1f));
+    assert(!Pulse.Observe(false, 0.0f));
+    assert(Pulse.Observe(true, 0.0f));
+    Pulse.Reset();
+    assert(!Pulse.IsPowered());
+
+    PowerBudget Budget{3};
+    assert(!Budget.PowerBranch(false, 2));
+    assert(!Budget.PowerBranch(true, 4));
+    assert(Budget.PowerBranch(true, 2));
+    assert(!Budget.PowerBranch(true, 2));
+    assert(Budget.PowerBranch(true, 1));
+
+    Abandoned::Application::Puzzles::OpticsCourse Optics;
+    assert(!Optics.ObserveReceivers(false, true, 1.0f).Interruption);
+    Optics.PressSupplyButton();
+    assert(Optics.GetPower().DirectEmitter && !Optics.GetPower().ReflectionEmitter);
+    assert(!Optics.ObserveReceivers(false, false, 0.15f).Interruption);
+    assert(!Optics.ObserveReceivers(true, false, 0.15f).Interruption);
+    assert(!Optics.ObserveReceivers(false, false, 0.15f).Interruption);
+    assert(Optics.ObserveReceivers(false, false, 0.2f).Interruption);
+    assert(Optics.GetPower().ReflectionEmitter);
+    assert(Optics.ObserveReceivers(true, true, 0.3f).Reflection);
+    assert(!Optics.ObserveReceivers(true, false, 0.0f).Reflection);
+    Optics.Reset();
+    assert(!Optics.GetPower().DirectEmitter && !Optics.GetPower().ReflectionEmitter);
+}
 }
 
 int main()
@@ -104,4 +149,5 @@ int main()
     TestRouteAndCheckpoint();
     TestCircuitAndBallast();
     TestSupply();
+    TestPowerSignalsAndOptics();
 }

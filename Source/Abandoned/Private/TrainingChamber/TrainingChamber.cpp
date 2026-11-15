@@ -379,7 +379,7 @@ void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int
     {
         if (Player.GetHeldCube() == Cube)
         {
-            Player.ReleaseCube();
+            Player.ReleaseHeldObject();
         }
         const FTrainingCubeSpawn& Spawn = Layout->CubeSpawns[Index];
         Cube->ResetPosition(bUseDispenser ? Spawn.Outlet : Spawn.Center);
@@ -390,7 +390,7 @@ void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int
 void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
 {
     Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
-    Player.ReleaseCube();
+    Player.ReleaseHeldObject();
     for (int32 Index = 0; Index < Cubes.Num(); ++Index)
     {
         ReturnCube(Player, Index);
@@ -1023,11 +1023,6 @@ APuzzleCube* ATrainingChamberCharacter::FindReachableCube() const
 bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacement& Placement) const
 {
     const ATrainingChamberGameMode* Chamber = GetChamber();
-    if (!Chamber)
-    {
-        return false;
-    }
-
     const FVector Origin = Camera->GetComponentLocation();
     const FVector Current = Cube.GetActorLocation();
     const double Half = Cube.GetHalfSize();
@@ -1041,7 +1036,7 @@ bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacemen
             return false;
         }
         const APuzzleCube* LowerCube = Cast<APuzzleCube>(Surface->GetOwner());
-        if (Surface != Chamber->GetPlate() && !LowerCube)
+        if ((!Chamber || Surface != Chamber->GetPlate()) && !LowerCube)
         {
             return false;
         }
@@ -1174,11 +1169,17 @@ void ATrainingChamberCharacter::Interact()
     {
         FPlacement Placement;
         const bool bCanSnap = FindPlacement(*Cube, Placement);
-        ReleaseCube();
+        ReleaseHeldObject();
         if (bCanSnap)
         {
             Cube->SnapTo(*Placement.Support, Placement.Center, Placement.Rotation);
         }
+        return;
+    }
+    if (UBoxComponent* Held = GetHeldBody())
+    {
+        ReleaseHeldObject();
+        PlaceHeldDevice(*Held);
         return;
     }
 
@@ -1189,27 +1190,47 @@ void ATrainingChamberCharacter::Interact()
         Chamber->PressButton();
         return;
     }
+    if (Target && InteractWithDevice(*Target))
+    {
+        return;
+    }
     if (APuzzleCube* Candidate = Target ? Cast<APuzzleCube>(Target->GetOwner()) : nullptr;
         Candidate && Candidate->GetMassKg() <= Abandoned::Domain::Puzzles::MaximumCarryKg)
     {
         Candidate->DetachForPickup();
-        UBoxComponent* Body = Candidate->GetBody();
-        Grip->GrabComponentAtLocationWithRotation(Body, NAME_None, Body->GetComponentLocation(), Body->GetComponentRotation());
-        if (GetHeldCube() == Candidate)
-        {
-            Body->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-            SetMovementLoad(Candidate->GetMassKg());
-        }
+        GrabBody(*Candidate->GetBody(), Candidate->GetMassKg());
     }
+}
+
+bool ATrainingChamberCharacter::GrabBody(UBoxComponent& Body, float MassKg)
+{
+    if (GetHeldBody() || !Body.IsSimulatingPhysics() || !FMath::IsFinite(MassKg) ||
+        MassKg <= 0.0f || MassKg > Abandoned::Domain::Puzzles::MaximumCarryKg)
+    {
+        return false;
+    }
+    Grip->GrabComponentAtLocationWithRotation(&Body, NAME_None, Body.GetComponentLocation(), Body.GetComponentRotation());
+    if (GetHeldBody() != &Body)
+    {
+        return false;
+    }
+    Body.SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+    SetMovementLoad(MassKg);
+    return true;
+}
+
+UBoxComponent* ATrainingChamberCharacter::GetHeldBody() const
+{
+    return Cast<UBoxComponent>(Grip->GetGrabbedComponent());
 }
 
 APuzzleCube* ATrainingChamberCharacter::GetHeldCube() const
 {
-    const UPrimitiveComponent* Held = Grip->GetGrabbedComponent();
+    const UBoxComponent* Held = GetHeldBody();
     return IsValid(Held) ? Cast<APuzzleCube>(Held->GetOwner()) : nullptr;
 }
 
-void ATrainingChamberCharacter::ReleaseCube()
+void ATrainingChamberCharacter::ReleaseHeldObject()
 {
     UpdatePlacementGhost(nullptr);
     SetMovementLoad(0.0f);
@@ -1232,7 +1253,7 @@ void ATrainingChamberCharacter::ThrowHeldObject()
 
     const FVector Direction = GetViewRotation().Vector();
     const FVector CarryVelocity = GetVelocity();
-    ReleaseCube();
+    ReleaseHeldObject();
     Held->SetPhysicsLinearVelocity(CarryVelocity);
     Held->AddImpulse(Direction * GetDefault<UTrainingChamberLayout>()->ThrowImpulse);
 }
@@ -1240,8 +1261,8 @@ void ATrainingChamberCharacter::ThrowHeldObject()
 void ATrainingChamberCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    const APuzzleCube* Held = GetHeldCube();
-    if (!IsValid(Held))
+    const UBoxComponent* Body = GetHeldBody();
+    if (!IsValid(Body))
     {
         UpdatePlacementGhost(nullptr);
         return;
@@ -1250,17 +1271,17 @@ void ATrainingChamberCharacter::Tick(float DeltaSeconds)
     const FVector Origin = Camera->GetComponentLocation();
     const FVector Direction = GetViewRotation().Vector();
     FCollisionQueryParams Query(SCENE_QUERY_STAT(TrainingHold), false, this);
-    Query.AddIgnoredActor(Held);
+    Query.AddIgnoredActor(Body->GetOwner());
     FHitResult Hit;
     const bool bWall = GetWorld()->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * HoldDistance, ECC_Visibility, Query);
-    const double Distance = bWall ? FMath::Clamp(Hit.Distance - Held->GetHalfSize(), 0.0, HoldDistance) : HoldDistance;
-    if (Distance < 75.0 || FVector::DistSquared(Origin, Held->GetActorLocation()) > FMath::Square(2.0 * Reach))
+    const double Distance = bWall ? FMath::Clamp(Hit.Distance - Body->GetScaledBoxExtent().GetMax(), 0.0, HoldDistance) : HoldDistance;
+    if (Distance < 75.0 || FVector::DistSquared(Origin, Body->GetComponentLocation()) > FMath::Square(2.0 * Reach))
     {
-        ReleaseCube();
+        ReleaseHeldObject();
         return;
     }
     Grip->SetTargetLocationAndRotation(Origin + Direction * Distance, FRotator(0.0, GetViewRotation().Yaw, 0.0));
-    UpdatePlacementGhost(Held);
+    UpdatePlacementGhost(GetHeldCube());
 }
 
 void ATrainingChamberCharacter::ResetChamber()
@@ -1273,13 +1294,13 @@ void ATrainingChamberCharacter::ResetChamber()
 
 void ATrainingChamberCharacter::UnPossessed()
 {
-    ReleaseCube();
+    ReleaseHeldObject();
     Super::UnPossessed();
 }
 
 void ATrainingChamberCharacter::EndPlay(const EEndPlayReason::Type Reason)
 {
-    ReleaseCube();
+    ReleaseHeldObject();
     Super::EndPlay(Reason);
 }
 
