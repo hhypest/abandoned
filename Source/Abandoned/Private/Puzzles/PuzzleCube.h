@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Domain/Puzzles/BallastRules.h"
 #include "GameFramework/Actor.h"
 #include "PuzzleCube.generated.h"
 
@@ -16,14 +17,7 @@ enum class EPuzzleCubeType : uint8
     Large,
 };
 
-enum class ECubeStackBlock : uint8
-{
-    None,
-    Size,
-    Occupied,
-    Unstable,
-    Height,
-};
+using ECubeStackBlock = Abandoned::Domain::Puzzles::StackBlock;
 
 UCLASS()
 class APuzzleCube final : public AActor

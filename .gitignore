@@ -13,6 +13,7 @@ Saved/
 
 # Local inputs, build output and credentials
 /AssetSource/
+/Content/AbandonedLocal/
 /Artifacts/
 .env
 .env.*

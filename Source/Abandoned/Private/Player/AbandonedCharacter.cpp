@@ -1,4 +1,5 @@
 #include "AbandonedCharacter.h"
+#include "Domain/Puzzles/BallastRules.h"
 #include "MovementProfile.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -148,7 +149,7 @@ void AAbandonedCharacter::UpdateSpeed()
 
 void AAbandonedCharacter::SetMovementLoad(float MassKg)
 {
-    LoadSpeedScale = 1.0f - 0.45f * FMath::Clamp(MassKg / 40.0f, 0.0f, 1.0f);
+    LoadSpeedScale = Abandoned::Domain::Puzzles::CarrySpeedScale(MassKg);
     UpdateSpeed();
 }
 
