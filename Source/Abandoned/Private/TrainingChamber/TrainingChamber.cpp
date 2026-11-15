@@ -1,4 +1,5 @@
 #include "TrainingChamber.h"
+#include "EntryCourseSave.h"
 #include "TrainingChamberLayout.h"
 
 #include "Camera/CameraComponent.h"
@@ -15,6 +16,7 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformMisc.h"
 #include "InputCoreTypes.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -35,6 +37,11 @@ constexpr double Reach = 280.0;
 constexpr double HoldDistance = 165.0;
 constexpr double SnapRange = 75.0;
 constexpr double SnapGap = 0.5;
+const FString StairsId = TEXT("Stairs");
+const FString ButtonId = TEXT("Button");
+const FString WeightId = TEXT("Weight");
+const FString SandboxId = TEXT("Sandbox");
+const FString CheckpointSlot = TEXT("AbandonedEntryCourse");
 
 UPointLightComponent* AddLight(UWorld& World, const FTrainingLight& Data)
 {
@@ -52,12 +59,12 @@ UPointLightComponent* AddLight(UWorld& World, const FTrainingLight& Data)
     return Light;
 }
 
-void BuildRoom(UWorld& World, UStaticMesh& Mesh, const UTrainingChamberLayout& Data)
+void SetFinish(const Abandoned::Blockout::FBox& Parts, const FTrainingBlock& Block,
+    const TMap<FName, UMaterialInstanceDynamic*>& Finishes)
 {
-    for (const FTrainingBlock& Block : Data.Room)
+    if (UMaterialInstanceDynamic* const* Material = Finishes.Find(Block.Finish); Material && Parts.Visual)
     {
-        Abandoned::Blockout::SpawnBox(World, Mesh, Block.Center, Block.Size, EComponentMobility::Static,
-            Block.bCollision ? TEXT("BlockAll") : TEXT("NoCollision"));
+        Parts.Visual->SetMaterial(0, *Material);
     }
 }
 }
@@ -69,6 +76,94 @@ ATrainingChamberGameMode::ATrainingChamberGameMode()
     PlayerControllerClass = AAbandonedTestController::StaticClass();
     PrimaryActorTick.bCanEverTick = true;
     PrimaryActorTick.TickGroup = TG_PostPhysics;
+    static const ConstructorHelpers::FObjectFinder<UMaterialInterface> Material(
+        TEXT("/Game/Abandoned/Materials/M_AbandonedSurface.M_AbandonedSurface"));
+    SurfaceMaterial = Material.Object;
+}
+
+void ATrainingChamberGameMode::SelectLayout(const FString& Options)
+{
+    ChamberId = UGameplayStatics::ParseOption(Options, TEXT("Chamber"));
+#if WITH_DEV_AUTOMATION_TESTS
+    bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
+    bVerifyEntryCourse = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
+    if (bVerifyChamber)
+    {
+        ChamberId = SandboxId;
+    }
+    else if (bVerifyEntryCourse && ChamberId.IsEmpty())
+    {
+        ChamberId = StairsId;
+    }
+#endif
+    if (ChamberId.IsEmpty() && GetWorld()->WorldType == EWorldType::Game &&
+        UGameplayStatics::DoesSaveGameExist(CheckpointSlot, 0))
+    {
+        const UEntryCourseSave* Save = Cast<UEntryCourseSave>(UGameplayStatics::LoadGameFromSlot(CheckpointSlot, 0));
+        if (Save && Save->Version == UEntryCourseSave::CurrentVersion &&
+            (Save->Chamber == StairsId || Save->Chamber == ButtonId || Save->Chamber == WeightId))
+        {
+            ChamberId = Save->Chamber;
+        }
+        else
+        {
+            bCheckpointFallback = true;
+            UE_LOG(LogTrainingChamber, Warning, TEXT("Entry checkpoint is incompatible. Starting at the first chamber."));
+        }
+    }
+    if (ChamberId == ButtonId)
+    {
+        Layout = GetDefault<UEntryButtonLayout>();
+    }
+    else if (ChamberId == WeightId)
+    {
+        Layout = GetDefault<UEntryWeightLayout>();
+    }
+    else if (ChamberId == SandboxId)
+    {
+        Layout = GetDefault<UTrainingChamberLayout>();
+    }
+    else
+    {
+        ChamberId = StairsId;
+        Layout = GetDefault<UEntryStairsLayout>();
+    }
+}
+
+void ATrainingChamberGameMode::SaveEntryCheckpoint()
+{
+#if WITH_DEV_AUTOMATION_TESTS
+    if (bVerifyChamber || bVerifyEntryCourse)
+    {
+        return;
+    }
+#endif
+    if (ChamberId == SandboxId || GetWorld()->WorldType != EWorldType::Game || bCheckpointFallback)
+    {
+        return;
+    }
+    UEntryCourseSave* Save = NewObject<UEntryCourseSave>(this);
+    Save->Chamber = ChamberId;
+    if (!UGameplayStatics::SaveGameToSlot(Save, CheckpointSlot, 0))
+    {
+        UE_LOG(LogTrainingChamber, Warning, TEXT("Could not save the entry checkpoint."));
+    }
+}
+
+void ATrainingChamberGameMode::AdvanceCourse()
+{
+    if (ChamberId == StairsId || ChamberId == ButtonId)
+    {
+        const FString& Next = ChamberId == StairsId ? ButtonId : WeightId;
+        UGameplayStatics::OpenLevel(this, FName(TEXT("/Engine/Maps/Entry")), true, TEXT("Chamber=") + Next);
+    }
+#if WITH_DEV_AUTOMATION_TESTS
+    else if (ChamberId == WeightId && bVerifyEntryCourse)
+    {
+        UE_LOG(LogTrainingChamber, Display, TEXT("Entry course verification passed: Stairs -> Button -> Weight."));
+        FPlatformMisc::RequestExitWithStatus(false, 0);
+    }
+#endif
 }
 
 void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
@@ -79,7 +174,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         return;
     }
 
-    const UTrainingChamberLayout* Layout = GetDefault<UTrainingChamberLayout>();
+    SelectLayout(Options);
     if (!Layout->IsValid())
     {
         ErrorMessage = TEXT("Invalid training chamber data in DefaultGame.ini.");
@@ -95,7 +190,25 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
 
     UWorld& World = *GetWorld();
     Abandoned::Blockout::ApplyGravity(World);
-    BuildRoom(World, *Mesh, *Layout);
+    TMap<FName, UMaterialInstanceDynamic*> Finishes;
+    if (SurfaceMaterial)
+    {
+        for (const FTrainingFinish& Finish : Layout->Finishes)
+        {
+            UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(SurfaceMaterial, this);
+            Material->SetVectorParameterValue(TEXT("DiffuseColor"), Finish.Tint);
+            Material->SetScalarParameterValue(TEXT("Roughness"), Finish.Roughness);
+            Material->SetScalarParameterValue(TEXT("Metallic"), Finish.Metallic);
+            Material->SetScalarParameterValue(TEXT("Glow"), Finish.Glow);
+            Finishes.Add(Finish.Name, Material);
+        }
+    }
+    for (const FTrainingBlock& Block : Layout->Room)
+    {
+        const auto Parts = Abandoned::Blockout::SpawnBox(World, *Mesh, Block.Center, Block.Size,
+            EComponentMobility::Static, Block.bCollision ? TEXT("BlockAll") : TEXT("NoCollision"));
+        SetFinish(Parts, Block, Finishes);
+    }
     for (const FTrainingCubeSpawn& CubeSpawn : Layout->CubeSpawns)
     {
         APuzzleCube* Cube = World.SpawnActor<APuzzleCube>(CubeSpawn.Center, FRotator::ZeroRotator);
@@ -105,16 +218,32 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
             return;
         }
         Cube->Initialize(CubeSpawn.Type, *Mesh);
+        const FName CubeFinish(CubeSpawn.Type == EPuzzleCubeType::Large ? TEXT("Heavy") : TEXT("Light"));
+        if (UMaterialInstanceDynamic* const* Material = Finishes.Find(CubeFinish))
+        {
+            Cube->SetVisualMaterial(**Material);
+        }
         Cubes.Add(Cube);
     }
-    Door = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center, Layout->Door.Size,
-        EComponentMobility::Movable, TEXT("BlockAllDynamic")).Collision;
+    const auto DoorParts = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center, Layout->Door.Size,
+        EComponentMobility::Movable, TEXT("BlockAllDynamic"));
+    Door = DoorParts.Collision;
+    SetFinish(DoorParts, Layout->Door, Finishes);
     const Abandoned::Blockout::FBox PlateParts = Abandoned::Blockout::SpawnBox(
         World, *Mesh, Layout->Plate.Center, Layout->Plate.Size, EComponentMobility::Movable);
     Plate = PlateParts.Collision;
     PlateVisual = PlateParts.Visual;
+    SetFinish(PlateParts, Layout->Plate, Finishes);
+    if (Layout->bRequiresButton)
+    {
+        const auto ButtonParts = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Button.Center,
+            Layout->Button.Size, EComponentMobility::Movable);
+        Button = ButtonParts.Collision;
+        ButtonVisual = ButtonParts.Visual;
+        SetFinish(ButtonParts, Layout->Button, Finishes);
+    }
 
-    if (!Door || !Plate || !PlateVisual)
+    if (!Door || !Plate || !PlateVisual || (Layout->bRequiresButton && (!Button || !ButtonVisual)))
     {
         ErrorMessage = TEXT("Could not create the cube, pressure plate or door.");
         return;
@@ -126,17 +255,16 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     }
     PlateIndicator = AddLight(World, Layout->PlateLight);
 
-#if WITH_DEV_AUTOMATION_TESTS
-    bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
-#endif
-    UE_LOG(LogTrainingChamber, Display, TEXT("Training chamber ready. %d cubes, plate released, exit closed."), Cubes.Num());
+    SaveEntryCheckpoint();
+    UE_LOG(LogTrainingChamber, Display, TEXT("Training chamber ready. %s, %d cubes, plate released, exit closed."),
+        *ChamberId, Cubes.Num());
 }
 
 void ATrainingChamberGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
 {
     if (IsValid(NewPlayer) && IsValid(Door) && IsValid(Plate))
     {
-        RestartPlayerAtTransform(NewPlayer, FTransform(FRotator::ZeroRotator, GetDefault<UTrainingChamberLayout>()->Spawn));
+        RestartPlayerAtTransform(NewPlayer, FTransform(FRotator::ZeroRotator, Layout->Spawn));
         NewPlayer->SetInputMode(FInputModeGameOnly());
     }
 }
@@ -157,33 +285,52 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         ResetChamber(*Player);
         return;
     }
-    const UTrainingChamberLayout* Layout = GetDefault<UTrainingChamberLayout>();
     const FBox CubeBounds = Layout->GetCubeBounds();
     for (int32 Index = 0; Index < Cubes.Num(); ++Index)
     {
         if (IsValid(Cubes[Index]) && !CubeBounds.IsInside(Cubes[Index]->GetActorLocation()))
         {
-            ReturnCube(*Player, Index);
+            ReturnCube(*Player, Index, Layout->bDispenseCubes);
         }
     }
 
-    PlateContactSeconds = GetPlateMass(*Player) >= Layout->PlateActivationMassKg
+    MeasuredMassKg = GetPlateMass(*Player);
+    const bool bInRange = MeasuredMassKg >= Layout->PlateActivationMassKg - 0.01f &&
+        MeasuredMassKg <= Layout->PlateMaximumMassKg + 0.01f;
+    PlateContactSeconds = bInRange
         ? FMath::Min(PlateContactSeconds + DeltaSeconds, PlateSettleSeconds) : 0.0f;
     const bool bPressed = PlateContactSeconds >= PlateSettleSeconds;
     if (bPlatePressed != bPressed)
     {
         SetPlatePressed(bPressed);
     }
+    if (Layout->bRequiresStack)
+    {
+        bExitEnabled = bExitEnabled || HasStackAtExit();
+    }
+    else
+    {
+        bExitEnabled = bPlatePressed && (!Layout->bRequiresButton || bButtonLatched);
+    }
     FVector DoorPosition = Door->GetComponentLocation();
-    const double TargetZ = Layout->Door.Center.Z + (bPlatePressed ? DoorTravel : 0.0);
+    const bool bClosing = DoorPosition.Z > Layout->Door.Center.Z && !bExitEnabled;
+    const double TargetZ = Layout->Door.Center.Z + (bExitEnabled ? DoorTravel : 0.0);
     const double Step = 350.0 * DeltaSeconds;
     DoorPosition.Z += FMath::Clamp(TargetZ - DoorPosition.Z, -Step, Step);
-    Door->SetWorldLocation(DoorPosition, true);
+    FHitResult DoorHit;
+    Door->SetWorldLocation(DoorPosition, true, &DoorHit);
+    if (bClosing && DoorHit.GetActor() == Player && ChamberId != SandboxId)
+    {
+        ResetChamber(*Player);
+        return;
+    }
 
     if (!bReachedExit && IsDoorOpen() && Layout->GetExitBounds().IsInside(Location))
     {
         bReachedExit = true;
         UE_LOG(LogTrainingChamber, Display, TEXT("Player reached the exit."));
+        AdvanceCourse();
+        return;
     }
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -191,12 +338,35 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     {
         VerifyChamber(*Player, DeltaSeconds);
     }
+    else if (bVerifyEntryCourse)
+    {
+        VerifyEntryChamber(*Player, DeltaSeconds);
+    }
 #endif
+}
+
+bool ATrainingChamberGameMode::HasStackAtExit() const
+{
+    const FBox StackBounds = Layout->GetStackBounds();
+    return Cubes.ContainsByPredicate([&StackBounds](const APuzzleCube* Cube)
+    {
+        return IsValid(Cube) && Cube->GetStackMass() > Cube->GetMassKg() &&
+            StackBounds.IsInside(Cube->GetActorLocation());
+    });
+}
+
+void ATrainingChamberGameMode::PressButton()
+{
+    if (!bButtonLatched && IsValid(ButtonVisual))
+    {
+        bButtonLatched = true;
+        ButtonVisual->SetRelativeLocation(FVector(8.0, 0.0, 0.0));
+        UE_LOG(LogTrainingChamber, Display, TEXT("Door circuit armed by wall button."));
+    }
 }
 
 float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Player) const
 {
-    const UTrainingChamberLayout* Layout = GetDefault<UTrainingChamberLayout>();
     const FVector AllowedOffset = Layout->Plate.Size * 0.5 - FVector(10.0);
     const APuzzleCube* Held = Player.GetHeldCube();
     const UPrimitiveComponent* PlayerSupport = Player.GetCharacterMovement()->IsMovingOnGround()
@@ -210,7 +380,8 @@ float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Pl
         }
         PlayerSupport = Cube->GetSupport();
     }
-    float MassKg = PlayerSupport == Plate ? Layout->PlayerMassKg : 0.0f;
+    const float PlayerLoad = Layout->PlayerMassKg + (Held && ChamberId != SandboxId ? Held->GetMassKg() : 0.0f);
+    float MassKg = PlayerSupport == Plate ? PlayerLoad : 0.0f;
     for (const APuzzleCube* Cube : Cubes)
     {
         if (!IsValid(Cube) || Cube == Held)
@@ -233,7 +404,7 @@ float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Pl
             MassKg += Cube->GetStackMass();
             if (PlayerSupport == Body)
             {
-                MassKg += Layout->PlayerMassKg;
+                MassKg += PlayerLoad;
             }
         }
     }
@@ -242,7 +413,7 @@ float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Pl
 
 bool ATrainingChamberGameMode::IsDoorOpen() const
 {
-    return IsValid(Door) && Door->GetComponentLocation().Z >= GetDefault<UTrainingChamberLayout>()->Door.Center.Z + DoorTravel - 2.0;
+    return IsValid(Door) && Door->GetComponentLocation().Z >= Layout->Door.Center.Z + DoorTravel - 2.0;
 }
 
 void ATrainingChamberGameMode::SetPlatePressed(bool bPressed)
@@ -251,13 +422,12 @@ void ATrainingChamberGameMode::SetPlatePressed(bool bPressed)
     PlateVisual->SetRelativeLocation(FVector(0.0, 0.0, bPlatePressed ? -4.0 : 0.0));
     if (PlateIndicator)
     {
-        const UTrainingChamberLayout* Layout = GetDefault<UTrainingChamberLayout>();
         PlateIndicator->SetIntensity(bPlatePressed ? Layout->PressedLightIntensity : Layout->PlateLight.Intensity);
     }
     UE_LOG(LogTrainingChamber, Display, TEXT("Pressure plate %s."), bPlatePressed ? TEXT("pressed") : TEXT("released"));
 }
 
-void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int32 Index)
+void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int32 Index, bool bUseDispenser)
 {
     if (APuzzleCube* Cube = Cubes[Index]; IsValid(Cube))
     {
@@ -265,14 +435,15 @@ void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int
         {
             Player.ReleaseCube();
         }
-        Cube->ResetPosition(GetDefault<UTrainingChamberLayout>()->CubeSpawns[Index].Center);
+        const FTrainingCubeSpawn& Spawn = Layout->CubeSpawns[Index];
+        Cube->ResetPosition(bUseDispenser ? Spawn.Outlet : Spawn.Center);
     }
-    UE_LOG(LogTrainingChamber, Display, TEXT("Cube returned to its start."));
+    UE_LOG(LogTrainingChamber, Display, TEXT("Cube returned by %s."), bUseDispenser ? TEXT("dispenser") : TEXT("reset"));
 }
 
 void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
 {
-    Player.PlaceAt(FTransform(FRotator::ZeroRotator, GetDefault<UTrainingChamberLayout>()->Spawn));
+    Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
     Player.ReleaseCube();
     for (int32 Index = 0; Index < Cubes.Num(); ++Index)
     {
@@ -285,15 +456,224 @@ void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
     }
     if (IsValid(Door))
     {
-        Door->SetWorldLocation(GetDefault<UTrainingChamberLayout>()->Door.Center, false, nullptr, ETeleportType::TeleportPhysics);
+        Door->SetWorldLocation(Layout->Door.Center, false, nullptr, ETeleportType::TeleportPhysics);
     }
+    bButtonLatched = false;
+    if (ButtonVisual)
+    {
+        ButtonVisual->SetRelativeLocation(FVector::ZeroVector);
+    }
+    bExitEnabled = false;
+    MeasuredMassKg = 0.0f;
     bReachedExit = false;
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
+void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds)
+{
+    CourseTestTime += DeltaSeconds;
+    const auto Fail = [this, &Player](const TCHAR* Reason)
+    {
+        UE_LOG(LogTrainingChamber, Error, TEXT("Entry test failed at %s step %d: %s. Mass %.2f, player %s."),
+            *ChamberId, CourseTestStep, Reason, MeasuredMassKg, *Player.GetActorLocation().ToCompactString());
+        bVerifyEntryCourse = false;
+        FPlatformMisc::RequestExitWithStatus(false, 1);
+    };
+    if (CourseTestTime > 9.0f)
+    {
+        Fail(TEXT("Timed out waiting for gameplay"));
+        return;
+    }
+    const bool bWeight = ChamberId == WeightId;
+    const bool bAlternateWeight = bWeight && FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryAlternateWeight"));
+    const int32 RequiredCubes = ChamberId == StairsId ? 3 : bAlternateWeight ? 4 : bWeight ? 2 : 1;
+    if (Cubes.Num() < RequiredCubes ||
+        Cubes.ContainsByPredicate([](const APuzzleCube* Cube) { return !IsValid(Cube); }))
+    {
+        Fail(TEXT("Missing cubes from the test layout"));
+        return;
+    }
+    if (CourseTestStep == 0 && CourseTestTime >= 0.3f && !bVerificationScreenshotRequested &&
+        FParse::Param(FCommandLine::Get(), TEXT("CaptureEntryCourse")))
+    {
+        FScreenshotRequest::RequestScreenshot(TEXT("Entry-") + ChamberId, false, false);
+        bVerificationScreenshotRequested = true;
+        return;
+    }
+    const auto Step = [this](int32 Next)
+    {
+        CourseTestStep = Next;
+        CourseTestTime = 0.0f;
+    };
+    const auto AimFrom = [&Player](const FVector& From, const FVector& Target)
+    {
+        const FVector Eye = From + FVector(0.0, 0.0, Abandoned::MovementProfile::CameraHeight);
+        Player.PlaceAt(FTransform((Target - Eye).Rotation(), From));
+    };
+    const auto Pickup = [&Player, &AimFrom, this](APuzzleCube& Cube, FVector Approach)
+    {
+        const FVector Body = Cube.GetActorLocation();
+        const FVector Start = Body - Approach * 156.0;
+        AimFrom(FVector(Start.X, Start.Y, Layout->Spawn.Z), Body);
+        Player.Interact();
+        return Player.GetHeldCube() == &Cube;
+    };
+    const auto AimHold = [&AimFrom, this](const FVector& Target, FVector Approach)
+    {
+        const double Height = Target.Z - Layout->Spawn.Z - Abandoned::MovementProfile::CameraHeight;
+        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(HoldDistance) - FMath::Square(Height)));
+        const FVector Start = Target - Approach * Forward;
+        AimFrom(FVector(Start.X, Start.Y, Layout->Spawn.Z), Target);
+    };
+    const auto Aligned = [&Player](const UBoxComponent* Support)
+    {
+        const APuzzleCube* Held = Player.GetHeldCube();
+        return Held && Player.PreviewSupport.Get() == Support && !Player.bPreviewBlocked &&
+            Held->GetBody()->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(28.0);
+    };
+
+    APuzzleCube& First = *Cubes[0];
+    if (ChamberId == StairsId)
+    {
+        APuzzleCube& Base = *Cubes[1];
+        APuzzleCube& Low = *Cubes[2];
+        if (CourseTestStep == 0 && CourseTestTime >= 0.35f)
+        {
+            if (!Pickup(First, FVector::ForwardVector))
+            {
+                Fail(TEXT("Could not pick up the small cube"));
+                return;
+            }
+            AimHold(Base.GetActorLocation() + FVector(0.0, 0.0, Base.GetHalfSize() + First.GetHalfSize() + 40.0),
+                FVector::RightVector);
+            Step(1);
+        }
+        else if (CourseTestStep == 1 && Aligned(Base.GetBody()))
+        {
+            Player.Interact();
+            if (First.GetSupport() != Base.GetBody())
+            {
+                Fail(TEXT("Small cube did not snap to the large one"));
+                return;
+            }
+            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Low.GetActorLocation() + FVector(-6.0, 0.0,
+                Low.GetHalfSize() + Abandoned::MovementProfile::StandingHalfHeight + 1.0)));
+            Step(2);
+        }
+        else if (CourseTestStep == 2 && Player.GetMovementBase() == Low.GetBody())
+        {
+            Player.AddMovementInput(FVector::ForwardVector);
+            if (Player.GetActorLocation().X >= Low.GetActorLocation().X + 7.0)
+            {
+                Player.Jump();
+                Step(3);
+            }
+        }
+        else if (CourseTestStep == 3)
+        {
+            Player.AddMovementInput(FVector::ForwardVector * 0.35);
+            if (Player.GetMovementBase() == First.GetBody())
+            {
+                Player.StopJumping();
+                Player.Jump();
+                Step(4);
+            }
+        }
+        else if (CourseTestStep == 4)
+        {
+            Player.AddMovementInput(FVector::ForwardVector);
+        }
+        return;
+    }
+
+    if (CourseTestStep == 0 && CourseTestTime >= 0.35f)
+    {
+        const FVector Position = Layout->Button.Center - FVector(156.0, 0.0, 0.0);
+        AimFrom(FVector(Position.X, Position.Y, Layout->Spawn.Z), Layout->Button.Center);
+        Player.Interact();
+        if (!bButtonLatched || bExitEnabled || !Pickup(First, FVector::ForwardVector))
+        {
+            Fail(TEXT("Wall button should arm the circuit and leave the unloaded door closed"));
+            return;
+        }
+        const FVector HeldTarget = Layout->Plate.Center + FVector(0.0, 0.0,
+            Layout->Plate.Size.Z * 0.5 + First.GetHalfSize() + 40.0);
+        AimHold(HeldTarget, FVector::ForwardVector);
+        Step(1);
+    }
+    else if (CourseTestStep == 1 && Aligned(Plate))
+    {
+        Player.Interact();
+        if (First.GetSupport() != Plate)
+        {
+            Fail(TEXT("Cube did not snap to the plate"));
+            return;
+        }
+        Step(2);
+    }
+    else if (CourseTestStep == 2 && bWeight && CourseTestTime >= 0.35f)
+    {
+        APuzzleCube& Second = *Cubes[bAlternateWeight ? 2 : 1];
+        if (MeasuredMassKg != 10.0f || bExitEnabled || !Pickup(Second, FVector::ForwardVector))
+        {
+            Fail(TEXT("Weight lock must reject 10 kg even with its circuit armed"));
+            return;
+        }
+        const FVector HeldTarget = First.GetActorLocation() + FVector(0.0, 0.0,
+            First.GetHalfSize() + Second.GetHalfSize() + 35.0);
+        AimHold(HeldTarget, FVector::ForwardVector);
+        Step(3);
+    }
+    else if (CourseTestStep == 3 && Aligned(First.GetBody()))
+    {
+        Player.Interact();
+        if (Cubes[bAlternateWeight ? 2 : 1]->GetSupport() != First.GetBody())
+        {
+            Fail(TEXT("Second cube did not snap to the stack"));
+            return;
+        }
+        Step(bAlternateWeight ? 6 : 4);
+    }
+    else if (CourseTestStep == 6 && CourseTestTime >= 0.35f)
+    {
+        APuzzleCube& Middle = *Cubes[2];
+        APuzzleCube& Third = *Cubes[3];
+        if (MeasuredMassKg != 15.0f || bExitEnabled || !Pickup(Third, FVector::ForwardVector))
+        {
+            Fail(TEXT("Weight lock must reject 15 kg"));
+            return;
+        }
+        AimHold(Middle.GetActorLocation() + FVector(0.0, 0.0,
+            Middle.GetHalfSize() + Third.GetHalfSize() + 35.0), FVector::ForwardVector);
+        Step(7);
+    }
+    else if (CourseTestStep == 7 && Aligned(Cubes[2]->GetBody()))
+    {
+        Player.Interact();
+        if (Cubes[3]->GetSupport() != Cubes[2]->GetBody() || Cubes[3]->CanSupportCube(*Cubes[2]))
+        {
+            Fail(TEXT("The third cube must snap on top, and the stack must reject a fourth cube"));
+            return;
+        }
+        UE_LOG(LogTrainingChamber, Display, TEXT("Entry test: alternate solution assembled, 10 + 5 + 5 kg."));
+        Step(4);
+    }
+    else if (((CourseTestStep == 2 && !bWeight) || CourseTestStep == 4) && IsDoorOpen())
+    {
+        UE_LOG(LogTrainingChamber, Display, TEXT("Entry test: %s accepted %.0f kg after the wall button."),
+            *ChamberId, MeasuredMassKg);
+        Player.PlaceAt(FTransform(FRotator::ZeroRotator, FVector(Layout->Door.Center.X - 175.0,
+            Layout->Door.Center.Y, Layout->Spawn.Z)));
+        Step(5);
+    }
+    else if (CourseTestStep == 5)
+    {
+        Player.AddMovementInput(FVector::ForwardVector);
+    }
+}
+
 void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds)
 {
-    const UTrainingChamberLayout* Layout = GetDefault<UTrainingChamberLayout>();
     if (Cubes.Num() != 3 || !IsValid(Cubes[0]) || !IsValid(Cubes[1]) || !IsValid(Cubes[2]))
     {
         UE_LOG(LogTrainingChamber, Error, TEXT("Verification needs the three default training cubes."));
@@ -326,7 +706,7 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
         const FVector Eye = Here + FVector(0.0, 0.0, Abandoned::MovementProfile::CameraHeight);
         Player.PlaceAt(FTransform((Target - Eye).Rotation(), Here));
     };
-    const auto AimToHold = [Layout, &AimFrom](const FVector& Target, const FVector& Approach)
+    const auto AimToHold = [this, &AimFrom](const FVector& Target, const FVector& Approach)
     {
         const double Height = Target.Z - (Layout->Spawn.Z + Abandoned::MovementProfile::CameraHeight);
         const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(HoldDistance) - FMath::Square(Height)));
@@ -444,10 +824,10 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
                 Fail(TEXT("Expected a collision-free placement ghost on the plate"));
                 return;
             }
-            if (!bGhostScreenshotRequested && FParse::Param(FCommandLine::Get(), TEXT("CapturePlacementGhost")))
+            if (!bVerificationScreenshotRequested && FParse::Param(FCommandLine::Get(), TEXT("CapturePlacementGhost")))
             {
                 FScreenshotRequest::RequestScreenshot(TEXT("PlacementGhost"), false, false);
-                bGhostScreenshotRequested = true;
+                bVerificationScreenshotRequested = true;
                 break;
             }
             const FVector Expected = Player.PlacementGhost->GetComponentLocation();
@@ -665,13 +1045,19 @@ ATrainingChamberGameMode* ATrainingChamberCharacter::GetChamber() const
     return GetWorld()->GetAuthGameMode<ATrainingChamberGameMode>();
 }
 
-APuzzleCube* ATrainingChamberCharacter::FindReachableCube() const
+UPrimitiveComponent* ATrainingChamberCharacter::TraceInteractable() const
 {
     const FVector Origin = Camera->GetComponentLocation();
     const FCollisionQueryParams Query(SCENE_QUERY_STAT(TrainingReach), false, this);
     FHitResult Hit;
     GetWorld()->LineTraceSingleByChannel(Hit, Origin, Origin + GetViewRotation().Vector() * Reach, ECC_Visibility, Query);
-    return Cast<APuzzleCube>(Hit.GetActor());
+    return Hit.GetComponent();
+}
+
+APuzzleCube* ATrainingChamberCharacter::FindReachableCube() const
+{
+    const UPrimitiveComponent* Target = TraceInteractable();
+    return Target ? Cast<APuzzleCube>(Target->GetOwner()) : nullptr;
 }
 
 bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacement& Placement) const
@@ -695,7 +1081,7 @@ bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacemen
             return false;
         }
         const APuzzleCube* LowerCube = Cast<APuzzleCube>(Surface->GetOwner());
-        if (Surface != Chamber->GetPlate() && (!LowerCube || !LowerCube->CanSupportCube()))
+        if (Surface != Chamber->GetPlate() && !LowerCube)
         {
             return false;
         }
@@ -706,11 +1092,37 @@ bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacemen
             return false;
         }
         const FRotator Rotation(0.0, Surface->GetComponentRotation().Yaw, 0.0);
+        Placement = {Surface, Target, Rotation};
+        if (LowerCube)
+        {
+            switch (LowerCube->GetStackBlock(Cube))
+            {
+            case ECubeStackBlock::Size:
+                Placement.BlockReason = TEXT("Large cubes need a large support");
+                break;
+            case ECubeStackBlock::Occupied:
+                Placement.BlockReason = TEXT("This cube already supports a stack");
+                break;
+            case ECubeStackBlock::Height:
+                Placement.BlockReason = TEXT("Maximum stack height: three cubes");
+                break;
+            case ECubeStackBlock::Unstable:
+                Placement.BlockReason = TEXT("Wait for the support to settle");
+                break;
+            case ECubeStackBlock::None:
+                break;
+            }
+            if (Placement.BlockReason)
+            {
+                return false;
+            }
+        }
         const FCollisionShape Shape = FCollisionShape::MakeBox(FVector(Half));
         FCollisionQueryParams Clearance(SCENE_QUERY_STAT(CubePlacementClearance), false, &Cube);
         Clearance.AddIgnoredComponent(Surface);
         if (GetWorld()->OverlapBlockingTestByProfile(Target, Rotation.Quaternion(), TEXT("PhysicsActor"), Shape, Clearance))
         {
+            Placement.BlockReason = TEXT("Not enough room for the cube");
             return false;
         }
         // Sweep a small inset so a cube already touching the floor can slide clear of it.
@@ -718,9 +1130,9 @@ bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacemen
         if (GetWorld()->SweepSingleByProfile(Obstruction, Current, Target, Rotation.Quaternion(),
             TEXT("PhysicsActor"), FCollisionShape::MakeBox(FVector(Half - 1.0)), Clearance))
         {
+            Placement.BlockReason = TEXT("Something blocks the placement path");
             return false;
         }
-        Placement = {Surface, Target, Rotation};
         return true;
     };
     FHitResult Hit;
@@ -737,6 +1149,10 @@ const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
 {
     if (GetHeldCube())
     {
+        if (bPreviewBlocked)
+        {
+            return PreviewBlockReason ? PreviewBlockReason : TEXT("Placement blocked");
+        }
         if (const UBoxComponent* Support = PreviewSupport.Get())
         {
             return Cast<APuzzleCube>(Support->GetOwner()) ? TEXT("[E] Snap to cube") : TEXT("[E] Snap to plate");
@@ -746,6 +1162,11 @@ const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
     const APuzzleCube* Cube = FindReachableCube();
     if (!Cube)
     {
+        const ATrainingChamberGameMode* Chamber = GetChamber();
+        if (Chamber && Chamber->GetButton() && TraceInteractable() == Chamber->GetButton())
+        {
+            return Chamber->IsButtonLatched() ? TEXT("Circuit armed") : TEXT("[E] Arm the door circuit");
+        }
         return nullptr;
     }
     return Cube->GetMassKg() == 5.0f ? TEXT("[E] Pick up small cube (5 kg)") : TEXT("[E] Pick up large cube (10 kg)");
@@ -754,15 +1175,36 @@ const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
 void ATrainingChamberCharacter::UpdatePlacementGhost(const APuzzleCube* Held)
 {
     FPlacement Placement;
-    if (IsValid(Held) && FindPlacement(*Held, Placement))
+    const bool bCanPlace = IsValid(Held) && FindPlacement(*Held, Placement);
+    if (Placement.Support)
     {
         PreviewSupport = Placement.Support;
+        PreviewBlockReason = Placement.BlockReason;
+        if (bPreviewBlocked == bCanPlace)
+        {
+            const UTrainingChamberLayout* Art = GetDefault<UTrainingChamberLayout>();
+            if (UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(PlacementGhost->GetMaterial(0)))
+            {
+                Material->SetVectorParameterValue(TEXT("TintColorAndOpacity"),
+                    bCanPlace ? Art->PlacementGhostTint : Art->BlockedGhostTint);
+            }
+        }
+        bPreviewBlocked = !bCanPlace;
         PlacementGhost->SetWorldTransform(FTransform(Placement.Rotation, Placement.Center,
             FVector(Held->GetHalfSize() / 50.0)));
         PlacementGhost->SetVisibility(PlacementGhost->GetStaticMesh() != nullptr);
         return;
     }
+    if (bPreviewBlocked)
+    {
+        if (UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(PlacementGhost->GetMaterial(0)))
+        {
+            Material->SetVectorParameterValue(TEXT("TintColorAndOpacity"), GetDefault<UTrainingChamberLayout>()->PlacementGhostTint);
+        }
+        bPreviewBlocked = false;
+    }
     PreviewSupport.Reset();
+    PreviewBlockReason = nullptr;
     PlacementGhost->SetVisibility(false);
 }
 
@@ -780,7 +1222,15 @@ void ATrainingChamberCharacter::Interact()
         return;
     }
 
-    if (APuzzleCube* Candidate = FindReachableCube())
+    UPrimitiveComponent* Target = TraceInteractable();
+    ATrainingChamberGameMode* Chamber = GetChamber();
+    if (Target && Chamber && Target == Chamber->GetButton())
+    {
+        Chamber->PressButton();
+        return;
+    }
+    if (APuzzleCube* Candidate = Target ? Cast<APuzzleCube>(Target->GetOwner()) : nullptr;
+        Candidate && Candidate->GetMassKg() <= 40.0f)
     {
         Candidate->DetachForPickup();
         UBoxComponent* Body = Candidate->GetBody();
@@ -788,6 +1238,7 @@ void ATrainingChamberCharacter::Interact()
         if (GetHeldCube() == Candidate)
         {
             Body->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+            SetMovementLoad(Candidate->GetMassKg());
         }
     }
 }
@@ -801,6 +1252,7 @@ APuzzleCube* ATrainingChamberCharacter::GetHeldCube() const
 void ATrainingChamberCharacter::ReleaseCube()
 {
     UpdatePlacementGhost(nullptr);
+    SetMovementLoad(0.0f);
     UPrimitiveComponent* Held = Grip->GetGrabbedComponent();
     if (IsValid(Held))
     {
@@ -881,12 +1333,24 @@ void ATrainingChamberHUD::DrawHUD()
         return;
     }
 
-    DrawText(TEXT("TRAINING CHAMBER"), FLinearColor::White, 24.0f, 24.0f, nullptr, 1.2f);
+    const UTrainingChamberLayout* Layout = Chamber->GetLayout();
+    DrawText(Layout->Title, FLinearColor::White, 24.0f, 24.0f, nullptr, 1.2f);
     DrawText(TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   M test menu"), FLinearColor::White, 24.0f, 52.0f);
-    const TCHAR* Status = Chamber->HasReachedExit() ? TEXT("Exit reached") :
+    const FString Status = Chamber->HasReachedExit() ? TEXT("Entry course complete") :
         (Chamber->IsDoorOpen() ? TEXT("Exit open") :
-        (Chamber->IsPlatePressed() ? TEXT("Exit opening") : TEXT("Weigh down the pressure plate")));
+        (Chamber->IsExitEnabled() ? TEXT("Exit opening") : Layout->Objective));
     DrawText(Status, FLinearColor(1.0, 0.68, 0.23), 24.0f, 76.0f);
+    if (Layout->bRequiresButton)
+    {
+        DrawText(FString::Printf(TEXT("Circuit: %s   |   Plate: %.0f kg   |   Target: %.0f%s kg"),
+            Chamber->IsButtonLatched() ? TEXT("armed") : TEXT("off"), Chamber->GetMeasuredMass(),
+            Layout->PlateActivationMassKg, Layout->PlateActivationMassKg == Layout->PlateMaximumMassKg ? TEXT("") : TEXT("+")),
+            FLinearColor::White, 24.0f, 101.0f);
+    }
+    if (Chamber->DidCheckpointFallback())
+    {
+        DrawText(TEXT("Incompatible checkpoint. Starting from chamber 01."), FLinearColor::White, 24.0f, 125.0f);
+    }
 
     const float CenterX = Canvas->ClipX * 0.5f;
     const float CenterY = Canvas->ClipY * 0.5f;

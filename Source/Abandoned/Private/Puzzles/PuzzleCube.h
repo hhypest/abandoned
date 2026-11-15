@@ -5,6 +5,7 @@
 #include "PuzzleCube.generated.h"
 
 class UBoxComponent;
+class UMaterialInterface;
 class UStaticMesh;
 class UStaticMeshComponent;
 
@@ -13,6 +14,15 @@ enum class EPuzzleCubeType : uint8
 {
     Small,
     Large,
+};
+
+enum class ECubeStackBlock : uint8
+{
+    None,
+    Size,
+    Occupied,
+    Unstable,
+    Height,
 };
 
 UCLASS()
@@ -28,8 +38,10 @@ public:
     double GetHalfSize() const;
     float GetMassKg() const { return MassKg; }
     float GetStackMass() const;
+    void SetVisualMaterial(UMaterialInterface& Material);
     UBoxComponent* GetSupport() const { return Support.Get(); }
-    bool CanSupportCube() const;
+    ECubeStackBlock GetStackBlock(const APuzzleCube& Upper) const;
+    bool CanSupportCube(const APuzzleCube& Upper) const { return GetStackBlock(Upper) == ECubeStackBlock::None; }
     bool SnapTo(UBoxComponent& NewSupport, const FVector& Center, const FRotator& Rotation);
     void DetachForPickup();
     void ResetPosition(const FVector& Center);
