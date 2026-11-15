@@ -12,11 +12,11 @@
 
 ## Текущее состояние
 
-Создан стартовый C++-проект с целями Game и Editor, конфигурацией Vulkan и Enhanced Input. При открытии используется пустая карта движка. Управление, устройства головоломок, игровые карты и интеграция со Steam запланированы.
+Создан стартовый C++-проект с целями Game и Editor, конфигурацией Vulkan и Enhanced Input. При обычном открытии используется пустая карта движка. Для проверки контроллера предусмотрен отдельный [стенд движения](Docs/MovementLab.md). Устройства головоломок, карты кампании и интеграция со Steam запланированы.
 
 ## Запуск на Windows
 
-1. Установите UE 5.7 через Epic Games Launcher. В Visual Studio 2022 17.14 установите **Game development with C++**, MSVC v143 14.44.35214 и Windows SDK 10.0.22621.0 или новее. [Руководство Epic для UE 5.7](https://dev.epicgames.com/documentation/en-us/unreal-engine/setting-up-visual-studio-development-environment-for-cplusplus-projects-in-unreal-engine?application_version=5.7)
+1. Установите UE 5.7 через Epic Games Launcher. Для сборки нужны MSVC v143 (Visual Studio 2022 17.14, инструментальная цепочка 14.44) и Windows SDK 10.0.22621.0 или новее. Подходит Visual Studio с **Game development with C++** либо Visual Studio Build Tools 2022 с компонентами C++ x64/x86 и Windows SDK. [Руководство Epic для UE 5.7](https://dev.epicgames.com/documentation/en-us/unreal-engine/setting-up-visual-studio-development-environment-for-cplusplus-projects-in-unreal-engine?application_version=5.7)
 2. Клонируйте репозиторий или откройте существующую рабочую копию.
 
    ```powershell
