@@ -7,6 +7,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Domain/Puzzles/BallastRules.h"
+#include "Domain/Puzzles/SlidingDoorRules.h"
 #include "Engine/Canvas.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/PointLight.h"
@@ -43,6 +44,7 @@ using Dev20Step = Abandoned::Domain::Expedition::Dev20Stage;
 using Abandoned::Domain::Puzzles::CircuitRules;
 using Abandoned::Infrastructure::Expedition::UnrealCheckpointStore;
 using Abandoned::Infrastructure::Expedition::WriteSegment;
+using Abandoned::Infrastructure::Puzzles::IsDoorClamped;
 constexpr double DoorTravel = 280.0;
 constexpr double Reach = 280.0;
 constexpr double HoldDistance = 165.0;
@@ -87,11 +89,12 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
 #if WITH_DEV_AUTOMATION_TESTS
     bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
     bVerifyHints = FParse::Param(FCommandLine::Get(), TEXT("VerifyChamberHints"));
+    bVerifyDoorClamp = FParse::Param(FCommandLine::Get(), TEXT("VerifyDoorClamp"));
     bVerifyBalance = FParse::Param(FCommandLine::Get(), TEXT("VerifyBalanceChamber"));
     bVerifyEntryCheckpoint = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint"));
     bVerifyDev20 = Dev20Stage.has_value() && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
     bVerifyEntryCourse = bVerifyDev20 || bVerifyEntryCheckpoint || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
-    if (bVerifyHints)
+    if (bVerifyHints || bVerifyDoorClamp)
     {
         Requested = Segment::Weight;
         bReadCheckpoint = false;
@@ -147,7 +150,7 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || bVerifyHints)
+    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || bVerifyHints || bVerifyDoorClamp)
     {
         return;
     }
@@ -293,6 +296,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         ErrorMessage = TEXT("Could not create the cube, pressure plate or door.");
         return;
     }
+    DoorClamp.AddSigns(*Door);
 
     if (!Layout->HintPages.IsEmpty())
     {
@@ -367,9 +371,14 @@ void ATrainingChamberGameMode::HandleStartingNewPlayer_Implementation(APlayerCon
 void ATrainingChamberGameMode::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+    if (!IsValid(Door))
+    {
+        DoorClamp.Release();
+        return;
+    }
     const APlayerController* Controller = GetWorld()->GetFirstPlayerController();
     ATrainingChamberCharacter* Player = Controller ? Cast<ATrainingChamberCharacter>(Controller->GetPawn()) : nullptr;
-    if (!Player || !IsValid(GetPlate()) || !IsValid(Door) || bDev20Recovering)
+    if (!Player || !IsValid(GetPlate()) || bDev20Recovering)
     {
         return;
     }
@@ -396,16 +405,8 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
 
     ObserveCircuit(*Player, DeltaSeconds);
     ObserveHints(*Player, DeltaSeconds);
-    FVector DoorPosition = Door->GetComponentLocation();
-    const bool bClosing = DoorPosition.Z > Layout->Door.Center.Z && !IsExitEnabled();
-    const double TargetZ = Layout->Door.Center.Z + (IsExitEnabled() ? DoorTravel : 0.0);
-    const double Step = 350.0 * DeltaSeconds;
-    DoorPosition.Z += FMath::Clamp(TargetZ - DoorPosition.Z, -Step, Step);
-    FHitResult DoorHit;
-    Door->SetWorldLocation(DoorPosition, true, &DoorHit);
-    if (bClosing && DoorHit.GetActor() == Player && Course.Current != Segment::Sandbox)
+    if (MoveDoor(*Player, DeltaSeconds))
     {
-        ResetChamber(*Player);
         return;
     }
 
@@ -419,7 +420,11 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     }
 
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyHints)
+    if (bVerifyDoorClamp)
+    {
+        VerifyDoorClamp(*Player, DeltaSeconds);
+    }
+    else if (bVerifyHints)
     {
         VerifyHints(*Player, DeltaSeconds);
     }
@@ -436,6 +441,37 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         VerifyEntryChamber(*Player, DeltaSeconds);
     }
 #endif
+}
+
+bool ATrainingChamberGameMode::MoveDoor(ATrainingChamberCharacter& Player, float DeltaSeconds)
+{
+    using namespace Abandoned::Domain::Puzzles;
+    const auto Sweep = DoorClamp.Move(*Door, Layout->Door.Center.Z, DoorTravel, 350.0 * DeltaSeconds, IsExitEnabled());
+    if (!Sweep.Closing || !Sweep.Hit.bBlockingHit)
+    {
+        return false;
+    }
+    UBoxComponent* Body = Cast<UBoxComponent>(Sweep.Hit.GetComponent());
+    const APuzzleCube* Cube = Cast<APuzzleCube>(Sweep.Hit.GetActor());
+    const bool bPortable = Body && ((Cube && Cube->GetBody() == Body) || (IsValid(Dev20) && Dev20->GetBody() == Body));
+    const DoorContact Contact = Sweep.Hit.GetActor() == &Player ? DoorContact::Player :
+        bPortable ? DoorContact::Carryable : DoorContact::None;
+    switch (ResolveClosingContact(Sweep.Closing, Contact, Course.Current != Segment::Sandbox))
+    {
+    case ClosingContact::Clamp:
+        if (Player.GetHeldBody() == Body)
+        {
+            Player.ReleaseHeldObject();
+        }
+        DoorClamp.Capture(*Body);
+        break;
+    case ClosingContact::ResetPlayer:
+        ResetChamber(Player);
+        return true;
+    case ClosingContact::Block:
+        break;
+    }
+    return false;
 }
 
 const TCHAR* ATrainingChamberGameMode::GetDev20Status(const ATrainingChamberCharacter& Player) const
@@ -563,7 +599,8 @@ float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Pl
 
 bool ATrainingChamberGameMode::IsDoorOpen() const
 {
-    return IsValid(Door) && Door->GetComponentLocation().Z >= Layout->Door.Center.Z + DoorTravel - 2.0;
+    return IsValid(Door) && !DoorClamp.HasObject() &&
+        Door->GetComponentLocation().Z >= Layout->Door.Center.Z + DoorTravel - 2.0;
 }
 
 void ATrainingChamberGameMode::SetPlatePressed(int32 Index, bool bPressed)
@@ -589,6 +626,10 @@ void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int
 {
     if (APuzzleCube* Cube = Cubes[Index]; IsValid(Cube))
     {
+        if (DoorClamp.Holds(Cube->GetBody()))
+        {
+            DoorClamp.Release();
+        }
         if (Player.GetHeldCube() == Cube)
         {
             Player.ReleaseHeldObject();
@@ -601,6 +642,7 @@ void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int
 
 void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
 {
+    DoorClamp.Release();
     if (bDev20Run)
     {
         if (!bDev20Recovering)
@@ -1432,10 +1474,14 @@ const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
         }
         return TEXT("[E] Drop cube");
     }
-    const APuzzleCube* Cube = FindReachableCube();
+    const UPrimitiveComponent* Target = TraceInteractable();
+    if (IsDoorClamped(Target))
+    {
+        return TEXT("Object clamped");
+    }
+    const APuzzleCube* Cube = Target ? Cast<APuzzleCube>(Target->GetOwner()) : nullptr;
     if (!Cube)
     {
-        const UPrimitiveComponent* Target = TraceInteractable();
         if (Target && Cast<ADev20Actor>(Target->GetOwner()))
         {
             return TEXT("[E] Pick up DEV-20 (34 kg)");
@@ -1541,7 +1587,7 @@ void ATrainingChamberCharacter::Interact()
 
 bool ATrainingChamberCharacter::GrabBody(UBoxComponent& Body, float MassKg)
 {
-    if (GetHeldBody() || !Body.IsSimulatingPhysics() || !FMath::IsFinite(MassKg) ||
+    if (GetHeldBody() || IsDoorClamped(&Body) || !Body.IsSimulatingPhysics() || !FMath::IsFinite(MassKg) ||
         MassKg <= 0.0f || MassKg > Abandoned::Domain::Puzzles::MaximumCarryKg)
     {
         return false;
@@ -1693,11 +1739,17 @@ void ATrainingChamberHUD::DrawHUD()
         ? TEXT("WASD / mouse   Space jump   E interact   LMB throw   R reset   M menu   |   HINTS at entrance")
         : TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   M test menu");
     DrawText(Controls, FLinearColor::White, 24.0f, 52.0f);
+    const bool bDoorObstructed = Chamber->HasClampedObject() && !Chamber->HasReachedExit();
     const FString Status = Chamber->HasReachedExit()
         ? (Layout->UsesPlateBalance() ? TEXT("Balance chamber complete") : TEXT("Entry course complete")) :
-        (Chamber->IsDoorOpen() ? TEXT("Exit open") :
+        (bDoorObstructed ? TEXT("Door obstructed. Restore power to release.") :
+        Chamber->IsDoorOpen() ? TEXT("Exit open") :
         (Chamber->IsExitEnabled() ? TEXT("Exit opening") : Layout->Objective));
-    DrawText(Status, FLinearColor(1.0, 0.68, 0.23), 24.0f, 76.0f);
+    if (bDoorObstructed)
+    {
+        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.78f), 16.0f, 71.0f, 300.0f, 24.0f);
+    }
+    DrawText(Status, bDoorObstructed ? FLinearColor::White : FLinearColor(1.0, 0.68, 0.23), 24.0f, 76.0f);
     if (Layout->bRequiresButton)
     {
         DrawText(FString::Printf(TEXT("Circuit: %s   |   Plate: %.0f kg   |   Target: %.0f%s kg"),

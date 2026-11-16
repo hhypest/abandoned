@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "Infrastructure/Puzzles/UnrealSlidingDoor.h"
 
 APuzzleCube::APuzzleCube()
 {
@@ -61,6 +62,10 @@ void APuzzleCube::SetVisualMaterial(UMaterialInterface& Material)
 
 ECubeStackBlock APuzzleCube::GetStackBlock(const APuzzleCube& Upper) const
 {
+    if (Abandoned::Infrastructure::Puzzles::IsDoorClamped(Body))
+    {
+        return ECubeStackBlock::Unstable;
+    }
     const bool bSettled = GetActorUpVector().Z >= 0.995 &&
         Body->GetPhysicsLinearVelocity().SizeSquared() <= FMath::Square(25.0) &&
         Body->GetPhysicsAngularVelocityInDegrees().SizeSquared() <= FMath::Square(10.0);
@@ -97,7 +102,8 @@ ECubeStackBlock APuzzleCube::GetStackBlock(const APuzzleCube& Upper) const
 bool APuzzleCube::SnapTo(UBoxComponent& NewSupport, const FVector& Center, const FRotator& Rotation)
 {
     APuzzleCube* LowerCube = Cast<APuzzleCube>(NewSupport.GetOwner());
-    if (&NewSupport == Body || Support.IsValid() || StackedCube.IsValid() ||
+    if (&NewSupport == Body || Abandoned::Infrastructure::Puzzles::IsDoorClamped(Body) ||
+        Support.IsValid() || StackedCube.IsValid() ||
         (LowerCube && !LowerCube->CanSupportCube(*this)))
     {
         return false;
