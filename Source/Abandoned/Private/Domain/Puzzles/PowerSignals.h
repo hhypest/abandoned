@@ -56,6 +56,7 @@ public:
 
     void Reset() { Powered = PreviousInput = false; Remaining = 0.0f; }
     bool IsPowered() const { return Powered; }
+    float RemainingSeconds() const { return Remaining; }
 
 private:
     SignalMode Mode;
