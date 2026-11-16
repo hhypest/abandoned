@@ -62,7 +62,8 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
     };
     if (!BoxMesh || !BaseMaterial || !LaneValid(Layout->Interruption) || !LaneValid(Layout->Reflection) ||
         Layout->Room.IsEmpty() || Layout->Spawn.ContainsNaN() || Layout->Cube.ContainsNaN() ||
-        Layout->Button.ContainsNaN() || Layout->Mirror.ContainsNaN() || Layout->MirrorDock.ContainsNaN())
+        Layout->Button.ContainsNaN() || Layout->Mirror.ContainsNaN() || Layout->MirrorDock.ContainsNaN() ||
+        !Layout->HasValidPulse())
     {
         Error = TEXT("Invalid optical lab layout or missing base assets.");
         return;
@@ -125,6 +126,14 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
     }
     Interruption.Clamp.AddSigns(*Interruption.Door);
     Reflection.Clamp.AddSigns(*Reflection.Door);
+    UMaterialInterface* Steel = Finishes.FindRef(TEXT("Steel"));
+    UMaterialInterface* Panel = Finishes.FindRef(TEXT("Panel"));
+    UMaterialInterface* PulseScreen = Finishes.FindRef(TEXT("PulseScreen"));
+    if (!Steel || !Panel || !PulseScreen || !SpawnPulseBay(*BoxMesh, *Steel, *Panel, *PulseScreen))
+    {
+        Error = TEXT("Could not assemble the timed door, switches or clock.");
+        return;
+    }
     Button = Box(Layout->Button, FVector(52, 24, 42), TEXT("Panel"), true).Collision;
     Box(Layout->Button - FVector(0, 15, 0), FVector(62, 26, 48), TEXT("Steel"), false);
     ButtonLamp = Box(Layout->Button + FVector(0, 13, 0), FVector(36, 4, 10), TEXT("Inactive"), false).Visual;
@@ -192,11 +201,11 @@ void APowerLabGameMode::HandleStartingNewPlayer_Implementation(APlayerController
 
 void APowerLabGameMode::RestoreMirror()
 {
-    for (FOpticalLane* Lane : {&Interruption, &Reflection})
+    for (auto* Clamp : {&Interruption.Clamp, &Reflection.Clamp, &PulseClamp})
     {
-        if (Lane->Clamp.Holds(Mirror))
+        if (Clamp->Holds(Mirror))
         {
-            Lane->Clamp.Release();
+            Clamp->Release();
         }
     }
     bMirrorDocked = false;
@@ -217,6 +226,7 @@ void APowerLabGameMode::ResetLab(APowerLabCharacter& Player)
     Player.ReleaseHeldObject();
     Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
     Course.Reset();
+    ResetPulseBay();
     Cube->ResetPosition(Layout->Cube);
     RestoreMirror();
     Reflection.Direction = FVector::ForwardVector;
@@ -241,6 +251,12 @@ bool APowerLabGameMode::Interact(APowerLabCharacter& Player, UPrimitiveComponent
     if (&Target == Button)
     {
         Course.PressSupplyButton();
+        return true;
+    }
+    if (&Target == PulseButton || &Target == PulseReturn)
+    {
+        Pulse.Press();
+        UpdatePulseDisplay();
         return true;
     }
     if (&Target == Reflection.Emitter)
@@ -367,15 +383,16 @@ bool APowerLabGameMode::TraceLane(FOpticalLane& Lane, bool bPowered, bool bAccep
     return false;
 }
 
-bool APowerLabGameMode::MoveDoor(FOpticalLane& Lane, const FVector& Closed, bool bOpen, float Delta, APowerLabCharacter& Player)
+bool APowerLabGameMode::MoveDoor(UBoxComponent* Door, Abandoned::Infrastructure::Puzzles::SlidingDoorClamp& Clamp,
+    const FVector& Closed, bool bOpen, float Delta, APowerLabCharacter& Player, const FVector* LocalRetry)
 {
     using namespace Abandoned::Domain::Puzzles;
-    if (!IsValid(Lane.Door))
+    if (!IsValid(Door))
     {
-        Lane.Clamp.Release();
+        Clamp.Release();
         return false;
     }
-    const auto Sweep = Lane.Clamp.Move(*Lane.Door, Closed.Z, DoorTravelCm, DoorSpeedCm * Delta, bOpen);
+    const auto Sweep = Clamp.Move(*Door, Closed.Z, DoorTravelCm, DoorSpeedCm * Delta, bOpen);
     if (!Sweep.Closing || !Sweep.Hit.bBlockingHit)
     {
         return false;
@@ -391,10 +408,18 @@ bool APowerLabGameMode::MoveDoor(FOpticalLane& Lane, const FVector& Closed, bool
         {
             Player.ReleaseHeldObject();
         }
-        Lane.Clamp.Capture(*Body);
+        Clamp.Capture(*Body);
         break;
     case ClosingContact::ResetPlayer:
-        ResetLab(Player);
+        if (LocalRetry)
+        {
+            Player.ReleaseHeldObject();
+            Player.PlaceAt(FTransform(FRotator::ZeroRotator, *LocalRetry));
+        }
+        else
+        {
+            ResetLab(Player);
+        }
         return true;
     case ClosingContact::Block:
         break;
@@ -413,11 +438,11 @@ void APowerLabGameMode::Tick(float Delta)
     }
     if (Cube->GetActorLocation().Z < -240.0)
     {
-        for (FOpticalLane* Lane : {&Interruption, &Reflection})
+        for (auto* Clamp : {&Interruption.Clamp, &Reflection.Clamp, &PulseClamp})
         {
-            if (Lane->Clamp.Holds(Cube->GetBody()))
+            if (Clamp->Holds(Cube->GetBody()))
             {
-                Lane->Clamp.Release();
+                Clamp->Release();
             }
         }
         if (Player->GetHeldCube() == Cube)
@@ -451,8 +476,10 @@ void APowerLabGameMode::Tick(float Delta)
     Reflection.ReceiverLamp->SetMaterial(0, bReflectedSignal ? Cyan : Inactive);
     Interruption.PowerLine->SetMaterial(0, Doors.Interruption ? Amber : Inactive);
     Reflection.PowerLine->SetMaterial(0, Doors.Reflection ? Amber : Inactive);
-    if (MoveDoor(Interruption, Layout->Interruption.Door, Doors.Interruption, Delta, *Player) ||
-        MoveDoor(Reflection, Layout->Reflection.Door, Doors.Reflection, Delta, *Player))
+    ObservePulse(Delta, Player->GetActorLocation());
+    if (MoveDoor(Interruption.Door, Interruption.Clamp, Layout->Interruption.Door, Doors.Interruption, Delta, *Player) ||
+        MoveDoor(Reflection.Door, Reflection.Clamp, Layout->Reflection.Door, Doors.Reflection, Delta, *Player) ||
+        MoveDoor(PulseDoor, PulseClamp, Layout->PulseDoor.Center, Pulse.IsPowered(), Delta, *Player, &Layout->PulseRetry))
     {
         return;
     }
@@ -461,18 +488,32 @@ void APowerLabGameMode::Tick(float Delta)
     {
         Verify(*Player, Delta);
     }
+    else if (bVerifyPulse)
+    {
+        VerifyPulse(*Player, Delta);
+    }
 #endif
 }
 
 const TCHAR* APowerLabGameMode::GetObjective(const FVector& Player) const
 {
+    if (IsInPulseBay(Player))
+    {
+        if (PulseClamp.HasObject())
+        {
+            return TEXT("Timed door obstructed. Start a pulse to release the item.");
+        }
+        if (Player.X > Layout->PulseDoor.Center.X)
+        {
+            return Pulse.IsComplete() ? TEXT("Timed passage complete. Use the return switch [E].")
+                : TEXT("Clear the doorway.");
+        }
+        return Pulse.IsPowered() ? TEXT("Pulse active. Cross the marked door.")
+            : TEXT("Use the pulse switch [E], then cross before the timer expires.");
+    }
     if (Interruption.Clamp.HasObject() || Reflection.Clamp.HasObject())
     {
         return TEXT("Door obstructed. Restore its signal to release the item.");
-    }
-    if (Player.X > Layout->Reflection.Door.X + 90.0)
-    {
-        return TEXT("Optical circuit complete.");
     }
     if (Player.X > Layout->Interruption.Door.X + 60.0)
     {
@@ -661,7 +702,7 @@ void APowerLabGameMode::Verify(APowerLabCharacter& Player, float Delta)
         }
         break;
     case 12:
-        MoveDoor(Reflection, Layout->Reflection.Door, true, Delta, Player);
+        MoveDoor(Reflection.Door, Reflection.Clamp, Layout->Reflection.Door, true, Delta, Player);
         if (!Reflection.Clamp.HasObject())
         {
             if (!Mirror->IsSimulatingPhysics() || !FMath::IsNearlyEqual(Mirror->GetMass(), MirrorMassKg, 0.05f))
@@ -671,7 +712,7 @@ void APowerLabGameMode::Verify(APowerLabCharacter& Player, float Delta)
             }
             UE_LOG(LogPowerLab, Display, TEXT("Power lab verification passed: switch, blockers, reflection, exit and mirror clamp."));
             bVerify = false;
-            FPlatformMisc::RequestExitWithStatus(false, 0);
+            bVerifyPulse = true;
         }
         break;
     }
@@ -761,6 +802,15 @@ void APowerLabHUD::DrawHUD()
     DrawText(Player->IsAiming() ? TEXT("Align with mouse. Confirm [E].") : Lab->GetObjective(Player->GetActorLocation()),
         FLinearColor::White, 24, 53, nullptr, 1.0f);
     DrawText(TEXT("Reset [R]"), FLinearColor::White, 24, 76, nullptr, 0.9f);
+    if (Lab->IsInPulseBay(Player->GetActorLocation()))
+    {
+        const float Seconds = Lab->GetPulseSeconds();
+        DrawRect(FLinearColor(0, 0, 0, 0.8f), 16, 97, 214, 41);
+        DrawText(Seconds > 0.0f ? FString::Printf(TEXT("Pulse %.1f s"), FMath::CeilToFloat(Seconds * 10.0f) * 0.1f)
+            : TEXT("Pulse ready"), FLinearColor::White, 24, 102, nullptr, 1.0f);
+        DrawRect(FLinearColor(0.22f, 0.24f, 0.25f), 24, 124, 196, 5);
+        DrawRect(FLinearColor(1.0f, 0.66f, 0.22f), 24, 124, 196 * Lab->GetPulseFraction(), 5);
+    }
     const float X = Canvas->ClipX * 0.5f;
     const float Y = Canvas->ClipY * 0.5f;
     DrawLine(X - 6, Y, X + 6, Y, FLinearColor::White, 1);

@@ -3,6 +3,7 @@
 #include "Application/Expedition/MantleRequest.h"
 #include "Application/Expedition/PassageProgress.h"
 #include "Application/Puzzles/OpticsCourse.h"
+#include "Application/Puzzles/TimedPassage.h"
 #include "Application/Puzzles/ChamberHintReader.h"
 #include "Domain/Expedition/FallImpact.h"
 #include "Domain/Expedition/RadiationExposure.h"
@@ -369,6 +370,28 @@ void TestGravityFields()
     assert(GravityRollDegrees(GravityDirection::Up) == 180.0f);
 }
 
+void TestTimedPassage()
+{
+    Abandoned::Application::Puzzles::TimedPassage Passage{3.5f};
+    assert(!Passage.IsPowered() && !Passage.IsComplete() && Passage.RemainingSeconds() == 0.0f);
+    Passage.Press();
+    Passage.Observe(0.5f, false);
+    Passage.Press();
+    Passage.Observe(std::numeric_limits<float>::quiet_NaN(), false);
+    assert(Passage.IsPowered() && Passage.RemainingSeconds() == 3.0f);
+    Passage.Observe(3.0f, false);
+    assert(!Passage.IsPowered() && !Passage.IsComplete());
+    Passage.Press();
+    assert(Passage.RemainingSeconds() == 3.5f);
+    Passage.Observe(0.25f, true);
+    Passage.Observe(3.5f, false);
+    assert(!Passage.IsPowered() && Passage.IsComplete());
+    Passage.Press();
+    assert(Passage.IsPowered() && Passage.IsComplete());
+    Passage.Reset();
+    assert(!Passage.IsPowered() && !Passage.IsComplete() && Passage.RemainingSeconds() == 0.0f);
+}
+
 void TestPortalTransit()
 {
     assert(FitsPortal(0, -53, 118, 145, 30, 90));
@@ -455,6 +478,7 @@ int main()
     TestChamberHints();
     TestSlidingDoor();
     TestPowerSignalsAndOptics();
+    TestTimedPassage();
     TestGravityFields();
     TestPortalTransit();
     TestDev20Transfer();
