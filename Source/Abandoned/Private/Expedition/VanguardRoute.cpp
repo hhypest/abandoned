@@ -106,6 +106,8 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         Layout->Lights.ContainsByPredicate([](const FSceneLight& Light) { return !Light.IsValid(); }) ||
         Layout->Finishes.ContainsByPredicate([](const FSceneFinish& Finish) { return !Finish.IsValid(); }) ||
         (AtStation() ? !Station->SupplyCabinet.IsValid() : (!Passage->Door.IsValid() || !Passage->ExitZone.IsValid() ||
+            (Passage->bEnableMantle && (Passage->MantleLedges.IsEmpty() ||
+                Passage->MantleLedges.ContainsByPredicate([](const FSceneBlock& Ledge) { return !Ledge.IsValid() || !Ledge.bCollision; }))) ||
             !Passage->FrameFit.IsValid() || Passage->FrameRotation.ContainsNaN() || Passage->LeafRotation.ContainsNaN())))
     {
         ErrorMessage = TEXT("Invalid Vanguard route geometry or device configuration.");
@@ -154,6 +156,19 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     }
     else
     {
+        if (Passage->bEnableMantle)
+        {
+            for (const auto& Ledge : Passage->MantleLedges)
+            {
+                UBoxComponent* Collision = SpawnBlock(Ledge, EComponentMobility::Static).Collision;
+                if (!IsValid(Collision))
+                {
+                    ErrorMessage = TEXT("Could not spawn a passage mantle ledge.");
+                    return;
+                }
+                Abandoned::Infrastructure::Expedition::MarkMantleLedge(*Collision);
+            }
+        }
         if (UVanguardSession* Session = GetSession())
         {
             Session->Suit.Refill();
@@ -318,6 +333,10 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
     }
     InjuryNoticeSeconds = FMath::Max(0.0f, InjuryNoticeSeconds - DeltaSeconds);
     const auto& Passage = *CastChecked<UVanguardPassageLayout>(Layout.Get());
+    if (Passage.bEnableMantle)
+    {
+        Player.UpdateMantle(DeltaSeconds, LastGroundHeight);
+    }
     const FVector Position = Player.GetActorLocation();
     const bool bNearDoor = FMath::Abs(Position.X - Passage.Door.Center.X) < 385.0 &&
         FMath::Abs(Position.Y - Passage.Door.Center.Y) < 135.0;
@@ -510,6 +529,7 @@ void AVanguardRouteGameMode::Verify(AVanguardCharacter& Player, float DeltaSecon
             }
             ++FlashlightInputStep;
         }
+        VerifyMantle(Player, DeltaSeconds);
         Player.AddMovementInput(FVector::ForwardVector);
         const FVector Closed = GetDefault<UVanguardPassageLayout>()->Door.Center;
         if (bCaptureRoute && !bCapturedOpenDoor && Player.GetActorLocation().X < Closed.X - 70.0 &&
@@ -651,6 +671,11 @@ void AVanguardHUD::DrawHUD()
     if (Mode->HasMinorInjuryNotice())
     {
         DrawText(TEXT("Suit: minor impact injury"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 132.0f);
+    }
+    if (Player->CanMantle() && !Player->IsMantling())
+    {
+        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, 152.0f, 194.0f, 26.0f);
+        DrawText(TEXT("[Hold Space] Climb ledge"), FLinearColor::White, 24.0f, 158.0f);
     }
     if (Dosimeter)
     {

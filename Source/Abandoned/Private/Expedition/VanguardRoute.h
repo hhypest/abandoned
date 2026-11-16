@@ -3,12 +3,14 @@
 #include <optional>
 
 #include "CoreMinimal.h"
+#include "Application/Expedition/MantleRequest.h"
 #include "Domain/Expedition/EntryRoute.h"
 #include "Domain/Expedition/FallImpact.h"
 #include "Domain/Expedition/RadiationExposure.h"
 #include "Domain/Expedition/SuitSupply.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
+#include "Infrastructure/Expedition/UnrealMantle.h"
 #include "Player/AbandonedCharacter.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "VanguardRoute.generated.h"
@@ -62,6 +64,7 @@ private:
     void Verify(AVanguardCharacter& Player, float DeltaSeconds);
     void VerifyFalls(AVanguardCharacter& Player, float DeltaSeconds);
     void VerifyRadiation(AVanguardCharacter& Player, float DeltaSeconds);
+    void VerifyMantle(AVanguardCharacter& Player, float DeltaSeconds);
     enum class ERadiationVerification { Gate, WaitForFlare, LeaveShelter, ReturnToShelter, HoldInShelter, LethalExposure, RunToStation };
     bool bVerifyRoute = false;
     bool bVerifyFalls = false;
@@ -80,6 +83,16 @@ private:
     ERadiationVerification RadiationVerification = ERadiationVerification::Gate;
     double ProtectedDose = 0.0;
     float ShelterSeconds = 0.0f;
+    enum class EMantleVerification
+    {
+        Approach, ReleaseTap, WaitForLanding, DuckRunUp, DuckJump, DuckLanding, PlaceBlocker, BlockedHold, Hold, PullUp, WaitForTop, Done
+    };
+    EMantleVerification MantleVerification = EMantleVerification::Approach;
+    float MantleVerificationSeconds = 0.0f;
+    bool bTapLeftGround = false;
+    bool bDuckedInAir = false;
+    bool bCapturedMantleApproach = false;
+    TWeakObjectPtr<AActor> MantleTestBlocker;
 #endif
 
     UPROPERTY()
@@ -116,18 +129,29 @@ public:
     AVanguardCharacter();
     bool CanReachSupply() const;
     bool IsFlashlightOn() const;
+    bool CanMantle() const { return bMantleAvailable; }
+    bool IsMantling() const { return ActiveMantle.has_value(); }
     void Interact();
+    void Jump() override;
+    void StopJumping() override;
 
 private:
     friend class AVanguardRouteGameMode;
     void ToggleFlashlight();
     void ResetRadiation();
+    void UpdateMantle(float DeltaSeconds, std::optional<double> SupportHeight);
+    void FinishMantle();
+    Abandoned::Application::Expedition::MantleRequest MantleRequest;
+    std::optional<Abandoned::Infrastructure::Expedition::MantlePath> ActiveMantle;
+    double MantleSeconds = 0.0;
+    bool bMantleAvailable = false;
 
     UPROPERTY(VisibleDefaultsOnly, Category="Suit")
     TObjectPtr<USpotLightComponent> ShoulderLight;
 
 protected:
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;
+    void UnPossessed() override;
     void Landed(const FHitResult& Hit) override;
 };
 

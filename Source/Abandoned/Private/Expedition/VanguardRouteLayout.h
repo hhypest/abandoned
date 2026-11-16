@@ -62,6 +62,12 @@ class UVanguardPassageLayout : public UVanguardRouteLayout
 
 public:
     UPROPERTY(Config)
+    bool bEnableMantle = false;
+
+    UPROPERTY(Config)
+    TArray<FSceneBlock> MantleLedges;
+
+    UPROPERTY(Config)
     FSceneBlock Door;
 
     UPROPERTY(Config)
