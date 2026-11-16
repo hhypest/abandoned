@@ -120,6 +120,7 @@ void AVanguardCharacter::StopJumping()
 
 void AVanguardCharacter::UnPossessed()
 {
+    CloseWristTerminal();
     StopJumping();
     if (IsMantling())
     {
@@ -182,6 +183,7 @@ void AVanguardCharacter::UpdateMantle(float DeltaSeconds, std::optional<double> 
         return;
     }
     MantleRequest.Consume();
+    CloseWristTerminal();
     MantleSeconds = 0.0;
     ActiveMantle = Path;
     if (MantleGloves[0]->GetStaticMesh() && MantleGloves[1]->GetStaticMesh() && MantleSleeves[0]->GetStaticMesh())

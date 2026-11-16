@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Application/Expedition/MantleRequest.h"
+#include "Application/Expedition/SuitTerminal.h"
 #include "Domain/Expedition/EntryRoute.h"
 #include "Domain/Expedition/FallImpact.h"
 #include "Domain/Expedition/RadiationExposure.h"
@@ -33,6 +34,7 @@ class UVanguardSession final : public UGameInstanceSubsystem
 public:
     Abandoned::Domain::Expedition::SuitSupply Suit;
     Abandoned::Domain::Expedition::RadiationDose Dose;
+    Abandoned::Domain::Expedition::SuitArchive Archive;
     bool bFlashlightOn = false;
 #if WITH_DEV_AUTOMATION_TESTS
     bool bRecoveredFromRadiation = false;
@@ -61,6 +63,7 @@ public:
 private:
     friend class AVanguardCharacter;
     UVanguardSession* GetSession() const;
+    Abandoned::Application::Expedition::SuitTelemetry GetSuitTelemetry() const;
     void RecordLanding(double SurfaceHeight);
     bool TickRadiation(const FVector& Position, float DeltaSeconds, Abandoned::Domain::Expedition::RadiationDose& Dose);
     void RestartRadiationPassage();
@@ -69,6 +72,7 @@ private:
     void Verify(AVanguardCharacter& Player, float DeltaSeconds);
     void VerifyFalls(AVanguardCharacter& Player, float DeltaSeconds);
     void VerifyRadiation(AVanguardCharacter& Player, float DeltaSeconds);
+    bool VerifyWristTerminal(AVanguardCharacter& Player, float DeltaSeconds);
     void VerifyMantle(AVanguardCharacter& Player, float DeltaSeconds);
     enum class ERadiationVerification
     {
@@ -79,6 +83,10 @@ private:
     bool bVerifyInjuryAudio = false;
     bool bVerifyRadiation = false;
     bool bCaptureRadiation = false;
+    bool bVerifyWristTerminal = false;
+    bool bCaptureWristTerminal = false;
+    int TerminalInputStep = 0;
+    float TerminalVerificationSeconds = 0.0f;
     bool bCaptureRoute = false;
     float VerificationSeconds = 0.0f;
     bool bCaptured = false;
@@ -145,12 +153,14 @@ public:
     bool IsFlashlightOn() const;
     bool CanMantle() const { return bMantleAvailable; }
     bool IsMantling() const { return ActiveMantle.has_value(); }
+    bool IsWristTerminalOpen() const { return WristTerminal.Page().has_value(); }
     void Interact();
     void Jump() override;
     void StopJumping() override;
 
 private:
     friend class AVanguardRouteGameMode;
+    friend class AVanguardHUD;
     void ToggleFlashlight();
     void PlayInjuryBreath();
 #if WITH_DEV_AUTOMATION_TESTS
@@ -158,12 +168,25 @@ private:
     bool bInjuryBreathDecoded = false;
 #endif
     void ResetRadiation();
+    void CreateWristTerminal();
+    void ConfigureWristTerminal(UMaterialInterface* Surface);
+    void BindWristTerminalInput(UEnhancedInputComponent& Input);
+    void ToggleWristTerminal();
+    void CloseWristTerminal();
+    void AdvanceTerminalPage();
+    void NextArchiveRecord();
+    void PreviousArchiveRecord();
+    void MoveArchive(bool Forward);
+    void UpdateWristTerminal(const AVanguardRouteGameMode& Mode);
     void UpdateMantle(float DeltaSeconds, std::optional<double> SupportHeight);
     void FinishMantle();
     void CreateMantleVisuals();
     void LoadMantleVisuals();
     void UpdateMantleHands();
     Abandoned::Application::Expedition::MantleRequest MantleRequest;
+    Abandoned::Application::Expedition::SuitTerminal WristTerminal;
+    FString WristHeading;
+    FString WristReadout;
     std::optional<Abandoned::Infrastructure::Expedition::MantlePath> ActiveMantle;
     std::optional<Abandoned::Infrastructure::Expedition::MantleHandhold> ActiveMantleHandhold;
     double MantleSeconds = 0.0;
@@ -181,6 +204,21 @@ private:
     UPROPERTY(VisibleDefaultsOnly, Category="Suit")
     TObjectPtr<UStaticMeshComponent> MantleSleeves[2];
 
+    UPROPERTY()
+    TObjectPtr<USceneComponent> WristRoot;
+
+    UPROPERTY()
+    TObjectPtr<UStaticMeshComponent> WristCasing;
+
+    UPROPERTY()
+    TObjectPtr<UStaticMeshComponent> WristDisplay;
+
+    UPROPERTY()
+    TObjectPtr<UStaticMeshComponent> WristSleeve;
+
+    UPROPERTY()
+    TObjectPtr<UStaticMeshComponent> WristGlove;
+
 protected:
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;
     void UnPossessed() override;
@@ -194,4 +232,7 @@ class AVanguardHUD final : public AHUD
 
 public:
     void DrawHUD() override;
+
+private:
+    void DrawWristReadout(const AVanguardCharacter& Player);
 };
