@@ -3,6 +3,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Domain/Puzzles/OpticalReflector.h"
 #include "Domain/Puzzles/SlidingDoorRules.h"
 #include "Engine/Canvas.h"
 #include "Engine/World.h"
@@ -24,6 +25,8 @@ namespace
 constexpr float MirrorMassKg = 8.0f;
 constexpr double BeamReachCm = 2400.0;
 constexpr double DockRangeCm = 100.0;
+constexpr double MirrorPlacementDropCm = 60.0;
+constexpr double MirrorPlacementClearanceCm = 0.5;
 constexpr double DoorTravelCm = 270.0;
 constexpr double DoorSpeedCm = 320.0;
 constexpr ECollisionChannel OpticalBeam = ECC_GameTraceChannel1;
@@ -145,27 +148,13 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
             FVector(98, 5, 7), TEXT("White"), false);
     }
 
-    const auto MirrorParts = Box(Layout->Mirror, MirrorSize, TEXT("Dark"), true, true);
-    Mirror = MirrorParts.Collision;
-    const auto Face = Box(Layout->Mirror, FVector(5, 62, 45), TEXT("Steel"), false, true);
-    MirrorFace = Face.Visual;
     Cube = World.SpawnActor<APuzzleCube>();
-    if (!Button || !ButtonLamp || !Mirror || !MirrorParts.Visual || !MirrorFace || !Cube)
+    UMaterialInterface* MirrorBase = Finishes.FindRef(TEXT("Dark"));
+    if (!Button || !ButtonLamp || !Cube || !MirrorBase || !BuildMirror(*BoxMesh, *MirrorBase, *Steel))
     {
         Error = TEXT("Could not assemble the optical lab controls.");
         return;
     }
-    MirrorParts.Visual->SetRelativeScale3D(FVector(0.66, 0.52, 0.20));
-    MirrorParts.Visual->SetRelativeLocation(FVector(0, 0, -44));
-    const auto Mast = Box(Layout->Mirror, FVector(14, 23, 72), TEXT("Steel"), false, true);
-    if (Mast.Visual)
-    {
-        Mast.Visual->AttachToComponent(Mirror, FAttachmentTransformRules::KeepWorldTransform);
-        Mast.Visual->SetRelativeLocation(FVector(0, 0, -6));
-    }
-    MirrorFace->AttachToComponent(Mirror, FAttachmentTransformRules::KeepWorldTransform);
-    MirrorFace->SetRelativeLocation(FVector(0, 0, 8));
-    MirrorFace->SetCastShadow(false);
     Cube->Initialize(EPuzzleCubeType::Large, *BoxMesh);
     Cube->SetVisualMaterial(*Ballast);
     Cube->ResetPosition(Layout->Cube);
@@ -187,6 +176,7 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
 #if WITH_DEV_AUTOMATION_TESTS
     bVerify = FParse::Param(FCommandLine::Get(), TEXT("VerifyPowerLab"));
     bCapture = FParse::Param(FCommandLine::Get(), TEXT("CapturePowerLab"));
+    bVerifyFreeReflector = FParse::Param(FCommandLine::Get(), TEXT("VerifyFreeReflector"));
 #endif
     SetActorTickEnabled(true);
 }
@@ -197,6 +187,60 @@ void APowerLabGameMode::HandleStartingNewPlayer_Implementation(APlayerController
     {
         RestartPlayerAtTransform(Player, FTransform(FRotator::ZeroRotator, Layout->Spawn));
     }
+}
+
+bool APowerLabGameMode::BuildMirror(UStaticMesh& Mesh, UMaterialInterface& Base, UMaterialInterface& Steel)
+{
+    const auto Parts = Abandoned::Blockout::SpawnBox(*GetWorld(), Mesh, Layout->Mirror, MirrorSize,
+        EComponentMobility::Movable, TEXT("BlockAll"));
+    Mirror = Parts.Collision;
+    if (!Mirror || !Parts.Visual)
+    {
+        return false;
+    }
+    // Chaos uses the carry envelope. Optics and aiming trace the visible parts.
+    Mirror->SetCollisionResponseToChannel(OpticalBeam, ECR_Ignore);
+    Mirror->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+    Parts.Visual->SetRelativeScale3D(FVector(0.66, 0.52, 0.20));
+    Parts.Visual->SetRelativeLocation(FVector(0, 0, -44));
+    Parts.Visual->SetMaterial(0, &Base);
+    AActor* MirrorActor = Mirror->GetOwner();
+    const auto AddOpticalPart = [&](FVector Offset, FVector Size)
+    {
+        auto* Shape = NewObject<UBoxComponent>(MirrorActor);
+        MirrorActor->AddInstanceComponent(Shape);
+        Shape->SetupAttachment(Mirror);
+        Shape->SetMobility(EComponentMobility::Movable);
+        Shape->SetRelativeLocation(Offset);
+        Shape->InitBoxExtent(Size * 0.5);
+        Shape->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        Shape->SetCollisionObjectType(ECC_WorldDynamic);
+        Shape->SetCollisionResponseToAllChannels(ECR_Ignore);
+        Shape->SetCollisionResponseToChannel(OpticalBeam, ECR_Block);
+        Shape->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+        Shape->SetGenerateOverlapEvents(false);
+        Shape->SetCanEverAffectNavigation(false);
+        Shape->BodyInstance.bAutoWeld = false;
+        Shape->RegisterComponent();
+        return Shape;
+    };
+    const auto AddVisual = [&](UBoxComponent& Shape)
+    {
+        auto* Visual = NewObject<UStaticMeshComponent>(MirrorActor);
+        MirrorActor->AddInstanceComponent(Visual);
+        Visual->SetupAttachment(&Shape);
+        Visual->SetMobility(EComponentMobility::Movable);
+        Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        Visual->SetStaticMesh(&Mesh);
+        Visual->SetRelativeScale3D(Shape.GetUnscaledBoxExtent() / 50.0);
+        Visual->SetMaterial(0, &Steel);
+        Visual->RegisterComponent();
+    };
+    AddOpticalPart(FVector(0, 0, -44), FVector(66, 52, 20));
+    AddVisual(*AddOpticalPart(FVector(0, 0, -24), FVector(14, 23, 20)));
+    MirrorSurface = AddOpticalPart(FVector(0, 0, 8), FVector(5, 62, 45));
+    AddVisual(*MirrorSurface);
+    return true;
 }
 
 void APowerLabGameMode::RestoreMirror()
@@ -211,7 +255,7 @@ void APowerLabGameMode::RestoreMirror()
     bMirrorDocked = false;
     Mirror->SetSimulatePhysics(false);
     Mirror->SetWorldLocationAndRotation(Layout->Mirror, FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
-    MirrorFace->SetRelativeRotation(FRotator(0, -45, 0));
+    MirrorSurface->SetRelativeRotation(FRotator(0, -45, 0));
     Mirror->SetSimulatePhysics(true);
     Mirror->SetMassOverrideInKg(NAME_None, MirrorMassKg);
     Mirror->SetPhysicsLinearVelocity(FVector::ZeroVector);
@@ -264,8 +308,12 @@ bool APowerLabGameMode::Interact(APowerLabCharacter& Player, UPrimitiveComponent
         Player.Aim = EOpticsAim::Emitter;
         return true;
     }
-    if (&Target == Mirror)
+    if (IsMirrorTarget(&Target))
     {
+        if (!IsValid(Mirror) || Abandoned::Infrastructure::Puzzles::IsDoorClamped(Mirror))
+        {
+            return true;
+        }
         if (bMirrorDocked)
         {
             Mirror->SetSimulatePhysics(true);
@@ -283,26 +331,78 @@ bool APowerLabGameMode::Interact(APowerLabCharacter& Player, UPrimitiveComponent
     return false;
 }
 
-void APowerLabGameMode::TryDockMirror()
+void APowerLabGameMode::PlaceMirror(const APowerLabCharacter& Player)
 {
-    if (FVector::DistSquared(Mirror->GetComponentLocation(), Layout->MirrorDock) > FMath::Square(DockRangeCm))
+    const FVector From = Mirror->GetComponentLocation();
+    const FCollisionShape Shape = Mirror->GetCollisionShape();
+    const FCollisionQueryParams Query(SCENE_QUERY_STAT(ReflectorPlacement), false, Mirror->GetOwner());
+    const FCollisionResponseParams Response(Mirror->GetCollisionResponseToChannels());
+    const ECollisionChannel Channel = Mirror->GetCollisionObjectType();
+    const UWorld& World = *GetWorld();
+    if (FVector::DistSquared(From, Layout->MirrorDock) <= FMath::Square(DockRangeCm) &&
+        !World.OverlapBlockingTestByChannel(Layout->MirrorDock, FQuat::Identity, Channel, Shape, Query, Response))
+    {
+        Mirror->SetSimulatePhysics(false);
+        Mirror->SetWorldLocationAndRotation(Layout->MirrorDock, FRotator::ZeroRotator,
+            false, nullptr, ETeleportType::TeleportPhysics);
+        bMirrorDocked = true;
+        return;
+    }
+
+    const FQuat Upright = FRotator(0, Mirror->GetComponentRotation().Yaw, 0).Quaternion();
+    FHitResult Support;
+    if (!World.SweepSingleByChannel(Support, From, From - FVector(0, 0, MirrorPlacementDropCm),
+        Upright, Channel, Shape, Query, Response) || Support.bStartPenetrating ||
+        Support.ImpactNormal.Z < 0.7 || Support.GetActor() == &Player)
     {
         return;
     }
-    const FCollisionQueryParams Query(SCENE_QUERY_STAT(OpticalDock), false, Mirror->GetOwner());
-    if (GetWorld()->OverlapBlockingTestByProfile(Layout->MirrorDock, FQuat::Identity, Mirror->GetCollisionProfileName(),
-        FCollisionShape::MakeBox(Mirror->GetScaledBoxExtent()), Query))
+    const FVector Landing = Support.Location + FVector(0, 0, MirrorPlacementClearanceCm);
+    if (World.OverlapBlockingTestByChannel(Landing, Upright, Channel, Shape, Query, Response))
     {
         return;
     }
-    Mirror->SetSimulatePhysics(false);
-    Mirror->SetWorldLocationAndRotation(Layout->MirrorDock, FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
-    bMirrorDocked = true;
+    Mirror->SetWorldLocationAndRotation(Landing, Upright, false, nullptr, ETeleportType::TeleportPhysics);
+    Mirror->SetPhysicsLinearVelocity(FVector::ZeroVector);
+    Mirror->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+}
+
+bool APowerLabGameMode::IsMirrorTarget(const UPrimitiveComponent* Target) const
+{
+    return IsValid(Target) && IsValid(Mirror) && Target->GetOwner() == Mirror->GetOwner();
+}
+
+bool APowerLabGameMode::CanAimMirror(const APowerLabCharacter& Player) const
+{
+    if (Player.GetHeldBody() || !IsValid(Mirror) || !IsValid(MirrorSurface) ||
+        Abandoned::Infrastructure::Puzzles::IsDoorClamped(Mirror))
+    {
+        return false;
+    }
+    if (bMirrorDocked)
+    {
+        return true;
+    }
+    const double Upright = Mirror->GetUpVector().Z;
+    const double SpeedSq = Mirror->GetPhysicsLinearVelocity().SizeSquared();
+    const double SpinSq = Mirror->GetPhysicsAngularVelocityInDegrees().SizeSquared();
+    if (!Mirror->IsSimulatingPhysics() || !Abandoned::Domain::Puzzles::IsReflectorSettled(Upright, SpeedSq, SpinSq))
+    {
+        return false;
+    }
+    const FVector Base = Mirror->GetComponentTransform().TransformPosition(
+        FVector(0, 0, -Mirror->GetUnscaledBoxExtent().Z));
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(ReflectorSupport), false, Mirror->GetOwner());
+    Query.AddIgnoredActor(&Player);
+    FHitResult Floor;
+    return GetWorld()->LineTraceSingleByChannel(Floor, Base + FVector(0, 0, 4), Base - FVector(0, 0, 7),
+        ECC_Visibility, Query) && Floor.ImpactNormal.Z >= 0.7;
 }
 
 const AActor* APowerLabGameMode::GetAimOwner(EOpticsAim Aim) const
 {
-    return Aim == EOpticsAim::Emitter ? Reflection.Emitter->GetOwner() : Mirror->GetOwner();
+    const UBoxComponent* Device = Aim == EOpticsAim::Emitter ? Reflection.Emitter.Get() : Mirror.Get();
+    return IsValid(Device) ? Device->GetOwner() : nullptr;
 }
 
 void APowerLabGameMode::AimAt(EOpticsAim Target, FVector Point)
@@ -315,15 +415,14 @@ void APowerLabGameMode::AimAt(EOpticsAim Target, FVector Point)
             Reflection.Direction = Direction;
         }
     }
-    else if (Target == EOpticsAim::Mirror && bMirrorDocked)
+    else if (Target == EOpticsAim::Mirror && IsValid(MirrorSurface))
     {
-        FVector Pivot = Mirror->GetComponentLocation();
-        Pivot.Z = Layout->Reflection.Emitter.Z;
+        FVector Pivot = MirrorSurface->GetComponentLocation();
         const FVector Start = Reflection.Emitter->GetComponentLocation();
         const FCollisionQueryParams Query(SCENE_QUERY_STAT(AimMirror), false, Reflection.Emitter->GetOwner());
         FHitResult Incoming;
         GetWorld()->LineTraceSingleByChannel(Incoming, Start, Start + Reflection.Direction * BeamReachCm, OpticalBeam, Query);
-        if (Incoming.GetComponent() == Mirror)
+        if (Incoming.GetComponent() == MirrorSurface)
         {
             Pivot = Incoming.ImpactPoint;
         }
@@ -332,7 +431,7 @@ void APowerLabGameMode::AimAt(EOpticsAim Target, FVector Point)
         const FVector Normal = (Desired - Incident).GetSafeNormal();
         if (!Desired.IsNearlyZero() && !Normal.IsNearlyZero())
         {
-            MirrorFace->SetWorldRotation(Normal.Rotation());
+            MirrorSurface->SetWorldRotation(Normal.Rotation());
         }
     }
 }
@@ -366,12 +465,18 @@ bool APowerLabGameMode::TraceLane(FOpticalLane& Lane, bool bPowered, bool bAccep
         {
             return !bAcceptReflection || Segment > 0;
         }
-        if (!bHit || Segment > 0 || !bAcceptReflection || Hit.GetComponent() != Mirror ||
-            FMath::Abs(Hit.ImpactPoint.Z - MirrorFace->GetComponentLocation().Z) > 23.0)
+        if (!bHit || Segment > 0 || !bAcceptReflection || !IsValid(MirrorSurface) ||
+            Hit.GetComponent() != MirrorSurface || Abandoned::Infrastructure::Puzzles::IsDoorClamped(Mirror))
         {
             return false;
         }
-        Direction = Direction.MirrorByVector(MirrorFace->GetForwardVector()).GetSafeNormal();
+        const FVector Normal = MirrorSurface->GetForwardVector();
+        if (!Abandoned::Domain::Puzzles::CanReflectFromFace(
+            FVector::DotProduct(Hit.ImpactNormal, Normal), FVector::DotProduct(Direction, Normal)))
+        {
+            return false;
+        }
+        Direction = Direction.MirrorByVector(Normal).GetSafeNormal();
         Query.AddIgnoredActor(Mirror->GetOwner());
         Range -= Hit.Distance + 2.0;
         if (Range <= 0.0)
@@ -521,8 +626,7 @@ const TCHAR* APowerLabGameMode::GetObjective(const FVector& Player) const
         {
             return TEXT("Signal received. Go through the open door.");
         }
-        return bMirrorDocked ? TEXT("Aim emitter at mirror [E]. Aim mirror at receiver [Q].")
-            : TEXT("Carry the mirror to its floor dock [E].");
+        return TEXT("Place mirror [E]. Aim emitter at mirror [E] and mirror at receiver [Q].");
     }
     return Course.GetPower().DirectEmitter ? TEXT("Interrupt the beam with the cube or your suit.")
         : TEXT("Turn on the signal at the wall switch [E].");
@@ -550,8 +654,17 @@ void APowerLabGameMode::Verify(APowerLabCharacter& Player, float Delta)
         const FVector Eye = Center + FVector(0, 0, Abandoned::MovementProfile::CameraHeight);
         Player.PlaceAt(FTransform((At - Eye).Rotation(), Center));
     };
+    const FVector MirrorPlacement = Layout->MirrorDock +
+        (bVerifyFreeReflector ? FVector(-140, 125, 0) : FVector::ZeroVector);
     if (VerificationTime > 6.0f)
     {
+        if (bVerifyFreeReflector && VerificationStep >= 6 && VerificationStep <= 8)
+        {
+            UE_LOG(LogPowerLab, Error, TEXT("Free mirror pose %s, up %.3f, speed %.2f, spin %.2f, aimable %d."),
+                *Mirror->GetComponentLocation().ToCompactString(), Mirror->GetUpVector().Z,
+                Mirror->GetPhysicsLinearVelocity().Size(), Mirror->GetPhysicsAngularVelocityInDegrees().Size(),
+                CanAimMirror(Player));
+        }
         Fail(TEXT("Timed out waiting for a physical transition."));
         return;
     }
@@ -617,17 +730,23 @@ void APowerLabGameMode::Verify(APowerLabCharacter& Player, float Delta)
                 Fail(TEXT("Could not pick up the portable mirror."));
                 return;
             }
-            LookFrom(Layout->MirrorDock + FVector(0, 127, 0), Layout->MirrorDock);
+            Player.AimMirror();
+            if (Player.IsAiming())
+            {
+                Fail(TEXT("held reflector entered adjustment mode"));
+                return;
+            }
+            LookFrom(MirrorPlacement + FVector(0, 127, 0), MirrorPlacement);
             Next(TEXT("Crossed the door and picked up the mirror."));
         }
         break;
     case 6:
-        if (FVector::DistSquared(Mirror->GetComponentLocation(), Layout->MirrorDock) < FMath::Square(45.0))
+        if (FVector::DistSquared(Mirror->GetComponentLocation(), MirrorPlacement) < FMath::Square(45.0))
         {
             Player.Interact();
-            if (!bMirrorDocked || Player.GetHeldBody())
+            if (bMirrorDocked == bVerifyFreeReflector || Player.GetHeldBody())
             {
-                Fail(TEXT("Mirror placement did not engage its dock."));
+                Fail(TEXT("Mirror placement did not enter the expected support state."));
                 return;
             }
             LookFrom(Layout->Reflection.Emitter + FVector(-105, 100, 0), Layout->Reflection.Emitter);
@@ -637,15 +756,16 @@ void APowerLabGameMode::Verify(APowerLabCharacter& Player, float Delta)
                 Fail(TEXT("Emitter interaction did not enter aiming."));
                 return;
             }
-            LookFrom(Player.GetActorLocation(), Layout->MirrorDock + FVector(0, 0, 9));
-            Next(TEXT("Docked the carried mirror and entered live emitter aiming."));
+            LookFrom(Player.GetActorLocation(), MirrorSurface->GetComponentLocation());
+            Next(bVerifyFreeReflector ? TEXT("Placed the carried mirror off the dock and aimed the emitter.")
+                : TEXT("Docked the carried mirror and entered live emitter aiming."));
         }
         break;
     case 7:
-        if (VerificationTime >= 0.12f)
+        if (VerificationTime >= 0.12f && CanAimMirror(Player))
         {
             Player.Interact();
-            LookFrom(Layout->MirrorDock + FVector(-119, 72, 0), Layout->MirrorDock + FVector(0, 0, 9));
+            LookFrom(Mirror->GetComponentLocation() + FVector(-119, 72, 0), MirrorSurface->GetComponentLocation());
             Player.AimMirror();
             if (Player.Aim != EOpticsAim::Mirror)
             {
@@ -662,10 +782,18 @@ void APowerLabGameMode::Verify(APowerLabCharacter& Player, float Delta)
             Player.Interact();
             if (bCapture)
             {
-                LookFrom(Layout->MirrorDock + FVector(-380, -70, 0), Layout->MirrorDock + FVector(280, -160, 35));
-                FScreenshotRequest::RequestScreenshot(TEXT("PowerLab-Reflection"), false, false);
+                LookFrom(MirrorPlacement + FVector(-380, -120, 0),
+                    (MirrorSurface->GetComponentLocation() + Layout->Reflection.Receiver) * 0.5);
             }
             Next(TEXT("Real reflected ray reached its receiver and opened the exit."));
+            if (bCapture)
+            {
+                VerificationStep = 16;
+            }
+            else if (bVerifyFreeReflector)
+            {
+                VerificationStep = 13;
+            }
         }
         break;
     case 9:
@@ -715,6 +843,51 @@ void APowerLabGameMode::Verify(APowerLabCharacter& Player, float Delta)
             bVerifyPulse = true;
         }
         break;
+    case 13:
+        if (VerificationTime >= 0.15f)
+        {
+            if (bMirrorDocked || !Mirror->IsSimulatingPhysics() ||
+                FVector::Dist2D(Mirror->GetComponentLocation(), Layout->MirrorDock) <= DockRangeCm)
+            {
+                Fail(TEXT("the free reflector route used the dock"));
+                return;
+            }
+            LookFrom(Mirror->GetComponentLocation() + FVector(-119, 72, 0), MirrorSurface->GetComponentLocation());
+            Player.AimMirror();
+            if (Player.Aim != EOpticsAim::Mirror)
+            {
+                Fail(TEXT("a settled reflector outside the dock could not be aimed again"));
+                return;
+            }
+            LookFrom(Player.GetActorLocation(), Layout->Reflection.Receiver + FVector(0, 240, 75));
+            Next(TEXT("Turned the free reflector away from its receiver."));
+        }
+        break;
+    case 14:
+        if (!bReflectedSignal && Reflection.Door->GetComponentLocation().Equals(Layout->Reflection.Door, 1.0))
+        {
+            LookFrom(Player.GetActorLocation(), Layout->Reflection.Receiver);
+            Next(TEXT("Turning off target closed the real door. Aimed at the receiver again."));
+        }
+        break;
+    case 15:
+        if (bReflectedSignal && Reflection.Door->GetComponentLocation().Z > Layout->Reflection.Door.Z + 250)
+        {
+            Player.Interact();
+            UE_LOG(LogPowerLab, Display, TEXT("Free reflector verification passed: placed off-dock, lost signal and reopened."));
+            Next(TEXT("Free reflector solution restored the reflected signal."));
+            VerificationStep = 9;
+        }
+        break;
+    case 16:
+        if (VerificationTime >= 0.18f)
+        {
+            FScreenshotRequest::RequestScreenshot(bVerifyFreeReflector ? TEXT("PowerLab-Free-Reflector")
+                : TEXT("PowerLab-Reflection"), false, false);
+            VerificationStep = bVerifyFreeReflector ? 13 : 9;
+            VerificationTime = 0.0f;
+        }
+        break;
     }
 }
 #endif
@@ -745,7 +918,7 @@ void APowerLabCharacter::PlaceHeldDevice(UBoxComponent& Body)
 {
     if (APowerLabGameMode* Lab = GetWorld()->GetAuthGameMode<APowerLabGameMode>(); Lab && &Body == Lab->Mirror)
     {
-        Lab->TryDockMirror();
+        Lab->PlaceMirror(*this);
     }
 }
 
@@ -760,7 +933,7 @@ void APowerLabCharacter::ResetChamber()
 void APowerLabCharacter::AimMirror()
 {
     const APowerLabGameMode* Lab = GetWorld()->GetAuthGameMode<APowerLabGameMode>();
-    if (Lab && Lab->bMirrorDocked && !GetHeldBody() && TraceInteractable() == Lab->Mirror)
+    if (Lab && Lab->IsMirrorTarget(TraceInteractable()) && Lab->CanAimMirror(*this))
     {
         Aim = EOpticsAim::Mirror;
     }
@@ -777,7 +950,8 @@ void APowerLabCharacter::Tick(float Delta)
     const FVector Start = Camera->GetComponentLocation();
     const FVector End = Start + GetViewRotation().Vector() * BeamReachCm;
     const AActor* Device = Lab->GetAimOwner(Aim);
-    if (FVector::DistSquared(Device->GetActorLocation(), Start) > FMath::Square(380.0))
+    if (!IsValid(Device) || FVector::DistSquared(Device->GetActorLocation(), Start) > FMath::Square(380.0) ||
+        (Aim == EOpticsAim::Mirror && !Lab->CanAimMirror(*this)))
     {
         Aim = EOpticsAim::None;
         return;
