@@ -16,8 +16,10 @@
 #include "VanguardRoute.generated.h"
 
 class AVanguardCharacter;
+class UAudioComponent;
 class UBoxComponent;
 class UMaterialInterface;
+class USoundWave;
 class USpotLightComponent;
 class UVanguardRadiationLayout;
 class UVanguardRouteLayout;
@@ -51,7 +53,7 @@ public:
     bool HasClearedRadiation() const { return bClearedRadiation; }
     float GetOxygenPercent() const;
     std::optional<Abandoned::Domain::Expedition::DosimeterReading> GetDosimeter() const;
-    bool HasMinorInjuryNotice() const { return InjuryNoticeSeconds > 0.0f; }
+    bool HasMinorInjuryNotice() const { return InjuryRecovery.IsActive(); }
     UBoxComponent* GetSupplyCabinet() const { return SupplyCabinet; }
     void Resupply();
 
@@ -73,6 +75,7 @@ private:
     };
     bool bVerifyRoute = false;
     bool bVerifyFalls = false;
+    bool bVerifyInjuryAudio = false;
     bool bVerifyRadiation = false;
     bool bCaptureRadiation = false;
     bool bCaptureRoute = false;
@@ -85,6 +88,7 @@ private:
     int FallTestStep = 0;
     bool bPlacedAtTestPlatform = false;
     bool bWalkedOffTestPlatform = false;
+    bool bWaitingForInjuryRecovery = false;
     ERadiationVerification RadiationVerification = ERadiationVerification::Gate;
     double ProtectedDose = 0.0;
     float ShelterSeconds = 0.0f;
@@ -122,7 +126,7 @@ private:
     bool bClearedRadiation = false;
     std::optional<double> LastGroundHeight;
     Abandoned::Domain::Expedition::FallImpact LandingImpact = Abandoned::Domain::Expedition::FallImpact::None;
-    float InjuryNoticeSeconds = 0.0f;
+    Abandoned::Domain::Expedition::MinorInjuryRecovery InjuryRecovery;
     std::optional<Abandoned::Domain::Expedition::RadiationExposure> Radiation;
     Abandoned::Domain::Expedition::RadiationPosition RadiationPosition = Abandoned::Domain::Expedition::RadiationPosition::Outside;
 };
@@ -145,6 +149,11 @@ public:
 private:
     friend class AVanguardRouteGameMode;
     void ToggleFlashlight();
+    void PlayInjuryBreath();
+#if WITH_DEV_AUTOMATION_TESTS
+    void ObserveInjuryBreath(const UAudioComponent*, const USoundWave*, float PlayedFraction);
+    bool bInjuryBreathDecoded = false;
+#endif
     void ResetRadiation();
     void UpdateMantle(float DeltaSeconds, std::optional<double> SupportHeight);
     void FinishMantle();
@@ -155,6 +164,9 @@ private:
 
     UPROPERTY(VisibleDefaultsOnly, Category="Suit")
     TObjectPtr<USpotLightComponent> ShoulderLight;
+
+    UPROPERTY(VisibleDefaultsOnly, Category="Suit")
+    TObjectPtr<UAudioComponent> InjuryBreath;
 
 protected:
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;

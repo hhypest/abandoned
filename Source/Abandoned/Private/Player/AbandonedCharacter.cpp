@@ -143,8 +143,28 @@ void AAbandonedCharacter::SetSlow(bool bHeld)
 void AAbandonedCharacter::UpdateSpeed()
 {
     const float NormalSpeed = bSprintHeld ? SprintSpeed : WalkSpeed;
-    GetCharacterMovement()->MaxWalkSpeed = (bSlowHeld ? SlowSpeed : NormalSpeed) * LoadSpeedScale;
-    GetCharacterMovement()->MaxWalkSpeedCrouched = SlowSpeed * LoadSpeedScale;
+    UCharacterMovementComponent& Movement = *GetCharacterMovement();
+    const float SpeedScale = LoadSpeedScale * (Movement.IsMovingOnGround() ? GroundSpeedScale : 1.0f);
+    Movement.MaxWalkSpeed = (bSlowHeld ? SlowSpeed : NormalSpeed) * SpeedScale;
+    Movement.MaxWalkSpeedCrouched = SlowSpeed * SpeedScale;
+}
+
+void AAbandonedCharacter::SetGroundSpeedScale(float Scale)
+{
+    if (GroundSpeedScale != Scale)
+    {
+        GroundSpeedScale = Scale;
+        UpdateSpeed();
+    }
+}
+
+void AAbandonedCharacter::OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode)
+{
+    Super::OnMovementModeChanged(PreviousMovementMode, PreviousCustomMode);
+    if (GroundSpeedScale != 1.0f)
+    {
+        UpdateSpeed();
+    }
 }
 
 void AAbandonedCharacter::SetMovementLoad(float MassKg)
