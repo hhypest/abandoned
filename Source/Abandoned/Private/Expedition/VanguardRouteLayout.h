@@ -1,10 +1,36 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Domain/Expedition/FallImpact.h"
 #include "World/SceneLayout.h"
 #include "VanguardRouteLayout.generated.h"
 
 class UStaticMesh;
+class USoundBase;
+
+UCLASS(Config=Game, DefaultConfig)
+class UVanguardInjurySettings final : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(Config)
+    double RecoverySeconds = 0.0;
+
+    UPROPERTY(Config)
+    float InitialGroundSpeedScale = 1.0f;
+
+    UPROPERTY(Config)
+    TSoftObjectPtr<USoundBase> BreathSound;
+
+    UPROPERTY(Config)
+    float BreathVolume = 0.7f;
+
+    Abandoned::Domain::Expedition::InjuryRecoveryProfile Recovery() const
+    {
+        return {RecoverySeconds, InitialGroundSpeedScale};
+    }
+};
 
 UCLASS(Config=Game, DefaultConfig)
 class UVanguardFlashlightSettings final : public UObject

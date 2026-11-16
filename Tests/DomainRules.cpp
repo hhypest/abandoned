@@ -132,6 +132,26 @@ void TestFallImpact()
     assert(AssessFall(300.0) == FallImpact::MinorInjury);
     assert(AssessFall(300.1) == FallImpact::Fatal);
     assert(AssessFall(std::numeric_limits<double>::quiet_NaN()) == FallImpact::None);
+
+    constexpr InjuryRecoveryProfile Profile{2.5, 0.65f};
+    MinorInjuryRecovery Recovery;
+    assert(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
+    Recovery.Start({0.0, 0.65f});
+    assert(!Recovery.IsActive());
+    Recovery.Start(Profile);
+    Recovery.Advance(-1.0);
+    Recovery.Advance(std::numeric_limits<double>::quiet_NaN());
+    assert(Recovery.IsActive() && Recovery.GroundSpeedScale() == Profile.InitialSpeedScale);
+    Recovery.Advance(1.25);
+    assert(std::abs(Recovery.GroundSpeedScale() - 0.825f) < 0.0001f);
+    Recovery.Advance(1.25);
+    assert(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
+    Recovery.Start(Profile);
+    Recovery.Advance(2.0);
+    Recovery.Start(Profile);
+    assert(Recovery.GroundSpeedScale() == Profile.InitialSpeedScale);
+    Recovery.Reset();
+    assert(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
 }
 
 void TestMantleRules()

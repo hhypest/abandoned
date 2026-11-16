@@ -3,6 +3,7 @@
 
 #include "Application/Expedition/PassageProgress.h"
 #include "Camera/CameraComponent.h"
+#include "Components/AudioComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -23,6 +24,7 @@
 #include "Misc/Parse.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
+#include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 #include "World/SceneAssembly.h"
 
@@ -118,6 +120,13 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
             !Passage->FrameFit.IsValid() || Passage->FrameRotation.ContainsNaN() || Passage->LeafRotation.ContainsNaN())))
     {
         ErrorMessage = TEXT("Invalid Vanguard route geometry or device configuration.");
+        return;
+    }
+    const UVanguardInjurySettings& Injury = *GetDefault<UVanguardInjurySettings>();
+    if (!AtStation() && (!Injury.Recovery().IsValid() ||
+        !FMath::IsFinite(Injury.BreathVolume) || Injury.BreathVolume < 0.0f || Injury.BreathVolume > 1.0f))
+    {
+        ErrorMessage = TEXT("Invalid Vanguard injury settings.");
         return;
     }
     if (RadiationLayout)
@@ -235,6 +244,7 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguard"));
     bCaptureRoute = FParse::Param(FCommandLine::Get(), TEXT("CaptureVanguard"));
     bVerifyFalls = !AtStation() && !Radiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardFalls"));
+    bVerifyInjuryAudio = bVerifyFalls && FParse::Param(FCommandLine::Get(), TEXT("VerifyInjuryAudio"));
     bVerifyRadiation = (Radiation || AtStation()) && FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation"));
     bCaptureRadiation = FParse::Param(FCommandLine::Get(), TEXT("CaptureRadiation"));
 #endif
@@ -248,7 +258,7 @@ void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerContr
     {
         LastGroundHeight.reset();
         LandingImpact = FallImpact::None;
-        InjuryNoticeSeconds = 0.0f;
+        InjuryRecovery.Reset();
         RestartPlayerAtTransform(Player, FTransform(FRotator::ZeroRotator, Layout->Spawn));
         Player->SetInputMode(FInputModeGameOnly());
         const UVanguardSession* Session = GetSession();
@@ -262,6 +272,25 @@ void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerContr
             Light.SetOuterConeAngle(Settings.OuterConeDegrees);
             Light.SetInnerConeAngle(Settings.InnerConeDegrees);
             Light.SetVisibility(Session && Session->bFlashlightOn);
+            if (!AtStation())
+            {
+                const UVanguardInjurySettings& Injury = *GetDefault<UVanguardInjurySettings>();
+                if (USoundBase* Sound = Injury.BreathSound.LoadSynchronous())
+                {
+                    Pawn->InjuryBreath->SetSound(Sound);
+                    Pawn->InjuryBreath->SetVolumeMultiplier(Injury.BreathVolume);
+                }
+                else if (!Injury.BreathSound.IsNull())
+                {
+                    UE_LOG(LogVanguardRoute, Warning, TEXT("Could not load the suit injury breath."));
+                }
+#if WITH_DEV_AUTOMATION_TESTS
+                if (bVerifyInjuryAudio)
+                {
+                    Pawn->InjuryBreath->OnAudioPlaybackPercentNative.AddUObject(Pawn, &AVanguardCharacter::ObserveInjuryBreath);
+                }
+#endif
+            }
         }
     }
 }
@@ -355,12 +384,14 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
     {
         LastGroundHeight = Movement->CurrentFloor.HitResult.ImpactPoint.Z;
     }
+    InjuryRecovery.Advance(DeltaSeconds);
     if (LandingImpact == FallImpact::MinorInjury)
     {
-        InjuryNoticeSeconds = 2.5f;
+        InjuryRecovery.Start(GetDefault<UVanguardInjurySettings>()->Recovery());
+        Player.PlayInjuryBreath();
         LandingImpact = FallImpact::None;
     }
-    InjuryNoticeSeconds = FMath::Max(0.0f, InjuryNoticeSeconds - DeltaSeconds);
+    Player.SetGroundSpeedScale(InjuryRecovery.GroundSpeedScale());
     const auto& Passage = *CastChecked<UVanguardPassageLayout>(Layout.Get());
     if (Passage.bEnableMantle)
     {
@@ -453,14 +484,48 @@ void AVanguardRouteGameMode::Tick(float DeltaSeconds)
 #if WITH_DEV_AUTOMATION_TESTS
 void AVanguardRouteGameMode::VerifyFalls(AVanguardCharacter& Player, float DeltaSeconds)
 {
+    using namespace Abandoned::MovementProfile;
     constexpr double DropHeights[] = {250.0, 300.0, 325.0};
     constexpr double TestPlatformX = 1550.0;
+    UCharacterMovementComponent& Movement = *Player.GetCharacterMovement();
+    const auto FinishDrop = [&]
+    {
+        UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard fall verified at %.0f cm."), DropHeights[FallTestStep]);
+        ++FallTestStep;
+        bPlacedAtTestPlatform = false;
+        bWalkedOffTestPlatform = false;
+    };
+    const auto Fail = [&](const TCHAR* Reason)
+    {
+        UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard fall verification failed at %.0f cm: %s."),
+            DropHeights[FallTestStep], Reason);
+        bVerifyFalls = false;
+        FPlatformMisc::RequestExitWithStatus(false, 1);
+    };
     VerificationSeconds += DeltaSeconds;
     if (VerificationSeconds > 15.0f)
     {
-        UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard fall verification timed out at step %d."), FallTestStep);
-        FPlatformMisc::RequestExitWithStatus(false, 1);
-        bVerifyFalls = false;
+        Fail(bWaitingForInjuryRecovery ? TEXT("recovery or audio playback timed out") : TEXT("test timed out"));
+        return;
+    }
+    if (bWaitingForInjuryRecovery)
+    {
+        if (HasMinorInjuryNotice() || (bVerifyInjuryAudio && !Player.bInjuryBreathDecoded))
+        {
+            return;
+        }
+        if (!FMath::IsNearlyEqual(Movement.MaxWalkSpeed, WalkSpeed))
+        {
+            Fail(TEXT("normal ground speed did not return"));
+            return;
+        }
+        UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard minor injury slowed ground movement, then restored normal speed."));
+        if (bVerifyInjuryAudio)
+        {
+            UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard injury breath decoded in audio mixer."));
+        }
+        bWaitingForInjuryRecovery = false;
+        FinishDrop();
         return;
     }
     if (!bPlacedAtTestPlatform)
@@ -473,9 +538,7 @@ void AVanguardRouteGameMode::VerifyFalls(AVanguardCharacter& Player, float Delta
         if (!Cube || !GetWorld()->LineTraceSingleByChannel(Floor, FloorProbe + FVector(0, 0, 50),
             FloorProbe - FVector(0, 0, 50), ECC_Visibility, Query))
         {
-            UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard fall verification could not place a test platform."));
-            FPlatformMisc::RequestExitWithStatus(false, 1);
-            bVerifyFalls = false;
+            Fail(TEXT("could not place a test platform"));
             return;
         }
         const double Top = Floor.ImpactPoint.Z + DropHeights[FallTestStep];
@@ -483,18 +546,16 @@ void AVanguardRouteGameMode::VerifyFalls(AVanguardCharacter& Player, float Delta
             FVector(120.0, 140.0, 20.0));
         if (!IsValid(Platform.Collision))
         {
-            FPlatformMisc::RequestExitWithStatus(false, 1);
-            bVerifyFalls = false;
+            Fail(TEXT("test platform has no collision"));
             return;
         }
-        InjuryNoticeSeconds = 0.0f;
         LastGroundHeight.reset();
         Player.PlaceAt(FTransform(FRotator::ZeroRotator,
-            FVector(X, 0, Top + Abandoned::MovementProfile::StandingHalfHeight + 2.0)));
+            FVector(X, 0, Top + StandingHalfHeight + 2.0)));
         bPlacedAtTestPlatform = true;
         return;
     }
-    if (Player.GetCharacterMovement()->IsFalling())
+    if (Movement.IsFalling())
     {
         const double X = TestPlatformX + FallTestStep * 500.0;
         bWalkedOffTestPlatform |= Player.GetActorLocation().X > X + 60.0;
@@ -503,16 +564,35 @@ void AVanguardRouteGameMode::VerifyFalls(AVanguardCharacter& Player, float Delta
     {
         if (HasMinorInjuryNotice() != (FallTestStep == 1) || FallTestStep >= 2)
         {
-            UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard fall verification got the wrong outcome at %.0f cm."),
-                DropHeights[FallTestStep]);
-            FPlatformMisc::RequestExitWithStatus(false, 1);
-            bVerifyFalls = false;
+            Fail(TEXT("unexpected injury outcome"));
             return;
         }
-        UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard fall verified at %.0f cm."), DropHeights[FallTestStep]);
-        ++FallTestStep;
-        bPlacedAtTestPlatform = false;
-        bWalkedOffTestPlatform = false;
+        if (FallTestStep == 0)
+        {
+            if (!FMath::IsNearlyEqual(Movement.MaxWalkSpeed, WalkSpeed) || Player.InjuryBreath->IsPlaying())
+            {
+                Fail(TEXT("a safe fall triggered injury feedback"));
+                return;
+            }
+            FinishDrop();
+            return;
+        }
+        const float InitialScale = GetDefault<UVanguardInjurySettings>()->InitialGroundSpeedScale;
+        const bool bGroundSlowed = FMath::IsNearlyEqual(Movement.MaxWalkSpeed, WalkSpeed * InitialScale) &&
+            FMath::IsNearlyEqual(Movement.MaxWalkSpeedCrouched, SlowSpeed * InitialScale);
+        Player.SetSprint(true);
+        const bool bSprintSlowed = FMath::IsNearlyEqual(Movement.MaxWalkSpeed, SprintSpeed * InitialScale);
+        Player.SetSprint(false);
+        Movement.SetMovementMode(MOVE_Falling);
+        const bool bAirSpeedUnchanged = FMath::IsNearlyEqual(Movement.MaxWalkSpeed, WalkSpeed);
+        Movement.SetMovementMode(MOVE_Walking);
+        const bool bGroundSlowedAgain = FMath::IsNearlyEqual(Movement.MaxWalkSpeed, WalkSpeed * InitialScale);
+        if (!bGroundSlowed || !bSprintSlowed || !bAirSpeedUnchanged || !bGroundSlowedAgain)
+        {
+            Fail(TEXT("unexpected ground or air speed after injury"));
+            return;
+        }
+        bWaitingForInjuryRecovery = true;
         return;
     }
     Player.AddMovementInput(FVector::ForwardVector);
@@ -611,7 +691,31 @@ AVanguardCharacter::AVanguardCharacter()
     ShoulderLight->SetMobility(EComponentMobility::Movable);
     ShoulderLight->SetIntensityUnits(ELightUnits::Lumens);
     ShoulderLight->SetVisibility(false);
+
+    InjuryBreath = CreateDefaultSubobject<UAudioComponent>(TEXT("SuitInjuryBreath"));
+    InjuryBreath->SetupAttachment(Camera);
+    InjuryBreath->bAutoActivate = false;
+    InjuryBreath->bAllowSpatialization = false;
 }
+
+void AVanguardCharacter::PlayInjuryBreath()
+{
+    if (InjuryBreath->Sound)
+    {
+        InjuryBreath->Stop();
+#if WITH_DEV_AUTOMATION_TESTS
+        bInjuryBreathDecoded = false;
+#endif
+        InjuryBreath->Play();
+    }
+}
+
+#if WITH_DEV_AUTOMATION_TESTS
+void AVanguardCharacter::ObserveInjuryBreath(const UAudioComponent*, const USoundWave*, float PlayedFraction)
+{
+    bInjuryBreathDecoded |= PlayedFraction > 0.02f;
+}
+#endif
 
 void AVanguardCharacter::BindAdditionalInput(UEnhancedInputComponent& Input)
 {
@@ -703,7 +807,8 @@ void AVanguardHUD::DrawHUD()
         FLinearColor::White, 24.0f, 106.0f);
     if (Mode->HasMinorInjuryNotice())
     {
-        DrawText(TEXT("Suit: minor impact injury"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 132.0f);
+        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, 129.0f, 330.0f, 23.0f);
+        DrawText(TEXT("Suit: minor impact injury. Recovering gait."), FLinearColor(1.0, 0.68, 0.23), 24.0f, 132.0f);
     }
     if (Mode->HasClearedRadiation())
     {

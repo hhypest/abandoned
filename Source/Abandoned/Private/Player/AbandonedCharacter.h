@@ -25,9 +25,11 @@ protected:
     void EndPlay(const EEndPlayReason::Type Reason) override;
     void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
     void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
+    void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
 
     virtual void BindAdditionalInput(UEnhancedInputComponent&) {}
     void SetMovementLoad(float MassKg);
+    void SetGroundSpeedScale(float Scale);
     UInputAction* MapAction(const FKey& Key, EInputActionValueType Type = EInputActionValueType::Boolean);
     virtual void Move(FVector LocalDirection);
     void SetSprint(bool bHeld);
@@ -41,6 +43,7 @@ private:
     void Look(const FInputActionValue& Value);
     void UpdateSpeed();
     float LoadSpeedScale = 1.0f;
+    float GroundSpeedScale = 1.0f;
     void StartCrouch();
     void StopCrouch();
     void RemoveInputMapping();

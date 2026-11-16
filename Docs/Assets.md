@@ -35,4 +35,6 @@
 
 `/Game/Abandoned/Materials/M_PortalView` — собственный материал проекта по лицензии MIT. Граф строит [BuildPortalMaterial.py](../Scripts/BuildPortalMaterial.py). В игре он получает изображение из буфера захвата UE. Резервная текстура берётся из стандартного контента движка.
 
+`/Game/Abandoned/Audio/S_SuitInjuryBreath` — процедурный звук проекта по лицензии MIT. Длительность 1,26 с, моно 44,1 кГц. [BuildInjuryBreath.py](../Scripts/BuildInjuryBreath.py) синтезирует звук без сторонних сэмплов, записывает WAV в `Saved/GeneratedAudio` и импортирует его как Sound Wave. Бинарный пакет хранится в Git LFS. Для повторения импорта передайте `UnrealEditor-Cmd.exe` путь к проекту и параметры `-run=pythonscript -script=<полный путь к BuildInjuryBreath.py> -EnablePlugins=PythonScriptPlugin -AllowCommandletAudio -nullrhi -muteaudio -unattended`.
+
 Силовой узел DEV‑20 на проверочном маршруте собран из стандартных примитивов UE и собственного материала. Простая прямоугольная коллизия 58 × 46 × 38 см и масса 34 кг задаются отдельно от корпуса, ручек и полосы заряда. В реестре исходников есть кандидат `Sci_Fi_Industrial_Pow.zip` со статусом подтверждения прав для публикации.
