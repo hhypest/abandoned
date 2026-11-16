@@ -3,6 +3,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Domain/Puzzles/SlidingDoorRules.h"
 #include "Engine/Canvas.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
@@ -122,6 +123,8 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
         Error = TEXT("Could not assemble optical devices.");
         return;
     }
+    Interruption.Clamp.AddSigns(*Interruption.Door);
+    Reflection.Clamp.AddSigns(*Reflection.Door);
     Button = Box(Layout->Button, FVector(52, 24, 42), TEXT("Panel"), true).Collision;
     Box(Layout->Button - FVector(0, 15, 0), FVector(62, 26, 48), TEXT("Steel"), false);
     ButtonLamp = Box(Layout->Button + FVector(0, 13, 0), FVector(36, 4, 10), TEXT("Inactive"), false).Visual;
@@ -189,6 +192,13 @@ void APowerLabGameMode::HandleStartingNewPlayer_Implementation(APlayerController
 
 void APowerLabGameMode::RestoreMirror()
 {
+    for (FOpticalLane* Lane : {&Interruption, &Reflection})
+    {
+        if (Lane->Clamp.Holds(Mirror))
+        {
+            Lane->Clamp.Release();
+        }
+    }
     bMirrorDocked = false;
     Mirror->SetSimulatePhysics(false);
     Mirror->SetWorldLocationAndRotation(Layout->Mirror, FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
@@ -201,6 +211,8 @@ void APowerLabGameMode::RestoreMirror()
 
 void APowerLabGameMode::ResetLab(APowerLabCharacter& Player)
 {
+    Interruption.Clamp.Release();
+    Reflection.Clamp.Release();
     Player.Aim = EOpticsAim::None;
     Player.ReleaseHeldObject();
     Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
@@ -355,22 +367,39 @@ bool APowerLabGameMode::TraceLane(FOpticalLane& Lane, bool bPowered, bool bAccep
     return false;
 }
 
-void APowerLabGameMode::MoveDoor(FOpticalLane& Lane, const FVector& Closed, bool bOpen, float Delta, APowerLabCharacter& Player)
+bool APowerLabGameMode::MoveDoor(FOpticalLane& Lane, const FVector& Closed, bool bOpen, float Delta, APowerLabCharacter& Player)
 {
-    const FVector From = Lane.Door->GetComponentLocation();
-    const double Target = Closed.Z + (bOpen ? DoorTravelCm : 0.0);
-    FVector To = From;
-    const double Step = DoorSpeedCm * Delta;
-    To.Z += FMath::Clamp(Target - From.Z, -Step, Step);
-    if (!To.Equals(From))
+    using namespace Abandoned::Domain::Puzzles;
+    if (!IsValid(Lane.Door))
     {
-        FHitResult Hit;
-        Lane.Door->SetWorldLocation(To, true, &Hit);
-        if (To.Z < From.Z && Hit.GetActor() == &Player)
-        {
-            ResetLab(Player);
-        }
+        Lane.Clamp.Release();
+        return false;
     }
+    const auto Sweep = Lane.Clamp.Move(*Lane.Door, Closed.Z, DoorTravelCm, DoorSpeedCm * Delta, bOpen);
+    if (!Sweep.Closing || !Sweep.Hit.bBlockingHit)
+    {
+        return false;
+    }
+    UBoxComponent* Body = Cast<UBoxComponent>(Sweep.Hit.GetComponent());
+    const bool bPortable = Body && (Body == Cube->GetBody() || (Body == Mirror && !bMirrorDocked));
+    const DoorContact Contact = Sweep.Hit.GetActor() == &Player ? DoorContact::Player :
+        bPortable ? DoorContact::Carryable : DoorContact::None;
+    switch (ResolveClosingContact(Sweep.Closing, Contact, true))
+    {
+    case ClosingContact::Clamp:
+        if (Player.GetHeldBody() == Body)
+        {
+            Player.ReleaseHeldObject();
+        }
+        Lane.Clamp.Capture(*Body);
+        break;
+    case ClosingContact::ResetPlayer:
+        ResetLab(Player);
+        return true;
+    case ClosingContact::Block:
+        break;
+    }
+    return false;
 }
 
 void APowerLabGameMode::Tick(float Delta)
@@ -384,6 +413,13 @@ void APowerLabGameMode::Tick(float Delta)
     }
     if (Cube->GetActorLocation().Z < -240.0)
     {
+        for (FOpticalLane* Lane : {&Interruption, &Reflection})
+        {
+            if (Lane->Clamp.Holds(Cube->GetBody()))
+            {
+                Lane->Clamp.Release();
+            }
+        }
         if (Player->GetHeldCube() == Cube)
         {
             Player->ReleaseHeldObject();
@@ -415,8 +451,11 @@ void APowerLabGameMode::Tick(float Delta)
     Reflection.ReceiverLamp->SetMaterial(0, bReflectedSignal ? Cyan : Inactive);
     Interruption.PowerLine->SetMaterial(0, Doors.Interruption ? Amber : Inactive);
     Reflection.PowerLine->SetMaterial(0, Doors.Reflection ? Amber : Inactive);
-    MoveDoor(Interruption, Layout->Interruption.Door, Doors.Interruption, Delta, *Player);
-    MoveDoor(Reflection, Layout->Reflection.Door, Doors.Reflection, Delta, *Player);
+    if (MoveDoor(Interruption, Layout->Interruption.Door, Doors.Interruption, Delta, *Player) ||
+        MoveDoor(Reflection, Layout->Reflection.Door, Doors.Reflection, Delta, *Player))
+    {
+        return;
+    }
 #if WITH_DEV_AUTOMATION_TESTS
     if (bVerify)
     {
@@ -427,6 +466,10 @@ void APowerLabGameMode::Tick(float Delta)
 
 const TCHAR* APowerLabGameMode::GetObjective(const FVector& Player) const
 {
+    if (Interruption.Clamp.HasObject() || Reflection.Clamp.HasObject())
+    {
+        return TEXT("Door obstructed. Restore its signal to release the item.");
+    }
     if (Player.X > Layout->Reflection.Door.X + 90.0)
     {
         return TEXT("Optical circuit complete.");
@@ -595,7 +638,38 @@ void APowerLabGameMode::Verify(APowerLabCharacter& Player, float Delta)
         Player.AddMovementInput(FVector::ForwardVector);
         if (Player.GetActorLocation().X > Layout->Reflection.Door.X + 95)
         {
-            UE_LOG(LogPowerLab, Display, TEXT("Power lab verification passed: switch, blockers, portable mirror, reflection and exit."));
+            bMirrorDocked = false;
+            FVector UnderDoor = Layout->Reflection.Door;
+            UnderDoor.Z += (MirrorSize.Z - DoorSize.Z) * 0.5 + 1.0;
+            Mirror->SetWorldLocationAndRotation(UnderDoor, FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
+            Mirror->SetSimulatePhysics(true);
+            Mirror->SetPhysicsLinearVelocity(FVector::ZeroVector);
+            Mirror->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+            Reflection.Direction = FVector::UpVector;
+            Next(TEXT("Optical exit passed. Closing the unpowered door over the mirror."));
+        }
+        break;
+    case 11:
+        if (Reflection.Clamp.Holds(Mirror))
+        {
+            if (Mirror->IsSimulatingPhysics())
+            {
+                Fail(TEXT("the door did not retain the mirror"));
+                return;
+            }
+            Next(TEXT("Optical door clamped the portable mirror."));
+        }
+        break;
+    case 12:
+        MoveDoor(Reflection, Layout->Reflection.Door, true, Delta, Player);
+        if (!Reflection.Clamp.HasObject())
+        {
+            if (!Mirror->IsSimulatingPhysics() || !FMath::IsNearlyEqual(Mirror->GetMass(), MirrorMassKg, 0.05f))
+            {
+                Fail(TEXT("opening did not restore mirror physics and mass"));
+                return;
+            }
+            UE_LOG(LogPowerLab, Display, TEXT("Power lab verification passed: switch, blockers, reflection, exit and mirror clamp."));
             bVerify = false;
             FPlatformMisc::RequestExitWithStatus(false, 0);
         }

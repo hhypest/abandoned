@@ -12,6 +12,7 @@
 #include "Domain/Puzzles/GravityField.h"
 #include "Domain/Puzzles/PortalTransit.h"
 #include "Domain/Puzzles/PlateBalance.h"
+#include "Domain/Puzzles/SlidingDoorRules.h"
 
 #include <cassert>
 #include <limits>
@@ -213,6 +214,18 @@ void TestRadiationExposure()
     static_assert(ResolvePassage({.Impact = FallImpact::Fatal}) == PassageOutcome::ReturnToCheckpoint);
 }
 
+void TestSlidingDoor()
+{
+    static_assert(ResolveClosingContact(true, DoorContact::Carryable, true) == ClosingContact::Clamp);
+    static_assert(ResolveClosingContact(false, DoorContact::Carryable, true) == ClosingContact::Block);
+    static_assert(ResolveClosingContact(true, DoorContact::None, true) == ClosingContact::Block);
+    static_assert(ResolveClosingContact(true, DoorContact::Player, true) == ClosingContact::ResetPlayer);
+    static_assert(ResolveClosingContact(true, DoorContact::Player, false) == ClosingContact::Block);
+    static_assert(!CanReleaseDoorClamp(false, 60.0, 55.0));
+    static_assert(!CanReleaseDoorClamp(true, 58.0, 55.0));
+    static_assert(CanReleaseDoorClamp(true, 59.0, 55.0));
+}
+
 void TestChamberHints()
 {
     using Abandoned::Application::Puzzles::ChamberHintReader;
@@ -394,6 +407,7 @@ int main()
     TestMantleRules();
     TestRadiationExposure();
     TestChamberHints();
+    TestSlidingDoor();
     TestPowerSignalsAndOptics();
     TestGravityFields();
     TestPortalTransit();

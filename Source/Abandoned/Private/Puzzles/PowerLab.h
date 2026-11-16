@@ -38,6 +38,7 @@ struct FOpticalLane
     TObjectPtr<UStaticMeshComponent> PowerLine;
 
     FVector Direction = FVector::RightVector;
+    Abandoned::Infrastructure::Puzzles::SlidingDoorClamp Clamp;
 };
 
 UCLASS()
@@ -63,7 +64,7 @@ private:
     const AActor* GetAimOwner(EOpticsAim Aim) const;
     bool TraceLane(FOpticalLane& Lane, bool bPowered, bool bAcceptReflection, int32& BeamIndex);
     void DrawBeam(FVector Start, FVector End, int32& BeamIndex);
-    void MoveDoor(FOpticalLane& Lane, const FVector& Closed, bool bOpen, float DeltaSeconds, APowerLabCharacter& Player);
+    bool MoveDoor(FOpticalLane& Lane, const FVector& Closed, bool bOpen, float DeltaSeconds, APowerLabCharacter& Player);
 
 #if WITH_DEV_AUTOMATION_TESTS
     void Verify(APowerLabCharacter& Player, float DeltaSeconds);

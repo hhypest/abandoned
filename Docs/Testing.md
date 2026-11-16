@@ -45,6 +45,7 @@ if ($run.ExitCode -ne 0) { throw "Unreal exit code $($run.ExitCode). See $log" }
 | Прежнее сохранение версии 1 | | `-VerifyEntryCheckpoint` | С изолированным профилем, где сохранён `Weight`, журнал начинает маршрут с `Training chamber ready. Weight`, после неё показывает `Training chamber ready. Balance` и завершает станцией. Следующий обычный запуск начинает камеру `Balance`. |
 | Альтернативное решение 03 | | `-VerifyEntryCourse -VerifyEntryAlternateWeight` | `alternate solution assembled, 10 + 5 + 5 kg`, затем `Vanguard verification passed` |
 | Камера баланса | `?Chamber=Balance` | `-VerifyBalanceChamber -CaptureBalanceChamber` | `Balance chamber verification passed` |
+| Зажим створкой | | `-VerifyDoorClamp -CaptureDoorClamp` | `Door retained the object`, `Door released the object`, `Door clamp verification passed` |
 | Подсказки | | `-VerifyChamberHints -CaptureChamberHints` | `Chamber hints verification passed` |
 | Стенд устройств | | `-VerifyTrainingChamber` | `Verification passed: player weight, placement ghost, throw, staircase, detach and reset` |
 | Переход и станция отдельно | `?game=/Script/Abandoned.VanguardRouteGameMode?Chamber=Passage` | `-VerifyVanguard` | `Vanguard verification passed` |

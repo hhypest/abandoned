@@ -8,6 +8,7 @@
 #include "Domain/Puzzles/PlateBalance.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
+#include "Infrastructure/Puzzles/UnrealSlidingDoor.h"
 #include "Player/AbandonedCharacter.h"
 #include "TrainingChamber.generated.h"
 
@@ -64,6 +65,7 @@ public:
     void PressButton();
     bool IsPlatePressed() const { return !Plates.IsEmpty() && Plates[0].bPressed; }
     bool IsDoorOpen() const;
+    bool HasClampedObject() const { return DoorClamp.HasObject(); }
     bool HasReachedExit() const { return bReachedExit; }
     bool IsDev20Run() const { return bDev20Run; }
     const TCHAR* GetDev20Status(const ATrainingChamberCharacter& Player) const;
@@ -74,6 +76,7 @@ private:
     float GetPlateMass(const ATrainingChamberCharacter& Player, int32 Index) const;
     void ObserveCircuit(const ATrainingChamberCharacter& Player, float DeltaSeconds);
     void ObserveHints(const ATrainingChamberCharacter& Player, float DeltaSeconds);
+    bool MoveDoor(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void SetPlatePressed(int32 Index, bool bPressed);
     bool HasStackAtExit() const;
     void SelectLayout(const FString& Options);
@@ -90,6 +93,7 @@ private:
     void VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyBalanceChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyHints(ATrainingChamberCharacter& Player, float DeltaSeconds);
+    void VerifyDoorClamp(ATrainingChamberCharacter& Player, float DeltaSeconds);
     EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
     float VerificationElapsed = 0.0f;
     bool bVerifyChamber = false;
@@ -100,6 +104,12 @@ private:
     bool bVerifyDev20 = false;
     bool bVerifyBalance = false;
     bool bVerifyHints = false;
+    bool bVerifyDoorClamp = false;
+    enum class EDoorClampTest { PowerOn, Open, Clamp, Hold, Release, Reopen, ClampForReset, OpenForPlayer, CrushPlayer };
+    EDoorClampTest DoorClampTest = EDoorClampTest::PowerOn;
+    double DoorClampTestSeconds = 0.0;
+    FVector ClampedObjectPosition = FVector::ZeroVector;
+    FVector ObstructedDoorPosition = FVector::ZeroVector;
     double HintTestSeconds = 0.0;
     int HintTestStep = 0;
     int32 Dev20TestPhase = 0;
@@ -139,6 +149,7 @@ private:
     Abandoned::Domain::Puzzles::ChamberCircuit Circuit;
     Abandoned::Domain::Puzzles::PlateBalance Balance;
     Abandoned::Application::Puzzles::ChamberHintReader HintReader;
+    Abandoned::Infrastructure::Puzzles::SlidingDoorClamp DoorClamp;
     bool bReachedExit = false;
     bool bDev20Run = false;
     bool bDev20Recovering = false;
