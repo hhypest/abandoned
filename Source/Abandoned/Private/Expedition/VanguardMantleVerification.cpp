@@ -16,7 +16,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogMantleVerification, Log, All);
 void AVanguardRouteGameMode::VerifyMantle(AVanguardCharacter& Player, float DeltaSeconds)
 {
     const auto* Passage = CastChecked<UVanguardPassageLayout>(Layout.Get());
-    if (Passage->MantleLedges.IsEmpty() || MantleVerification == EMantleVerification::Done)
+    if (!Passage->bEnableMantle || MantleVerification == EMantleVerification::Done)
     {
         return;
     }

@@ -106,7 +106,8 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         Layout->Lights.ContainsByPredicate([](const FSceneLight& Light) { return !Light.IsValid(); }) ||
         Layout->Finishes.ContainsByPredicate([](const FSceneFinish& Finish) { return !Finish.IsValid(); }) ||
         (AtStation() ? !Station->SupplyCabinet.IsValid() : (!Passage->Door.IsValid() || !Passage->ExitZone.IsValid() ||
-            Passage->MantleLedges.ContainsByPredicate([](const FSceneBlock& Ledge) { return !Ledge.IsValid() || !Ledge.bCollision; }) ||
+            (Passage->bEnableMantle && (Passage->MantleLedges.IsEmpty() ||
+                Passage->MantleLedges.ContainsByPredicate([](const FSceneBlock& Ledge) { return !Ledge.IsValid() || !Ledge.bCollision; }))) ||
             !Passage->FrameFit.IsValid() || Passage->FrameRotation.ContainsNaN() || Passage->LeafRotation.ContainsNaN())))
     {
         ErrorMessage = TEXT("Invalid Vanguard route geometry or device configuration.");
@@ -155,15 +156,18 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     }
     else
     {
-        for (const auto& Ledge : Passage->MantleLedges)
+        if (Passage->bEnableMantle)
         {
-            UBoxComponent* Collision = SpawnBlock(Ledge, EComponentMobility::Static).Collision;
-            if (!IsValid(Collision))
+            for (const auto& Ledge : Passage->MantleLedges)
             {
-                ErrorMessage = TEXT("Could not spawn a passage mantle ledge.");
-                return;
+                UBoxComponent* Collision = SpawnBlock(Ledge, EComponentMobility::Static).Collision;
+                if (!IsValid(Collision))
+                {
+                    ErrorMessage = TEXT("Could not spawn a passage mantle ledge.");
+                    return;
+                }
+                Abandoned::Infrastructure::Expedition::MarkMantleLedge(*Collision);
             }
-            Abandoned::Infrastructure::Expedition::MarkMantleLedge(*Collision);
         }
         if (UVanguardSession* Session = GetSession())
         {
@@ -329,7 +333,7 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
     }
     InjuryNoticeSeconds = FMath::Max(0.0f, InjuryNoticeSeconds - DeltaSeconds);
     const auto& Passage = *CastChecked<UVanguardPassageLayout>(Layout.Get());
-    if (!Passage.MantleLedges.IsEmpty())
+    if (Passage.bEnableMantle)
     {
         Player.UpdateMantle(DeltaSeconds, LastGroundHeight);
     }
