@@ -85,10 +85,16 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
     bool bReadCheckpoint = !bDev20Run && GetWorld()->WorldType == EWorldType::Game;
 #if WITH_DEV_AUTOMATION_TESTS
     bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
+    bVerifyHints = FParse::Param(FCommandLine::Get(), TEXT("VerifyChamberHints"));
     bVerifyBalance = FParse::Param(FCommandLine::Get(), TEXT("VerifyBalanceChamber"));
     bVerifyDev20 = Dev20Stage.has_value() && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
     bVerifyEntryCourse = bVerifyDev20 || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
-    if (bVerifyBalance)
+    if (bVerifyHints)
+    {
+        Requested = Segment::Weight;
+        bReadCheckpoint = false;
+    }
+    else if (bVerifyBalance)
     {
         Requested = Segment::Balance;
         bVerifyEntryCourse = false;
@@ -138,7 +144,7 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber || bVerifyEntryCourse || bVerifyBalance)
+    if (bVerifyChamber || bVerifyEntryCourse || bVerifyBalance || bVerifyHints)
     {
         return;
     }
@@ -285,6 +291,29 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         return;
     }
 
+    if (!Layout->HintPages.IsEmpty())
+    {
+        const FSceneBlock& Terminal = Layout->HintTerminal;
+        const auto Parts = Abandoned::Blockout::SpawnBox(World, *Mesh, Terminal.Center, Terminal.Size);
+        if (!IsValid(Parts.Collision))
+        {
+            ErrorMessage = TEXT("Could not create the chamber hint terminal.");
+            return;
+        }
+        HintTerminal = Parts.Collision;
+        Abandoned::Scene::SetFinish(Parts, Terminal, Finishes);
+        AActor* TerminalActor = HintTerminal->GetOwner();
+        auto* Label = NewObject<UTextRenderComponent>(TerminalActor);
+        TerminalActor->AddInstanceComponent(Label);
+        Label->SetupAttachment(HintTerminal);
+        Label->SetRelativeLocation(FVector(Terminal.Size.X * 0.5 + 1.0, 0.0, 0.0));
+        Label->SetHorizontalAlignment(EHTA_Center);
+        Label->SetVerticalAlignment(EVRTA_TextCenter);
+        Label->SetWorldSize(10.0f);
+        Label->SetText(NSLOCTEXT("ChamberHints", "TerminalLabel", "HINTS"));
+        Label->RegisterComponent();
+    }
+
     for (const FSceneLight& Light : Layout->Lights)
     {
         Abandoned::Scene::AddLight(World, Light);
@@ -363,6 +392,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     }
 
     ObserveCircuit(*Player, DeltaSeconds);
+    ObserveHints(*Player, DeltaSeconds);
     FVector DoorPosition = Door->GetComponentLocation();
     const bool bClosing = DoorPosition.Z > Layout->Door.Center.Z && !IsExitEnabled();
     const double TargetZ = Layout->Door.Center.Z + (IsExitEnabled() ? DoorTravel : 0.0);
@@ -386,7 +416,11 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     }
 
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber)
+    if (bVerifyHints)
+    {
+        VerifyHints(*Player, DeltaSeconds);
+    }
+    else if (bVerifyChamber)
     {
         VerifyChamber(*Player, DeltaSeconds);
     }
@@ -581,6 +615,7 @@ void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
     }
     Circuit.Reset();
     Balance.Reset();
+    HintReader = {};
     for (int32 Index = 0; Index < Plates.Num(); ++Index)
     {
         PlateLoads[Index] = 0.0f;
@@ -1269,6 +1304,13 @@ UPrimitiveComponent* ATrainingChamberCharacter::TraceInteractable() const
     return Hit.GetComponent();
 }
 
+bool ATrainingChamberCharacter::CanReadHintTerminal() const
+{
+    const ATrainingChamberGameMode* Chamber = GetChamber();
+    return Chamber && IsValid(Chamber->GetHintTerminal()) && !GetHeldBody() &&
+        TraceInteractable() == Chamber->GetHintTerminal();
+}
+
 APuzzleCube* ATrainingChamberCharacter::FindReachableCube() const
 {
     const UPrimitiveComponent* Target = TraceInteractable();
@@ -1382,7 +1424,11 @@ const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
             return TEXT("[E] Pick up DEV-20 (34 kg)");
         }
         const ATrainingChamberGameMode* Chamber = GetChamber();
-        if (Chamber && Chamber->GetButton() && TraceInteractable() == Chamber->GetButton())
+        if (Chamber && Target && Target == Chamber->GetHintTerminal())
+        {
+            return TEXT("[E] Read hint terminal");
+        }
+        if (Chamber && Target && Target == Chamber->GetButton())
         {
             return Chamber->IsButtonLatched() ? TEXT("Circuit armed") : TEXT("[E] Arm the door circuit");
         }
@@ -1449,6 +1495,11 @@ void ATrainingChamberCharacter::Interact()
 
     UPrimitiveComponent* Target = TraceInteractable();
     ATrainingChamberGameMode* Chamber = GetChamber();
+    if (Target && Chamber && Target == Chamber->GetHintTerminal())
+    {
+        Chamber->ReadNextHint();
+        return;
+    }
     if (Target && Chamber && Target == Chamber->GetButton())
     {
         Chamber->PressButton();
@@ -1621,7 +1672,10 @@ void ATrainingChamberHUD::DrawHUD()
 
     const UTrainingChamberLayout* Layout = Chamber->GetLayout();
     DrawText(Layout->Title, FLinearColor::White, 24.0f, 24.0f, nullptr, 1.2f);
-    DrawText(TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   M test menu"), FLinearColor::White, 24.0f, 52.0f);
+    const TCHAR* Controls = IsValid(Chamber->GetHintTerminal())
+        ? TEXT("WASD / mouse   Space jump   E interact   LMB throw   R reset   M menu   |   HINTS at entrance")
+        : TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   M test menu");
+    DrawText(Controls, FLinearColor::White, 24.0f, 52.0f);
     const FString Status = Chamber->HasReachedExit()
         ? (Layout->UsesPlateBalance() ? TEXT("Balance chamber complete") : TEXT("Entry course complete")) :
         (Chamber->IsDoorOpen() ? TEXT("Exit open") :
@@ -1659,12 +1713,23 @@ void ATrainingChamberHUD::DrawHUD()
     const float CenterX = Canvas->ClipX * 0.5f;
     const float CenterY = Canvas->ClipY * 0.5f;
     DrawRect(FLinearColor::White, CenterX - 1.0f, CenterY - 1.0f, 3.0f, 3.0f);
-    const TCHAR* Prompt = Player->GetPlacementPrompt();
+    const auto& Hints = Chamber->GetHints();
+    const bool bShowHintPage = Hints.Page() > 0 && Player->CanReadHintTerminal();
+    const TCHAR* Prompt = bShowHintPage ? nullptr : Player->GetPlacementPrompt();
     if (Prompt)
     {
         float PromptWidth = 0.0f;
         float PromptHeight = 0.0f;
         GetTextSize(Prompt, PromptWidth, PromptHeight);
         DrawText(Prompt, FLinearColor::White, CenterX - PromptWidth * 0.5f, CenterY + 22.0f);
+    }
+    if (bShowHintPage)
+    {
+        DrawHintPage(*Layout, Hints.Page(), Hints.AvailablePages());
+    }
+    if (IsValid(Chamber->GetHintTerminal()) && Hints.HasNewEntry())
+    {
+        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, 192.0f, 168.0f, 25.0f);
+        DrawText(TEXT("New terminal entry"), FLinearColor::White, 24.0f, 197.0f);
     }
 }
