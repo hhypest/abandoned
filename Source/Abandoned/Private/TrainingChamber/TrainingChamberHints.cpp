@@ -54,8 +54,14 @@ void ATrainingChamberGameMode::ObserveHints(const ATrainingChamberCharacter& Pla
     }
     else
     {
-        CorrectNodes = (IsButtonLatched() ? ArmedButtonHintNode : 0) |
-            (IsPlatePressed() ? PressurePlateHintNode(0) : 0);
+        CorrectNodes = IsButtonLatched() ? ArmedButtonHintNode : 0;
+        for (int32 Index = 0; Index < Plates.Num(); ++Index)
+        {
+            if (IsPlatePressed(Index))
+            {
+                CorrectNodes |= PressurePlateHintNode(Index);
+            }
+        }
     }
     double Delay = Layout->HintDelaySeconds;
 #if WITH_DEV_AUTOMATION_TESTS

@@ -90,6 +90,7 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
     bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
     bVerifyHints = FParse::Param(FCommandLine::Get(), TEXT("VerifyChamberHints"));
     bVerifyDoorClamp = FParse::Param(FCommandLine::Get(), TEXT("VerifyDoorClamp"));
+    bVerifyParallelCircuit = FParse::Param(FCommandLine::Get(), TEXT("VerifyParallelCircuit"));
     bVerifyBalance = FParse::Param(FCommandLine::Get(), TEXT("VerifyBalanceChamber"));
     bVerifyEntryCheckpoint = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint"));
     bVerifyDev20 = Dev20Stage.has_value() && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
@@ -98,6 +99,12 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
     {
         Requested = Segment::Weight;
         bReadCheckpoint = false;
+    }
+    else if (bVerifyParallelCircuit)
+    {
+        Requested = Segment::Button;
+        bReadCheckpoint = false;
+        bCampaignTravel = false;
     }
     else if (bVerifyBalance)
     {
@@ -150,7 +157,8 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || bVerifyHints || bVerifyDoorClamp)
+    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || bVerifyHints ||
+        bVerifyDoorClamp || bVerifyParallelCircuit)
     {
         return;
     }
@@ -267,7 +275,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         FSceneLight Light = Layout->PlateLight;
         Light.Position += Block.Center - Layout->Plate.Center;
         Plate.Indicator = Abandoned::Scene::AddLight(World, Light);
-        if (Layout->UsesPlateBalance())
+        if (Layout->UsesPlateBalance() || Layout->UsesParallelPlates())
         {
             AActor* PlateActor = Parts.Collision->GetOwner();
             auto* Sign = NewObject<UTextRenderComponent>(PlateActor);
@@ -278,9 +286,16 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
             Sign->SetHorizontalAlignment(EHTA_Center);
             Sign->SetVerticalAlignment(EVRTA_TextCenter);
             Sign->SetWorldSize(20.0f);
-            Sign->SetText(FText::AsNumber(Index + 1));
+            Sign->SetText(Layout->UsesParallelPlates() ? FText::FromString(Index == 0 ? TEXT("A") : TEXT("B"))
+                : FText::AsNumber(Index + 1));
             Sign->RegisterComponent();
         }
+    }
+    if (Layout->UsesParallelPlates() &&
+        !SpawnRelayTraces(*Mesh, Finishes.FindRef(FName(TEXT("RelayIdle"))), Finishes.FindRef(FName(TEXT("RelayPowered")))))
+    {
+        ErrorMessage = TEXT("Could not create the parallel plate signal traces.");
+        return;
     }
     if (Layout->bRequiresButton)
     {
@@ -428,6 +443,10 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     {
         VerifyHints(*Player, DeltaSeconds);
     }
+    else if (bVerifyParallelCircuit)
+    {
+        VerifyParallelCircuit(*Player, DeltaSeconds);
+    }
     else if (bVerifyChamber)
     {
         VerifyChamber(*Player, DeltaSeconds);
@@ -533,11 +552,17 @@ void ATrainingChamberGameMode::ObserveCircuit(const ATrainingChamberCharacter& P
         }
         return;
     }
-    const auto DoorGate = Layout->bRequiresStack ? CircuitRules::Gate::StackLatch :
+    const auto DoorGate = Layout->UsesParallelPlates() ? CircuitRules::Gate::ButtonAndParallelPlates :
+        Layout->bRequiresStack ? CircuitRules::Gate::StackLatch :
         (Layout->bRequiresButton ? CircuitRules::Gate::ButtonAndPlate : CircuitRules::Gate::Plate);
     Circuit.Observe({Layout->PlateActivationMassKg, Layout->PlateMaximumMassKg, DoorGate}, GetMeasuredMass(),
-        Layout->bRequiresStack && HasStackAtExit(), DeltaSeconds);
+        Layout->bRequiresStack && HasStackAtExit(), DeltaSeconds, GetMeasuredMass(1));
     SetPlatePressed(0, Circuit.GetState().PlatePressed);
+    if (Layout->UsesParallelPlates())
+    {
+        SetPlatePressed(1, Circuit.GetState().AlternatePlatePressed);
+        UpdateRelayTraces();
+    }
 }
 
 float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Player, int32 Index) const
@@ -666,6 +691,7 @@ void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
         PlateLoads[Index] = 0.0f;
         SetPlatePressed(Index, false);
     }
+    UpdateRelayTraces();
     if (IsValid(Door))
     {
         Door->SetWorldLocation(Layout->Door.Center, false, nullptr, ETeleportType::TeleportPhysics);
@@ -694,6 +720,8 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
         return;
     }
     const bool bWeight = Course.Current == Segment::Weight;
+    const int32 ExitPlateIndex = Layout->UsesParallelPlates() &&
+        FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryAlternatePlate")) ? 1 : 0;
     const bool bAlternateWeight = bWeight && FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryAlternateWeight"));
     const int32 RequiredCubes = Course.Current == Segment::Stairs ? 3 : bAlternateWeight ? 4 : bWeight ? 2 : 1;
     if (Cubes.Num() < RequiredCubes ||
@@ -848,18 +876,23 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
             Fail(TEXT("Wall button should arm the circuit and leave the unloaded door closed"));
             return;
         }
-        const FVector HeldTarget = Layout->Plate.Center + FVector(0.0, 0.0,
-            Layout->Plate.Size.Z * 0.5 + First.GetHalfSize() + 40.0);
+        const FSceneBlock& ExitPlate = Layout->GetPlateAt(ExitPlateIndex);
+        const FVector HeldTarget = ExitPlate.Center + FVector(0.0, 0.0,
+            ExitPlate.Size.Z * 0.5 + First.GetHalfSize() + 40.0);
         AimHold(HeldTarget, FVector::ForwardVector);
         Step(1);
     }
-    else if (CourseTestStep == 1 && Aligned(GetPlate()))
+    else if (CourseTestStep == 1 && Aligned(GetPlate(ExitPlateIndex)))
     {
         Player.Interact();
-        if (First.GetSupport() != GetPlate())
+        if (First.GetSupport() != GetPlate(ExitPlateIndex))
         {
             Fail(TEXT("Cube did not snap to the plate"));
             return;
+        }
+        if (ExitPlateIndex == 1)
+        {
+            UE_LOG(LogTrainingChamber, Display, TEXT("Entry alternate solution: cube snapped to plate B."));
         }
         Step(2);
     }
@@ -927,7 +960,7 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
             return;
         }
         UE_LOG(LogTrainingChamber, Display, TEXT("Entry test: %s accepted %.0f kg after the wall button."),
-            *WriteSegment(Course.Current), GetMeasuredMass());
+            *WriteSegment(Course.Current), GetMeasuredMass(ExitPlateIndex));
         Player.PlaceAt(FTransform(FRotator::ZeroRotator, FVector(Layout->Door.Center.X - 175.0,
             Layout->Door.Center.Y, Layout->Spawn.Z)));
         Step(5);
@@ -1750,7 +1783,17 @@ void ATrainingChamberHUD::DrawHUD()
         DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.78f), 16.0f, 71.0f, 300.0f, 24.0f);
     }
     DrawText(Status, bDoorObstructed ? FLinearColor::White : FLinearColor(1.0, 0.68, 0.23), 24.0f, 76.0f);
-    if (Layout->bRequiresButton)
+    if (Layout->UsesParallelPlates())
+    {
+        const bool bA = Chamber->IsPlatePressed(0);
+        const bool bB = Chamber->IsPlatePressed(1);
+        DrawText(FString::Printf(TEXT("Switch: %s   |   A: %.0f kg %s   |   B: %.0f kg %s   |   A OR B: %s"),
+            Chamber->IsButtonLatched() ? TEXT("armed") : TEXT("off"),
+            Chamber->GetMeasuredMass(0), bA ? TEXT("live") : TEXT("idle"),
+            Chamber->GetMeasuredMass(1), bB ? TEXT("live") : TEXT("idle"),
+            Chamber->IsParallelRelayPowered() ? TEXT("live") : TEXT("idle")), FLinearColor::White, 24.0f, 101.0f);
+    }
+    else if (Layout->bRequiresButton)
     {
         DrawText(FString::Printf(TEXT("Circuit: %s   |   Plate: %.0f kg   |   Target: %.0f%s kg"),
             Chamber->IsButtonLatched() ? TEXT("armed") : TEXT("off"), Chamber->GetMeasuredMass(),
