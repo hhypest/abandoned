@@ -21,6 +21,7 @@ class UBoxComponent;
 class UMaterialInterface;
 class USoundWave;
 class USpotLightComponent;
+class UStaticMeshComponent;
 class UVanguardRadiationLayout;
 class UVanguardRouteLayout;
 
@@ -101,6 +102,8 @@ private:
     bool bTapLeftGround = false;
     bool bDuckedInAir = false;
     bool bCapturedMantleApproach = false;
+    bool bSawMantleHandhold = false;
+    bool bVerifiedMantleHandhold = false;
     TWeakObjectPtr<AActor> MantleTestBlocker;
 #endif
 
@@ -157,8 +160,12 @@ private:
     void ResetRadiation();
     void UpdateMantle(float DeltaSeconds, std::optional<double> SupportHeight);
     void FinishMantle();
+    void CreateMantleVisuals();
+    void LoadMantleVisuals();
+    void UpdateMantleHands();
     Abandoned::Application::Expedition::MantleRequest MantleRequest;
     std::optional<Abandoned::Infrastructure::Expedition::MantlePath> ActiveMantle;
+    std::optional<Abandoned::Infrastructure::Expedition::MantleHandhold> ActiveMantleHandhold;
     double MantleSeconds = 0.0;
     bool bMantleAvailable = false;
 
@@ -167,6 +174,12 @@ private:
 
     UPROPERTY(VisibleDefaultsOnly, Category="Suit")
     TObjectPtr<UAudioComponent> InjuryBreath;
+
+    UPROPERTY(VisibleDefaultsOnly, Category="Suit")
+    TObjectPtr<UStaticMeshComponent> MantleGloves[2];
+
+    UPROPERTY(VisibleDefaultsOnly, Category="Suit")
+    TObjectPtr<UStaticMeshComponent> MantleSleeves[2];
 
 protected:
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;
