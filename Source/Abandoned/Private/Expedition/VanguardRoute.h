@@ -29,6 +29,7 @@ class UVanguardSession final : public UGameInstanceSubsystem
 
 public:
     Abandoned::Domain::Expedition::SuitSupply Suit;
+    Abandoned::Domain::Expedition::RadiationDose Dose;
     bool bFlashlightOn = false;
 #if WITH_DEV_AUTOMATION_TESTS
     bool bRecoveredFromRadiation = false;
@@ -47,6 +48,7 @@ public:
     void Tick(float DeltaSeconds) override;
     bool AtStation() const;
     bool HasResupplied() const { return bResupplied; }
+    bool HasClearedRadiation() const { return bClearedRadiation; }
     float GetOxygenPercent() const;
     std::optional<Abandoned::Domain::Expedition::DosimeterReading> GetDosimeter() const;
     bool HasMinorInjuryNotice() const { return InjuryNoticeSeconds > 0.0f; }
@@ -57,7 +59,7 @@ private:
     friend class AVanguardCharacter;
     UVanguardSession* GetSession() const;
     void RecordLanding(double SurfaceHeight);
-    bool TickRadiation(const FVector& Position, float DeltaSeconds);
+    bool TickRadiation(const FVector& Position, float DeltaSeconds, Abandoned::Domain::Expedition::RadiationDose& Dose);
     void RestartRadiationPassage();
     void TickPassage(AVanguardCharacter& Player, float DeltaSeconds);
 #if WITH_DEV_AUTOMATION_TESTS
@@ -65,7 +67,10 @@ private:
     void VerifyFalls(AVanguardCharacter& Player, float DeltaSeconds);
     void VerifyRadiation(AVanguardCharacter& Player, float DeltaSeconds);
     void VerifyMantle(AVanguardCharacter& Player, float DeltaSeconds);
-    enum class ERadiationVerification { Gate, WaitForFlare, LeaveShelter, ReturnToShelter, HoldInShelter, LethalExposure, RunToStation };
+    enum class ERadiationVerification
+    {
+        Gate, WaitForFlare, LeaveShelter, ReturnToShelter, HoldInShelter, RecoverOutside, LethalExposure, RunToStation
+    };
     bool bVerifyRoute = false;
     bool bVerifyFalls = false;
     bool bVerifyRadiation = false;
@@ -113,6 +118,7 @@ private:
     Abandoned::Domain::Expedition::Segment Current = Abandoned::Domain::Expedition::Segment::Passage;
     bool bTravelling = false;
     bool bResupplied = false;
+    bool bClearedRadiation = false;
     std::optional<double> LastGroundHeight;
     Abandoned::Domain::Expedition::FallImpact LandingImpact = Abandoned::Domain::Expedition::FallImpact::None;
     float InjuryNoticeSeconds = 0.0f;
