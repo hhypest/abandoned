@@ -1,5 +1,6 @@
 #include "Application/Expedition/EntryCourse.h"
 #include "Application/Expedition/Dev20Transfer.h"
+#include "Application/Expedition/MantleRequest.h"
 #include "Application/Expedition/PassageProgress.h"
 #include "Application/Puzzles/OpticsCourse.h"
 #include "Domain/Expedition/FallImpact.h"
@@ -113,6 +114,37 @@ void TestFallImpact()
     assert(AssessFall(300.0) == FallImpact::MinorInjury);
     assert(AssessFall(300.1) == FallImpact::Fatal);
     assert(AssessFall(std::numeric_limits<double>::quiet_NaN()) == FallImpact::None);
+}
+
+void TestMantleRules()
+{
+    static_assert(CanReachMantleLedge(140.0, 85.0, 1.0));
+    static_assert(!CanReachMantleLedge(90.0, 52.0, 1.0));
+    static_assert(CanReachMantleLedge(180.0, 130.0, 1.0));
+    static_assert(!CanReachMantleLedge(190.0, 85.0, 1.0));
+    static_assert(!CanReachMantleLedge(140.0, 18.0, 1.0));
+    static_assert(!CanReachMantleLedge(140.0, 85.0, 0.60));
+
+    MantleRequest Gesture;
+    Gesture.Press();
+    Gesture.Advance(0.08);
+    assert(!Gesture.IsReady());
+    Gesture.Release();
+    Gesture.Advance(1.0);
+    assert(!Gesture.IsReady());
+    Gesture.Press();
+    Gesture.Advance(std::numeric_limits<double>::quiet_NaN());
+    assert(!Gesture.IsReady());
+    Gesture.Advance(MantleHoldSeconds);
+    assert(Gesture.IsReady());
+    Gesture.Consume();
+    Gesture.Press();
+    Gesture.Advance(1.0);
+    assert(!Gesture.IsReady());
+    Gesture.Release();
+    Gesture.Press();
+    Gesture.Advance(MantleHoldSeconds);
+    assert(Gesture.IsReady());
 }
 
 void TestRadiationExposure()
@@ -296,6 +328,7 @@ int main()
     TestCircuitAndBallast();
     TestSupply();
     TestFallImpact();
+    TestMantleRules();
     TestRadiationExposure();
     TestPowerSignalsAndOptics();
     TestGravityFields();
