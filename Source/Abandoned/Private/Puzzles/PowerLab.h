@@ -64,8 +64,11 @@ private:
 
     bool Interact(APowerLabCharacter& Player, UPrimitiveComponent& Target);
     void ResetLab(APowerLabCharacter& Player);
-    void TryDockMirror();
+    bool BuildMirror(UStaticMesh& Mesh, UMaterialInterface& Base, UMaterialInterface& Steel);
+    void PlaceMirror(const APowerLabCharacter& Player);
     void RestoreMirror();
+    bool IsMirrorTarget(const UPrimitiveComponent* Target) const;
+    bool CanAimMirror(const APowerLabCharacter& Player) const;
     void AimAt(EOpticsAim Target, FVector Point);
     const AActor* GetAimOwner(EOpticsAim Aim) const;
     bool TraceLane(FOpticalLane& Lane, bool bPowered, bool bAcceptReflection, int32& BeamIndex);
@@ -84,6 +87,7 @@ private:
     bool bVerify = false;
     bool bVerifyPulse = false;
     bool bCapture = false;
+    bool bVerifyFreeReflector = false;
     int32 VerificationStep = 0;
     float VerificationTime = 0.0f;
     int32 PulseTestStep = 0;
@@ -115,7 +119,7 @@ private:
     TObjectPtr<UBoxComponent> Mirror;
 
     UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> MirrorFace;
+    TObjectPtr<UBoxComponent> MirrorSurface;
 
     UPROPERTY()
     TObjectPtr<UMaterialInterface> Cyan;

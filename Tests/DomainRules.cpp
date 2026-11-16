@@ -11,6 +11,7 @@
 #include "Domain/Puzzles/BallastRules.h"
 #include "Domain/Puzzles/ChamberCircuit.h"
 #include "Domain/Puzzles/GravityField.h"
+#include "Domain/Puzzles/OpticalReflector.h"
 #include "Domain/Puzzles/PortalTransit.h"
 #include "Domain/Puzzles/PlateBalance.h"
 #include "Domain/Puzzles/SlidingDoorRules.h"
@@ -351,6 +352,19 @@ void TestPowerSignalsAndOptics()
     assert(!Optics.GetPower().DirectEmitter && !Optics.GetPower().ReflectionEmitter);
 }
 
+void TestOpticalReflector()
+{
+    assert(IsReflectorSettled(1.0, 25.0, 36.0));
+    assert(!IsReflectorSettled(0.2, 0.0, 0.0));
+    assert(!IsReflectorSettled(1.0, 400.0, 0.0));
+    assert(!IsReflectorSettled(1.0, 0.0, 400.0));
+    assert(!IsReflectorSettled(1.0, std::numeric_limits<double>::quiet_NaN(), 0.0));
+    static_assert(CanReflectFromFace(1.0, -0.5));
+    static_assert(!CanReflectFromFace(-1.0, -0.5));
+    static_assert(!CanReflectFromFace(0.0, -0.5));
+    static_assert(!CanReflectFromFace(1.0, 0.0));
+}
+
 void TestGravityFields()
 {
     const GravityField Contact[] = {
@@ -478,6 +492,7 @@ int main()
     TestChamberHints();
     TestSlidingDoor();
     TestPowerSignalsAndOptics();
+    TestOpticalReflector();
     TestTimedPassage();
     TestGravityFields();
     TestPortalTransit();

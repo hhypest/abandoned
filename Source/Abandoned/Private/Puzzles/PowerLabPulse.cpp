@@ -263,7 +263,9 @@ void APowerLabGameMode::VerifyPulse(APowerLabCharacter& Player, float DeltaSecon
     case 7:
         Player.ResetChamber();
         if (Pulse.IsPowered() || Pulse.IsComplete() || !DoorClosed() || DisplayedPulseTenths != 0 ||
-            !Player.GetActorLocation().Equals(Layout->Spawn, 3.0))
+            !Player.GetActorLocation().Equals(Layout->Spawn, 3.0) || bMirrorDocked || !Mirror->IsSimulatingPhysics() ||
+            !Mirror->GetComponentLocation().Equals(Layout->Mirror, 1.0) ||
+            !MirrorSurface->GetRelativeRotation().Equals(FRotator(0, -45, 0), 0.1))
         {
             Fail(TEXT("reset left a pulse, open door or completion"));
             return;
