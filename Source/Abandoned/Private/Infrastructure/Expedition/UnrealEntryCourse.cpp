@@ -45,12 +45,20 @@ bool UnrealCheckpointStore::Write(Segment Chamber) const
     return UGameplayStatics::SaveGameToSlot(Save, CheckpointSlot, 0);
 }
 
-void TravelToSegment(const UObject* WorldContext, Segment Destination)
+void TravelToSegment(const UObject* WorldContext, Segment Destination, std::optional<Segment> PassageOrigin)
 {
     const bool bExpeditionMode = Destination == Segment::Passage || Destination == Segment::Vanguard;
     const FString Mode = bExpeditionMode ? TEXT("/Script/Abandoned.VanguardRouteGameMode")
                                          : TEXT("/Script/Abandoned.TrainingChamberGameMode");
-    const FString Options = TEXT("game=") + Mode + TEXT("?Chamber=") + WriteSegment(Destination);
+    FString Options = TEXT("game=") + Mode + TEXT("?Chamber=") + WriteSegment(Destination);
+    if (Destination == Segment::Balance)
+    {
+        Options += TEXT("?EntryCourse=1");
+    }
+    if (Destination == Segment::Passage && PassageOrigin && Domain::Expedition::IsCheckpoint(*PassageOrigin))
+    {
+        Options += TEXT("?Checkpoint=") + WriteSegment(*PassageOrigin);
+    }
     UGameplayStatics::OpenLevel(WorldContext, FName(TEXT("/Engine/Maps/Entry")), true, Options);
 }
 

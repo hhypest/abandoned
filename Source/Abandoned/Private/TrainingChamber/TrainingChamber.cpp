@@ -83,12 +83,14 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
         }
     }
     bool bReadCheckpoint = !bDev20Run && GetWorld()->WorldType == EWorldType::Game;
+    bool bCampaignTravel = UGameplayStatics::ParseOption(Options, TEXT("EntryCourse")) == TEXT("1");
 #if WITH_DEV_AUTOMATION_TESTS
     bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
     bVerifyHints = FParse::Param(FCommandLine::Get(), TEXT("VerifyChamberHints"));
     bVerifyBalance = FParse::Param(FCommandLine::Get(), TEXT("VerifyBalanceChamber"));
+    bVerifyEntryCheckpoint = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint"));
     bVerifyDev20 = Dev20Stage.has_value() && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
-    bVerifyEntryCourse = bVerifyDev20 || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
+    bVerifyEntryCourse = bVerifyDev20 || bVerifyEntryCheckpoint || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
     if (bVerifyHints)
     {
         Requested = Segment::Weight;
@@ -97,6 +99,7 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
     else if (bVerifyBalance)
     {
         Requested = Segment::Balance;
+        bCampaignTravel = false;
         bVerifyEntryCourse = false;
         bVerifyChamber = false;
     }
@@ -104,13 +107,13 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
     {
         Requested = Segment::Sandbox;
     }
-    else if (bVerifyEntryCourse)
+    else if (bVerifyEntryCourse && !bVerifyEntryCheckpoint)
     {
         bReadCheckpoint = false;
     }
 #endif
     const UnrealCheckpointStore Store;
-    Course = Abandoned::Application::Expedition::StartCourse(Requested, bReadCheckpoint ? &Store : nullptr);
+    Course = Abandoned::Application::Expedition::StartCourse(Requested, bReadCheckpoint ? &Store : nullptr, bCampaignTravel);
     if (Course.CheckpointFallback)
     {
         UE_LOG(LogTrainingChamber, Warning, TEXT("Entry checkpoint is incompatible. Starting at the first chamber."));
@@ -144,7 +147,7 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber || bVerifyEntryCourse || bVerifyBalance || bVerifyHints)
+    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || bVerifyHints)
     {
         return;
     }
@@ -181,14 +184,14 @@ void ATrainingChamberGameMode::AdvanceCourse(const ATrainingChamberCharacter& Pl
         FPlatformMisc::RequestExitWithStatus(false, 0);
         return;
     }
-    if (Course.Current == Segment::Weight && bVerifyEntryCourse)
+    if (Course.Current == Segment::Balance && bVerifyEntryCourse)
     {
-        UE_LOG(LogTrainingChamber, Display, TEXT("Entry course verification passed: Stairs -> Button -> Weight."));
+        UE_LOG(LogTrainingChamber, Display, TEXT("Entry course verification passed: balance released the passage."));
     }
 #endif
-    if (const auto Next = Abandoned::Domain::Expedition::NextSegment(Course.Current))
+    if (const auto Next = Abandoned::Application::Expedition::NextCourseSegment(Course))
     {
-        Abandoned::Infrastructure::Expedition::TravelToSegment(this, *Next);
+        Abandoned::Infrastructure::Expedition::TravelToSegment(this, *Next, Course.Current);
     }
 }
 
@@ -424,13 +427,13 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     {
         VerifyChamber(*Player, DeltaSeconds);
     }
+    else if (bVerifyBalance || (bVerifyEntryCourse && Course.Current == Segment::Balance))
+    {
+        VerifyBalanceChamber(*Player, DeltaSeconds);
+    }
     else if (bVerifyEntryCourse)
     {
         VerifyEntryChamber(*Player, DeltaSeconds);
-    }
-    else if (bVerifyBalance)
-    {
-        VerifyBalanceChamber(*Player, DeltaSeconds);
     }
 #endif
 }
@@ -867,6 +870,20 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
     }
     else if (((CourseTestStep == 2 && !bWeight) || CourseTestStep == 4) && IsDoorOpen())
     {
+        if (bWeight && !bVerifyDev20 && !bVerifiedWeightReset)
+        {
+            Player.ResetChamber();
+            if (IsButtonLatched() || GetMeasuredMass() != 0.0f || IsExitEnabled() ||
+                !Door->GetComponentLocation().Equals(Layout->Door.Center))
+            {
+                Fail(TEXT("Reset did not restore chamber 03 after solving its weight lock"));
+                return;
+            }
+            bVerifiedWeightReset = true;
+            UE_LOG(LogTrainingChamber, Display, TEXT("Entry test: reset restored the weight lock, then the solution will be repeated."));
+            Step(0);
+            return;
+        }
         UE_LOG(LogTrainingChamber, Display, TEXT("Entry test: %s accepted %.0f kg after the wall button."),
             *WriteSegment(Course.Current), GetMeasuredMass());
         Player.PlaceAt(FTransform(FRotator::ZeroRotator, FVector(Layout->Door.Center.X - 175.0,

@@ -40,7 +40,8 @@ void TestRouteAndCheckpoint()
 {
     static_assert(NextSegment(Segment::Stairs) == Segment::Button);
     static_assert(NextSegment(Segment::Button) == Segment::Weight);
-    static_assert(NextSegment(Segment::Weight) == Segment::Passage);
+    static_assert(NextSegment(Segment::Weight) == Segment::Balance);
+    static_assert(NextSegment(Segment::Balance) == Segment::Passage);
     static_assert(NextSegment(Segment::Passage) == Segment::Vanguard);
     static_assert(!NextSegment(Segment::Vanguard));
     static_assert(!NextSegment(Segment::Sandbox));
@@ -55,12 +56,27 @@ void TestRouteAndCheckpoint()
     assert(Store.Writes == 1);
     assert(StartCourse(std::nullopt, &Store).Current == Segment::Weight);
     assert(StartCourse(Segment::Button, &Store).Current == Segment::Button);
+    assert(PassageCheckpoint(Segment::Balance, &Store) == Segment::Balance);
+    assert(PassageCheckpoint(std::nullopt, &Store) == Segment::Weight);
+
+    const CourseStart Standalone = StartCourse(Segment::Balance, &Store);
+    assert(Standalone.StandaloneBalance && !NextCourseSegment(Standalone));
+    assert(RecordArrival(Standalone, Store) && Store.Writes == 1);
+    assert(StartCourse(std::nullopt, &Store).Current == Segment::Weight);
+
+    const CourseStart Campaign = StartCourse(Segment::Balance, &Store, true);
+    assert(!Campaign.StandaloneBalance && NextCourseSegment(Campaign) == Segment::Passage);
+    assert(RecordArrival(Campaign, Store) && Store.Writes == 2);
+    const CourseStart Resumed = StartCourse(std::nullopt, &Store);
+    assert(Resumed.Current == Segment::Balance && NextCourseSegment(Resumed) == Segment::Passage);
+    assert(PassageCheckpoint(Segment::Sandbox, &Store) == Segment::Balance);
 
     Store.Data = {Segment::Vanguard, false};
     const CourseStart Recovered = StartCourse(std::nullopt, &Store);
     assert(Recovered.CheckpointFallback && Recovered.Current == Segment::Stairs);
     assert(RecordArrival(Recovered, Store));
-    assert(Store.Writes == 1);
+    assert(Store.Writes == 2);
+    assert(PassageCheckpoint(std::nullopt, &Store) == Segment::Weight);
 }
 
 void TestCircuitAndBallast()
@@ -366,7 +382,6 @@ void TestPlateBalance()
     Balance.Reset();
     assert(!Balance.IsBalanced());
     static_assert(ParseSegment("Balance") == Segment::Balance);
-    static_assert(!IsCheckpoint(Segment::Balance) && !NextSegment(Segment::Balance));
 }
 }
 

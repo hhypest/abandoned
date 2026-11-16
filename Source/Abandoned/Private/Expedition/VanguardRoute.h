@@ -116,6 +116,7 @@ private:
     TObjectPtr<UBoxComponent> SupplyCabinet;
 
     Abandoned::Domain::Expedition::Segment Current = Abandoned::Domain::Expedition::Segment::Passage;
+    Abandoned::Domain::Expedition::Segment ReturnCheckpoint = Abandoned::Domain::Expedition::Segment::Weight;
     bool bTravelling = false;
     bool bResupplied = false;
     bool bClearedRadiation = false;

@@ -14,6 +14,7 @@ public:
 
 std::optional<Domain::Expedition::Segment> ReadSegment(const FString& Id);
 FString WriteSegment(Domain::Expedition::Segment Value);
-void TravelToSegment(const UObject* WorldContext, Domain::Expedition::Segment Destination);
+void TravelToSegment(const UObject* WorldContext, Domain::Expedition::Segment Destination,
+    std::optional<Domain::Expedition::Segment> PassageOrigin = std::nullopt);
 void TravelToRadiationPassage(const UObject* WorldContext);
 }
