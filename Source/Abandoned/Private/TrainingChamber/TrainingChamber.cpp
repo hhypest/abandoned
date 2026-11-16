@@ -157,7 +157,8 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || bVerifyHints || bVerifyDoorClamp)
+    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || bVerifyHints ||
+        bVerifyDoorClamp || bVerifyParallelCircuit)
     {
         return;
     }
