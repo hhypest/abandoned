@@ -21,6 +21,26 @@ struct FTrainingCubeSpawn
     FVector Outlet = FVector::ZeroVector;
 };
 
+UENUM()
+enum class ETrainingRelaySignal : uint8
+{
+    PlateA,
+    PlateB,
+    Drive
+};
+
+USTRUCT()
+struct FTrainingRelayTrace
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FSceneBlock Block;
+
+    UPROPERTY()
+    ETrainingRelaySignal Signal = ETrainingRelaySignal::PlateA;
+};
+
 UCLASS(Config=Game, DefaultConfig)
 class UTrainingChamberLayout : public UObject
 {
@@ -79,6 +99,12 @@ public:
     TArray<FSceneBlock> AdditionalPlates;
 
     UPROPERTY(Config)
+    bool bUseParallelPlates = false;
+
+    UPROPERTY(Config)
+    TArray<FTrainingRelayTrace> RelayTraces;
+
+    UPROPERTY(Config)
     float BalanceTotalKg = 0.0f;
 
     UPROPERTY(Config)
@@ -115,7 +141,8 @@ public:
     bool bDispenseCubes = false;
 
     double GetPlateTop() const { return Plate.Center.Z + Plate.Size.Z * 0.5; }
-    bool UsesPlateBalance() const { return !AdditionalPlates.IsEmpty(); }
+    bool UsesParallelPlates() const { return bUseParallelPlates; }
+    bool UsesPlateBalance() const { return !UsesParallelPlates() && !AdditionalPlates.IsEmpty(); }
     int32 GetPlateCount() const { return 1 + AdditionalPlates.Num(); }
     const FSceneBlock& GetPlateAt(int32 Index) const { return Index == 0 ? Plate : AdditionalPlates[Index - 1]; }
     FBox GetExitBounds() const { return MakeBounds(ExitZone); }
@@ -130,7 +157,7 @@ public:
             !Finishes.ContainsByPredicate([](const FSceneFinish& Finish) { return !Finish.IsValid(); }) &&
             FMath::IsFinite(PressedLightIntensity) && PressedLightIntensity >= 0.0f &&
             Door.IsValid() && Plate.IsValid() && !Spawn.ContainsNaN() && ExitZone.IsValid() &&
-            CubeBounds.IsValid() && AreBalancePlatesValid() && AreHintsValid() &&
+            CubeBounds.IsValid() && AreMultiplePlatesValid() && AreHintsValid() &&
             (UsesPlateBalance() || (FMath::IsFinite(PlateActivationMassKg) && PlateActivationMassKg > 0.0f &&
             FMath::IsFinite(PlateMaximumMassKg) && PlateMaximumMassKg >= PlateActivationMassKg)) &&
             (!bRequiresButton || Button.IsValid()) && (!bRequiresStack || StackZone.IsValid()) &&
@@ -154,13 +181,32 @@ private:
             !HintPages.ContainsByPredicate([](const FString& Page) { return Page.TrimStartAndEnd().IsEmpty(); }));
     }
 
-    bool AreBalancePlatesValid() const
+    bool AreMultiplePlatesValid() const
     {
-        if (!UsesPlateBalance())
+        if (UsesParallelPlates())
         {
-            return BalanceTotalKg == 0.0f;
+            const auto HasTrace = [this](ETrainingRelaySignal Signal)
+            {
+                return RelayTraces.ContainsByPredicate([Signal](const FTrainingRelayTrace& Trace)
+                    { return Trace.Signal == Signal; });
+            };
+            if (AdditionalPlates.Num() != 1 || !bRequiresButton || bRequiresStack || BalanceTotalKg != 0.0f ||
+                !HasTrace(ETrainingRelaySignal::PlateA) || !HasTrace(ETrainingRelaySignal::PlateB) ||
+                !HasTrace(ETrainingRelaySignal::Drive) ||
+                RelayTraces.ContainsByPredicate([](const FTrainingRelayTrace& Trace)
+                {
+                    return !Trace.Block.IsValid() || Trace.Block.bCollision || Trace.Signal > ETrainingRelaySignal::Drive;
+                }))
+            {
+                return false;
+            }
         }
-        if (bRequiresButton || bRequiresStack || !FMath::IsFinite(BalanceTotalKg) || BalanceTotalKg <= 0.0f)
+        else if (AdditionalPlates.IsEmpty())
+        {
+            return BalanceTotalKg == 0.0f && RelayTraces.IsEmpty();
+        }
+        else if (bRequiresButton || bRequiresStack || !FMath::IsFinite(BalanceTotalKg) || BalanceTotalKg <= 0.0f ||
+            !RelayTraces.IsEmpty())
         {
             return false;
         }

@@ -125,6 +125,31 @@ void TestSupply()
     assert(Supply.Percent() == 0);
 }
 
+void TestParallelPlateCircuit()
+{
+    const CircuitRules Rules{5, 20, CircuitRules::Gate::ButtonAndParallelPlates};
+    ChamberCircuit Circuit;
+    Circuit.Observe(Rules, 5, false, 0.06f);
+    Circuit.Observe(Rules, 5, false, 0.06f, 5);
+    assert(Circuit.GetState().PlatePressed && !Circuit.GetState().AlternatePlatePressed);
+    assert(Circuit.GetState().ParallelOutput && !Circuit.GetState().ExitEnabled);
+    Circuit.PressButton();
+    Circuit.Observe(Rules, 5, false, 0.0f, 5);
+    assert(Circuit.GetState().ExitEnabled);
+    Circuit.Observe(Rules, 10, false, 0.06f, 5);
+    assert(Circuit.GetState().PlatePressed && Circuit.GetState().AlternatePlatePressed);
+    Circuit.Observe(Rules, 85, false, 0.0f, 20);
+    assert(!Circuit.GetState().PlatePressed && Circuit.GetState().AlternatePlatePressed);
+    assert(Circuit.GetState().ExitEnabled);
+    Circuit.Observe(Rules, 4, false, 1.0f, 21);
+    assert(!Circuit.GetState().ParallelOutput && !Circuit.GetState().ExitEnabled);
+    Circuit.Observe(Rules, 0, false, 0.2f, 5);
+    assert(Circuit.GetState().ExitEnabled);
+    Circuit.Reset();
+    Circuit.Observe(Rules, 0, false, 0.06f, 5);
+    assert(!Circuit.GetState().ButtonLatched && !Circuit.GetState().ParallelOutput);
+}
+
 void TestFallImpact()
 {
     assert(AssessFall(0.0) == FallImpact::None);
@@ -422,6 +447,7 @@ int main()
 {
     TestRouteAndCheckpoint();
     TestCircuitAndBallast();
+    TestParallelPlateCircuit();
     TestSupply();
     TestFallImpact();
     TestMantleRules();

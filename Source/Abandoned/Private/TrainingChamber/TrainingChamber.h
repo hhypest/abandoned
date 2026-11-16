@@ -19,6 +19,7 @@ class UBoxComponent;
 class UMaterialInterface;
 class UPhysicsHandleComponent;
 class UPointLightComponent;
+class UStaticMesh;
 class UStaticMeshComponent;
 class UTrainingChamberLayout;
 
@@ -50,7 +51,7 @@ public:
     void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
     void Tick(float DeltaSeconds) override;
 
-    UBoxComponent* GetPlate() const { return Plates.IsEmpty() ? nullptr : Plates[0].Body.Get(); }
+    UBoxComponent* GetPlate(int32 Index = 0) const { return Plates.IsValidIndex(Index) ? Plates[Index].Body.Get() : nullptr; }
     bool IsPressurePlate(const UBoxComponent* Body) const;
     UBoxComponent* GetButton() const { return Button; }
     UBoxComponent* GetHintTerminal() const { return HintTerminal; }
@@ -58,12 +59,13 @@ public:
     void ReadNextHint() { HintReader.Activate(); }
     const UTrainingChamberLayout* GetLayout() const { return Layout; }
     bool IsButtonLatched() const { return Circuit.GetState().ButtonLatched; }
-    float GetMeasuredMass() const { return PlateLoads.IsEmpty() ? 0.0f : PlateLoads[0]; }
+    bool IsParallelRelayPowered() const { return Circuit.GetState().ParallelOutput; }
+    float GetMeasuredMass(int32 Index = 0) const { return PlateLoads.IsValidIndex(Index) ? PlateLoads[Index] : 0.0f; }
     const TArray<float>& GetPlateLoads() const { return PlateLoads; }
     bool IsExitEnabled() const;
     bool DidCheckpointFallback() const { return Course.CheckpointFallback; }
     void PressButton();
-    bool IsPlatePressed() const { return !Plates.IsEmpty() && Plates[0].bPressed; }
+    bool IsPlatePressed(int32 Index = 0) const { return Plates.IsValidIndex(Index) && Plates[Index].bPressed; }
     bool IsDoorOpen() const;
     bool HasClampedObject() const { return DoorClamp.HasObject(); }
     bool HasReachedExit() const { return bReachedExit; }
@@ -78,6 +80,8 @@ private:
     void ObserveHints(const ATrainingChamberCharacter& Player, float DeltaSeconds);
     bool MoveDoor(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void SetPlatePressed(int32 Index, bool bPressed);
+    bool SpawnRelayTraces(UStaticMesh& Mesh, UMaterialInterface* Idle, UMaterialInterface* Powered);
+    void UpdateRelayTraces();
     bool HasStackAtExit() const;
     void SelectLayout(const FString& Options);
     void SaveEntryCheckpoint();
@@ -94,6 +98,7 @@ private:
     void VerifyBalanceChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyHints(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyDoorClamp(ATrainingChamberCharacter& Player, float DeltaSeconds);
+    void VerifyParallelCircuit(ATrainingChamberCharacter& Player, float DeltaSeconds);
     EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
     float VerificationElapsed = 0.0f;
     bool bVerifyChamber = false;
@@ -105,6 +110,9 @@ private:
     bool bVerifyBalance = false;
     bool bVerifyHints = false;
     bool bVerifyDoorClamp = false;
+    bool bVerifyParallelCircuit = false;
+    int32 RelayTestStep = 0;
+    float RelayTestSeconds = 0.0f;
     enum class EDoorClampTest { PowerOn, Open, Clamp, Hold, Release, Reopen, ClampForReset, OpenForPlayer, CrushPlayer };
     EDoorClampTest DoorClampTest = EDoorClampTest::PowerOn;
     double DoorClampTestSeconds = 0.0;
@@ -125,6 +133,15 @@ private:
 
     UPROPERTY(Transient)
     TArray<FTrainingPressurePlate> Plates;
+
+    UPROPERTY(Transient)
+    TArray<TObjectPtr<UStaticMeshComponent>> RelayTraces;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UMaterialInterface> RelayIdleMaterial;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UMaterialInterface> RelayPoweredMaterial;
 
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> Button;
