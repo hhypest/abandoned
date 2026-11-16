@@ -96,6 +96,13 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         RadiationLayout = GetDefault<UVanguardRadiationLayout>();
     }
+    if (!AtStation() && !RadiationLayout)
+    {
+        const Abandoned::Infrastructure::Expedition::UnrealCheckpointStore Store;
+        const auto Origin = ReadSegment(UGameplayStatics::ParseOption(Options, TEXT("Checkpoint")));
+        ReturnCheckpoint = Abandoned::Application::Expedition::PassageCheckpoint(
+            Origin, GetWorld()->WorldType == EWorldType::Game ? &Store : nullptr);
+    }
     const auto* Passage = RadiationLayout ? static_cast<const UVanguardPassageLayout*>(RadiationLayout.Get())
                                           : GetDefault<UVanguardPassageLayout>();
     const auto* Station = GetDefault<UVanguardStationLayout>();
@@ -180,6 +187,12 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
             Session->Suit.Refill();
             Session->Dose.Clear();
             Session->bFlashlightOn = false;
+#if WITH_DEV_AUTOMATION_TESTS
+            if (!Radiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardOxygen")))
+            {
+                Session->Suit.SpendInPassage(555.0f);
+            }
+#endif
         }
         const auto DoorVisual = SpawnBlock(Passage->Door, EComponentMobility::Movable);
         Door = DoorVisual.Collision;
@@ -218,6 +231,7 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     }
 #if WITH_DEV_AUTOMATION_TESTS
     bVerifyRoute = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse")) ||
+        FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint")) ||
         FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguard"));
     bCaptureRoute = FParse::Param(FCommandLine::Get(), TEXT("CaptureVanguard"));
     bVerifyFalls = !AtStation() && !Radiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardFalls"));
@@ -363,12 +377,13 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
 
     UVanguardSession* Session = GetSession();
     const bool bRadiationLimit = Session && TickRadiation(Position, DeltaSeconds, Session->Dose);
+    const bool bOxygenDepleted = Session && Session->Suit.SpendInPassage(DeltaSeconds);
     using namespace Abandoned::Application::Expedition;
     const auto Outcome = ResolvePassage({
         .ReachedExit = BoundsOf(Passage.ExitZone).IsInside(Position),
         .Impact = LandingImpact,
         .OutOfBounds = Position.Z < -600.0,
-        .OxygenDepleted = Session && Session->Suit.SpendInPassage(DeltaSeconds),
+        .OxygenDepleted = bOxygenDepleted,
         .RadiationLimitReached = bRadiationLimit});
     if (Outcome == PassageOutcome::ReturnToCheckpoint)
     {
@@ -389,7 +404,10 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
         else
         {
             bTravelling = true;
-            TravelToSegment(this, Segment::Weight);
+            UE_LOG(LogVanguardRoute, Display, TEXT("Passage checkpoint recovery: %s (%s)."),
+                *Abandoned::Infrastructure::Expedition::WriteSegment(ReturnCheckpoint),
+                bOxygenDepleted ? TEXT("oxygen depleted") : TEXT("fall"));
+            TravelToSegment(this, ReturnCheckpoint);
         }
         return;
     }

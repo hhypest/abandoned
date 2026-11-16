@@ -38,7 +38,7 @@ constexpr std::optional<Segment> ParseSegment(std::string_view Key)
 
 constexpr bool IsCheckpoint(Segment Value)
 {
-    return Value == Segment::Stairs || Value == Segment::Button || Value == Segment::Weight;
+    return Value == Segment::Stairs || Value == Segment::Button || Value == Segment::Weight || Value == Segment::Balance;
 }
 
 constexpr std::optional<Segment> NextSegment(Segment Value)
@@ -47,7 +47,8 @@ constexpr std::optional<Segment> NextSegment(Segment Value)
     {
     case Segment::Stairs: return Segment::Button;
     case Segment::Button: return Segment::Weight;
-    case Segment::Weight: return Segment::Passage;
+    case Segment::Weight: return Segment::Balance;
+    case Segment::Balance: return Segment::Passage;
     case Segment::Passage: return Segment::Vanguard;
     default: return std::nullopt;
     }

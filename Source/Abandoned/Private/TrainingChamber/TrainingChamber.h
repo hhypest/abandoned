@@ -95,6 +95,8 @@ private:
     bool bVerifyChamber = false;
     bool bVerificationScreenshotRequested = false;
     bool bVerifyEntryCourse = false;
+    bool bVerifyEntryCheckpoint = false;
+    bool bVerifiedWeightReset = false;
     bool bVerifyDev20 = false;
     bool bVerifyBalance = false;
     bool bVerifyHints = false;
