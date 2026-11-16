@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Materials/MaterialInterface.h"
 
 namespace
 {
@@ -13,7 +14,7 @@ constexpr double ReachPeakSeconds = 0.055;
 constexpr double ReachSeconds = 0.12;
 constexpr double ReleaseStartSeconds = 0.27;
 constexpr double ReleaseEndSeconds = 0.51;
-constexpr float GripLightFraction = 0.005f;
+constexpr float GripLightFraction = 0.001f;
 const FVector GloveWrist(-7.5, 0.0, 2.5);
 constexpr double SleeveMeshLength = 26.0;
 }
@@ -40,11 +41,20 @@ void AVanguardCharacter::CreateMantleVisuals()
 void AVanguardCharacter::LoadMantleVisuals()
 {
     const UVanguardMantleVisuals& Visuals = *GetDefault<UVanguardMantleVisuals>();
-    MantleGloves[0]->SetStaticMesh(Visuals.LeftGlove.LoadSynchronous());
-    MantleGloves[1]->SetStaticMesh(Visuals.RightGlove.LoadSynchronous());
+    UMaterialInterface* Finish = Visuals.Finish.LoadSynchronous();
+    const auto SetPart = [Finish](UStaticMeshComponent& Component, UStaticMesh* PartMesh)
+    {
+        Component.SetStaticMesh(PartMesh);
+        if (Finish)
+        {
+            Component.SetMaterial(0, Finish);
+        }
+    };
+    SetPart(*MantleGloves[0], Visuals.LeftGlove.LoadSynchronous());
+    SetPart(*MantleGloves[1], Visuals.RightGlove.LoadSynchronous());
     UStaticMesh* Sleeve = Visuals.Sleeve.LoadSynchronous();
-    MantleSleeves[0]->SetStaticMesh(Sleeve);
-    MantleSleeves[1]->SetStaticMesh(Sleeve);
+    SetPart(*MantleSleeves[0], Sleeve);
+    SetPart(*MantleSleeves[1], Sleeve);
 }
 
 void AVanguardCharacter::UpdateMantleHands()
