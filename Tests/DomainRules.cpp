@@ -151,33 +151,45 @@ void TestMantleRules()
 void TestRadiationExposure()
 {
     using Position = RadiationPosition;
-    const FlarePattern Pattern{4.0, 2.0, 2.0, 30.0};
+    const FlarePattern Pattern{4.0, 2.0, 2.0, 30.0, 3.0};
     assert(Pattern.IsValid());
-    const FlarePattern Invalid{0.0, 2.0, 2.0, 30.0};
+    const FlarePattern Invalid{0.0, 2.0, 2.0, 30.0, 3.0};
     assert(!Invalid.IsValid());
+    const FlarePattern NoRecovery{4.0, 2.0, 2.0, 30.0, 0.0};
+    assert(!NoRecovery.IsValid());
+    RadiationDose Dose;
     RadiationExposure Radiation{Pattern};
-    assert(Radiation.Read(Position::Outside).SecondsToChange == 4.0);
-    assert(!Radiation.Advance(3.0, Position::Outside));
-    assert(Radiation.Read(Position::Outside).DosePercent == 0.0);
-    assert(!Radiation.Advance(1.5, Position::Exposed));
-    const auto Flare = Radiation.Read(Position::Exposed);
+    assert(Radiation.Read(Position::Outside, Dose).SecondsToChange == 4.0);
+    assert(!Radiation.Advance(3.0, Position::Outside, Dose));
+    assert(Radiation.Read(Position::Outside, Dose).DosePercent == 0.0);
+    assert(!Radiation.Advance(1.5, Position::Exposed, Dose));
+    const auto Flare = Radiation.Read(Position::Exposed, Dose);
     assert(Flare.FlareActive && Flare.DosePercent == 17.0 && Flare.DosePerSecond == 30.0 && Flare.SecondsToChange == 1.5);
-    assert(!Radiation.Advance(2.0, Position::Sheltered));
-    const auto Shelter = Radiation.Read(Position::Sheltered);
+    assert(!Radiation.Advance(2.0, Position::Sheltered, Dose));
+    const auto Shelter = Radiation.Read(Position::Sheltered, Dose);
     assert(!Shelter.FlareActive && Shelter.DosePercent == 17.0 && Shelter.DosePerSecond == 0.0);
     assert(Shelter.SecondsToChange == 3.5);
-    assert(!Radiation.Advance(std::numeric_limits<double>::quiet_NaN(), Position::Exposed));
-    assert(Radiation.Advance(12.0, Position::Exposed));
-    assert(Radiation.Read(Position::Exposed).DosePercent == RadiationExposure::DoseLimit);
+    assert(!Radiation.Advance(0.5, Position::Outside, Dose));
+    assert(Dose.Percent() == 15.5 && Radiation.Read(Position::Outside, Dose).DosePerSecond == -3.0);
+    assert(!Radiation.Advance(6.0, Position::Outside, Dose));
+    assert(Dose.Percent() == 0.0 && Radiation.Read(Position::Outside, Dose).DosePerSecond == 0.0);
+    assert(!Radiation.Advance(std::numeric_limits<double>::quiet_NaN(), Position::Exposed, Dose));
+    assert(Radiation.Advance(18.0, Position::Exposed, Dose));
+    assert(Dose.Percent() == RadiationDose::Limit && Dose.IsLethal());
+    assert(Radiation.Advance(60.0, Position::Outside, Dose) && Dose.IsLethal());
+    Dose.Clear();
+    assert(Dose.Percent() == 0.0);
 
     RadiationExposure Stepwise{Pattern};
     RadiationExposure Batched{Pattern};
+    RadiationDose StepwiseDose;
+    RadiationDose BatchedDose;
     for (int Index = 0; Index < 112; ++Index)
     {
-        assert(!Stepwise.Advance(0.0625, Position::Exposed));
+        assert(!Stepwise.Advance(0.0625, Position::Exposed, StepwiseDose));
     }
-    assert(!Batched.Advance(7.0, Position::Exposed));
-    assert(Stepwise.Read(Position::Exposed).DosePercent == Batched.Read(Position::Exposed).DosePercent);
+    assert(!Batched.Advance(7.0, Position::Exposed, BatchedDose));
+    assert(StepwiseDose.Percent() == BatchedDose.Percent());
 
     static_assert(ResolvePassage({}) == PassageOutcome::Continue);
     static_assert(ResolvePassage({.ReachedExit = true}) == PassageOutcome::EnterSanctuary);

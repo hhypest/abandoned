@@ -28,12 +28,13 @@ void AVanguardRouteGameMode::VerifyRadiation(AVanguardCharacter& Player, float D
     const auto Reading = GetDosimeter();
     if (AtStation())
     {
-        if (Reading || !Session || !Session->bRecoveredFromRadiation)
+        if (Reading || !Session || !Session->bRecoveredFromRadiation || !HasClearedRadiation() ||
+            Session->Dose.Percent() != 0.0)
         {
-            Fail(TEXT("the station should be safe after a full passage run"));
+            Fail(TEXT("the station should clear the remaining dose after a full passage run"));
             return;
         }
-        UE_LOG(LogRadiationVerification, Display, TEXT("Radiation passage verification passed: forecast, shelter, dose, checkpoint recovery and safe station."));
+        UE_LOG(LogRadiationVerification, Display, TEXT("Radiation passage verification passed: forecast, shelter, recovery outside, checkpoint and station decontamination."));
         bVerifyRadiation = false;
         FPlatformMisc::RequestExitWithStatus(false, 0);
         return;
@@ -121,6 +122,24 @@ void AVanguardRouteGameMode::VerifyRadiation(AVanguardCharacter& Player, float D
         if (ShelterSeconds >= 0.35f)
         {
             UE_LOG(LogRadiationVerification, Display, TEXT("Radiation shelter held dose at %.2f%% through the active flare."), ProtectedDose);
+            const FSceneBlock& Exposure = RadiationLayout->ExposureBounds;
+            const double BeforeExposure = Exposure.Center.X - Exposure.Size.X * 0.5 - 85.0;
+            Player.PlaceAt(FTransform(FRotator::ZeroRotator, FVector(BeforeExposure, 0.0, Layout->Spawn.Z)));
+            RadiationVerification = ERadiationVerification::RecoverOutside;
+        }
+        break;
+    case ERadiationVerification::RecoverOutside:
+        if (Reading->Position != RadiationPosition::Outside || Reading->DosePerSecond != -RadiationLayout->RecoveryDosePerSecond ||
+            Reading->DosePercent <= 0.0 || Reading->DosePercent >= ProtectedDose)
+        {
+            Fail(TEXT("dose should recover gradually after leaving the exposure zone"));
+            return;
+        }
+        if (ProtectedDose - Reading->DosePercent >= 1.0)
+        {
+            UE_LOG(LogRadiationVerification, Display, TEXT("Radiation recovery outside the zone: %.2f%% to %.2f%%."),
+                ProtectedDose, Reading->DosePercent);
+            Capture(TEXT("Radiation-Recovering"));
             Player.PlaceAt(FTransform(FRotator::ZeroRotator, FVector(FirstShelter.Center.X, 0.0, Layout->Spawn.Z)));
             RadiationVerification = ERadiationVerification::LethalExposure;
         }

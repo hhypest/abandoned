@@ -116,7 +116,8 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     if (RadiationLayout)
     {
         const Abandoned::Domain::Expedition::FlarePattern Pattern{RadiationLayout->QuietSeconds,
-            RadiationLayout->FlareSeconds, RadiationLayout->QuietDosePerSecond, RadiationLayout->FlareDosePerSecond};
+            RadiationLayout->FlareSeconds, RadiationLayout->QuietDosePerSecond, RadiationLayout->FlareDosePerSecond,
+            RadiationLayout->RecoveryDosePerSecond};
         const FSceneBlock& Exposure = RadiationLayout->ExposureBounds;
         const FBox ExposureBox = BoundsOf(Exposure);
         const bool bInvalidShelter = RadiationLayout->ShelterBounds.ContainsByPredicate([&ExposureBox](const FSceneBlock& Shelter)
@@ -131,6 +132,11 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
             return;
         }
         Radiation.emplace(Pattern);
+        if (!GetSession())
+        {
+            ErrorMessage = TEXT("Radiation passage requires an expedition session.");
+            return;
+        }
     }
     UWorld& World = *GetWorld();
     Abandoned::Blockout::ApplyGravity(World);
@@ -172,6 +178,7 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         if (UVanguardSession* Session = GetSession())
         {
             Session->Suit.Refill();
+            Session->Dose.Clear();
             Session->bFlashlightOn = false;
         }
         const auto DoorVisual = SpawnBlock(Passage->Door, EComponentMobility::Movable);
@@ -201,6 +208,13 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         ErrorMessage = TEXT("Could not spawn the Vanguard route device.");
         return;
+    }
+    if (UVanguardSession* Session = GetSession(); AtStation() && Session && Session->Dose.Percent() > 0.0)
+    {
+        UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard station cleared remaining radiation dose: %.2f%%."),
+            Session->Dose.Percent());
+        Session->Dose.Clear();
+        bClearedRadiation = true;
     }
 #if WITH_DEV_AUTOMATION_TESTS
     bVerifyRoute = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse")) ||
@@ -257,14 +271,15 @@ float AVanguardRouteGameMode::GetOxygenPercent() const
 
 std::optional<Abandoned::Domain::Expedition::DosimeterReading> AVanguardRouteGameMode::GetDosimeter() const
 {
-    if (Radiation)
+    if (const UVanguardSession* Session = GetSession(); Radiation && Session)
     {
-        return Radiation->Read(RadiationPosition);
+        return Radiation->Read(RadiationPosition, Session->Dose);
     }
     return std::nullopt;
 }
 
-bool AVanguardRouteGameMode::TickRadiation(const FVector& Position, float DeltaSeconds)
+bool AVanguardRouteGameMode::TickRadiation(const FVector& Position, float DeltaSeconds,
+    Abandoned::Domain::Expedition::RadiationDose& Dose)
 {
     if (!Radiation)
     {
@@ -280,7 +295,7 @@ bool AVanguardRouteGameMode::TickRadiation(const FVector& Position, float DeltaS
         RadiationPosition = bSheltered ? Abandoned::Domain::Expedition::RadiationPosition::Sheltered
                                       : Abandoned::Domain::Expedition::RadiationPosition::Exposed;
     }
-    return Radiation->Advance(DeltaSeconds, RadiationPosition);
+    return Radiation->Advance(DeltaSeconds, RadiationPosition, Dose);
 }
 
 void AVanguardRouteGameMode::RestartRadiationPassage()
@@ -347,7 +362,7 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
     Door->SetWorldLocation(DoorPosition, true);
 
     UVanguardSession* Session = GetSession();
-    const bool bRadiationLimit = TickRadiation(Position, DeltaSeconds);
+    const bool bRadiationLimit = Session && TickRadiation(Position, DeltaSeconds, Session->Dose);
     using namespace Abandoned::Application::Expedition;
     const auto Outcome = ResolvePassage({
         .ReachedExit = BoundsOf(Passage.ExitZone).IsInside(Position),
@@ -671,6 +686,10 @@ void AVanguardHUD::DrawHUD()
     if (Mode->HasMinorInjuryNotice())
     {
         DrawText(TEXT("Suit: minor impact injury"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 132.0f);
+    }
+    if (Mode->HasClearedRadiation())
+    {
+        DrawText(TEXT("Station decontamination complete"), FLinearColor::White, 24.0f, 132.0f);
     }
     if (Player->CanMantle() && !Player->IsMantling())
     {

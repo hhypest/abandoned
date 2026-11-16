@@ -122,4 +122,7 @@ public:
 
     UPROPERTY(Config)
     double FlareDosePerSecond = 0.0;
+
+    UPROPERTY(Config)
+    double RecoveryDosePerSecond = 0.0;
 };
