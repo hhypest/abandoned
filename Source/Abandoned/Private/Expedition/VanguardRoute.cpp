@@ -274,6 +274,10 @@ void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerContr
             Light.SetVisibility(Session && Session->bFlashlightOn);
             if (!AtStation())
             {
+                if (CastChecked<UVanguardPassageLayout>(Layout.Get())->bEnableMantle)
+                {
+                    Pawn->LoadMantleVisuals();
+                }
                 const UVanguardInjurySettings& Injury = *GetDefault<UVanguardInjurySettings>();
                 if (USoundBase* Sound = Injury.BreathSound.LoadSynchronous())
                 {
@@ -696,6 +700,8 @@ AVanguardCharacter::AVanguardCharacter()
     InjuryBreath->SetupAttachment(Camera);
     InjuryBreath->bAutoActivate = false;
     InjuryBreath->bAllowSpatialization = false;
+
+    CreateMantleVisuals();
 }
 
 void AVanguardCharacter::PlayInjuryBreath()

@@ -7,6 +7,26 @@
 
 class UStaticMesh;
 class USoundBase;
+class UMaterialInterface;
+
+UCLASS(Config=Game, DefaultConfig)
+class UVanguardMantleVisuals final : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(Config)
+    TSoftObjectPtr<UStaticMesh> LeftGlove;
+
+    UPROPERTY(Config)
+    TSoftObjectPtr<UStaticMesh> RightGlove;
+
+    UPROPERTY(Config)
+    TSoftObjectPtr<UStaticMesh> Sleeve;
+
+    UPROPERTY(Config)
+    TSoftObjectPtr<UMaterialInterface> Finish;
+};
 
 UCLASS(Config=Game, DefaultConfig)
 class UVanguardInjurySettings final : public UObject

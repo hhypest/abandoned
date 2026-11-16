@@ -74,6 +74,36 @@ std::optional<MantlePath> FindMantlePath(const ACharacter& Player, double Suppor
     {
         return std::nullopt;
     }
-    return MantlePath{Start, Raised, Landing};
+    const FVector Edge(Face.ImpactPoint.X, Face.ImpactPoint.Y, Top.ImpactPoint.Z);
+    return MantlePath{Start, Raised, Landing, Edge, IntoLedge, Ledge};
+}
+
+std::optional<MantleHandhold> FindMantleHandhold(const ACharacter& Player, const MantlePath& Path)
+{
+    const UPrimitiveComponent* Ledge = Path.Ledge.Get();
+    if (!Ledge)
+    {
+        return std::nullopt;
+    }
+    const UCapsuleComponent& Capsule = *Player.GetCapsuleComponent();
+    const FCollisionQueryParams Query(SCENE_QUERY_STAT(PassageMantleHandhold), false, &Player);
+    const FCollisionResponseParams Response(Capsule.GetCollisionResponseToChannels());
+    const FVector Across = FVector::CrossProduct(FVector::UpVector, Path.IntoLedge);
+    const FVector Inset = Path.IntoLedge * 2.0;
+    const UWorld& World = *Player.GetWorld();
+    MantleHandhold Handhold{};
+    Handhold.Orientation = FRotationMatrix::MakeFromXZ(Path.IntoLedge, FVector::UpVector).ToQuat();
+    for (int Hand = 0; Hand < 2; ++Hand)
+    {
+        const FVector Probe = Path.Edge + Across * (Hand == 0 ? -16.0 : 16.0) + Inset;
+        FHitResult Top;
+        if (!World.LineTraceSingleByChannel(Top, Probe + FVector(0, 0, 8), Probe - FVector(0, 0, 5),
+            Capsule.GetCollisionObjectType(), Query, Response) || Top.GetComponent() != Ledge)
+        {
+            return std::nullopt;
+        }
+        Handhold.Edge[Hand] = Top.ImpactPoint - Inset;
+    }
+    return Handhold;
 }
 }
