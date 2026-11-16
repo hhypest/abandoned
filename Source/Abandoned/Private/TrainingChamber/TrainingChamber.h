@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Application/Expedition/EntryCourse.h"
+#include "Application/Puzzles/ChamberHintReader.h"
 #include "Domain/Expedition/Dev20.h"
 #include "Domain/Puzzles/ChamberCircuit.h"
 #include "Domain/Puzzles/PlateBalance.h"
@@ -51,6 +52,9 @@ public:
     UBoxComponent* GetPlate() const { return Plates.IsEmpty() ? nullptr : Plates[0].Body.Get(); }
     bool IsPressurePlate(const UBoxComponent* Body) const;
     UBoxComponent* GetButton() const { return Button; }
+    UBoxComponent* GetHintTerminal() const { return HintTerminal; }
+    const Abandoned::Application::Puzzles::ChamberHintReader& GetHints() const { return HintReader; }
+    void ReadNextHint() { HintReader.Activate(); }
     const UTrainingChamberLayout* GetLayout() const { return Layout; }
     bool IsButtonLatched() const { return Circuit.GetState().ButtonLatched; }
     float GetMeasuredMass() const { return PlateLoads.IsEmpty() ? 0.0f : PlateLoads[0]; }
@@ -69,6 +73,7 @@ private:
     void ReturnCube(ATrainingChamberCharacter& Player, int32 Index, bool bUseDispenser = false);
     float GetPlateMass(const ATrainingChamberCharacter& Player, int32 Index) const;
     void ObserveCircuit(const ATrainingChamberCharacter& Player, float DeltaSeconds);
+    void ObserveHints(const ATrainingChamberCharacter& Player, float DeltaSeconds);
     void SetPlatePressed(int32 Index, bool bPressed);
     bool HasStackAtExit() const;
     void SelectLayout(const FString& Options);
@@ -84,6 +89,7 @@ private:
     void VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyBalanceChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
+    void VerifyHints(ATrainingChamberCharacter& Player, float DeltaSeconds);
     EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
     float VerificationElapsed = 0.0f;
     bool bVerifyChamber = false;
@@ -91,6 +97,9 @@ private:
     bool bVerifyEntryCourse = false;
     bool bVerifyDev20 = false;
     bool bVerifyBalance = false;
+    bool bVerifyHints = false;
+    double HintTestSeconds = 0.0;
+    int HintTestStep = 0;
     int32 Dev20TestPhase = 0;
     int32 CourseTestStep = 0;
     float CourseTestTime = 0.0f;
@@ -109,6 +118,9 @@ private:
     TObjectPtr<UBoxComponent> Button;
 
     UPROPERTY(Transient)
+    TObjectPtr<UBoxComponent> HintTerminal;
+
+    UPROPERTY(Transient)
     TObjectPtr<UStaticMeshComponent> ButtonVisual;
 
     UPROPERTY(Transient)
@@ -124,6 +136,7 @@ private:
     Abandoned::Application::Expedition::CourseStart Course;
     Abandoned::Domain::Puzzles::ChamberCircuit Circuit;
     Abandoned::Domain::Puzzles::PlateBalance Balance;
+    Abandoned::Application::Puzzles::ChamberHintReader HintReader;
     bool bReachedExit = false;
     bool bDev20Run = false;
     bool bDev20Recovering = false;
@@ -141,6 +154,7 @@ public:
     ADev20Actor* GetHeldDev20() const;
     APuzzleCube* FindReachableCube() const;
     const TCHAR* GetPlacementPrompt() const;
+    bool CanReadHintTerminal() const;
     void ReleaseHeldObject();
 
 protected:
@@ -190,4 +204,7 @@ class ATrainingChamberHUD final : public AHUD
 
 public:
     void DrawHUD() override;
+
+private:
+    void DrawHintPage(const UTrainingChamberLayout& Layout, int Page, int AvailablePages);
 };

@@ -3,6 +3,7 @@
 #include "Application/Expedition/MantleRequest.h"
 #include "Application/Expedition/PassageProgress.h"
 #include "Application/Puzzles/OpticsCourse.h"
+#include "Application/Puzzles/ChamberHintReader.h"
 #include "Domain/Expedition/FallImpact.h"
 #include "Domain/Expedition/RadiationExposure.h"
 #include "Domain/Expedition/SuitSupply.h"
@@ -184,6 +185,41 @@ void TestRadiationExposure()
     static_assert(ResolvePassage({.Impact = FallImpact::Fatal}) == PassageOutcome::ReturnToCheckpoint);
 }
 
+void TestChamberHints()
+{
+    using Abandoned::Application::Puzzles::ChamberHintReader;
+    constexpr double Delay = 360.0;
+    ChamberHintReader Reader;
+    assert(Reader.Page() == 0 && Reader.AvailablePages() == 1 && !Reader.HasNewEntry());
+    Reader.Activate();
+    assert(Reader.Page() == 1);
+    Reader.Activate();
+    assert(Reader.Page() == 0);
+    Reader.Observe(0, false, 300.0, Delay);
+    Reader.Observe(ArmedButtonHintNode, false, 1.0, Delay);
+    Reader.Observe(ArmedButtonHintNode, false, 200.0, Delay);
+    Reader.Observe(0, false, 159.0, Delay);
+    assert(Reader.AvailablePages() == 1);
+    Reader.Observe(ArmedButtonHintNode, false, 1.0, Delay);
+    assert(Reader.AvailablePages() == 2 && Reader.HasNewEntry() && Reader.Page() == 0);
+    Reader.Activate();
+    assert(Reader.HasNewEntry());
+    Reader.Activate();
+    assert(Reader.Page() == 2 && !Reader.HasNewEntry());
+    Reader.Close();
+    Reader.Observe(PressurePlateHintNode(0), false, 1.0, Delay);
+    Reader.Observe(0, true, 360.0, Delay);
+    Reader.Observe(0, false, std::numeric_limits<double>::quiet_NaN(), Delay);
+    Reader.Observe(0, false, 359.0, Delay);
+    assert(Reader.AvailablePages() == 2);
+    Reader.Observe(0, false, 1.0, Delay);
+    assert(Reader.AvailablePages() == 3 && Reader.HasNewEntry());
+    Reader = {};
+    assert(Reader.AvailablePages() == 1 && !Reader.HasNewEntry());
+    static_assert(PressurePlateHintNode(0) != PressurePlateHintNode(1));
+    static_assert(PressurePlateHintNode(-1) == 0 && PressurePlateHintNode(MaximumHintPlates) == 0);
+}
+
 void TestPowerSignalsAndOptics()
 {
     const bool Mixed[] = {false, true};
@@ -330,6 +366,7 @@ int main()
     TestFallImpact();
     TestMantleRules();
     TestRadiationExposure();
+    TestChamberHints();
     TestPowerSignalsAndOptics();
     TestGravityFields();
     TestPortalTransit();

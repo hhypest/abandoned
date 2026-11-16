@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Domain/Puzzles/ChamberHints.h"
 #include "Puzzles/PuzzleCube.h"
 #include "World/SceneLayout.h"
 #include "TrainingChamberLayout.generated.h"
@@ -40,6 +41,15 @@ public:
 
     UPROPERTY(Config)
     FString Objective = TEXT("Weigh down the pressure plate");
+
+    UPROPERTY(Config)
+    FSceneBlock HintTerminal;
+
+    UPROPERTY(Config)
+    TArray<FString> HintPages;
+
+    UPROPERTY(Config)
+    double HintDelaySeconds = 360.0;
 
     UPROPERTY(Config)
     bool bRequiresStack = false;
@@ -120,7 +130,7 @@ public:
             !Finishes.ContainsByPredicate([](const FSceneFinish& Finish) { return !Finish.IsValid(); }) &&
             FMath::IsFinite(PressedLightIntensity) && PressedLightIntensity >= 0.0f &&
             Door.IsValid() && Plate.IsValid() && !Spawn.ContainsNaN() && ExitZone.IsValid() &&
-            CubeBounds.IsValid() && AreBalancePlatesValid() &&
+            CubeBounds.IsValid() && AreBalancePlatesValid() && AreHintsValid() &&
             (UsesPlateBalance() || (FMath::IsFinite(PlateActivationMassKg) && PlateActivationMassKg > 0.0f &&
             FMath::IsFinite(PlateMaximumMassKg) && PlateMaximumMassKg >= PlateActivationMassKg)) &&
             (!bRequiresButton || Button.IsValid()) && (!bRequiresStack || StackZone.IsValid()) &&
@@ -135,6 +145,15 @@ public:
     }
 
 private:
+    bool AreHintsValid() const
+    {
+        using Abandoned::Domain::Puzzles::ChamberHints;
+        return HintPages.IsEmpty() || (HintPages.Num() == ChamberHints::PageCount && HintTerminal.IsValid() &&
+            HintTerminal.bCollision && FMath::IsFinite(HintDelaySeconds) && HintDelaySeconds > 0.0 &&
+            GetPlateCount() <= Abandoned::Domain::Puzzles::MaximumHintPlates &&
+            !HintPages.ContainsByPredicate([](const FString& Page) { return Page.TrimStartAndEnd().IsEmpty(); }));
+    }
+
     bool AreBalancePlatesValid() const
     {
         if (!UsesPlateBalance())
