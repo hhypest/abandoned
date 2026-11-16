@@ -90,6 +90,12 @@ void AVanguardRouteGameMode::VerifyRadiation(AVanguardCharacter& Player, float D
     case ERadiationVerification::LeaveShelter:
         if (Reading->Position == RadiationPosition::Exposed && Reading->FlareActive && Reading->DosePercent >= 5.0)
         {
+            if (bVerifyWristTerminal && (!Player.IsWristTerminalOpen() ||
+                !Player.WristReadout.Contains(FString::Printf(TEXT("DOSE    %.1f%%"), Reading->DosePercent))))
+            {
+                Fail(TEXT("the raised wrist should display the accumulating exposure dose"));
+                return;
+            }
             Capture(TEXT("Radiation-Exposed"));
             UE_LOG(LogRadiationVerification, Display, TEXT("Radiation exposure increased dose during a flare: %.2f%%."), Reading->DosePercent);
             RadiationVerification = ERadiationVerification::ReturnToShelter;

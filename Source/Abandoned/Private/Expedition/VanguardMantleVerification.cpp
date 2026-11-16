@@ -170,6 +170,12 @@ void AVanguardRouteGameMode::VerifyMantle(AVanguardCharacter& Player, float Delt
     case EMantleVerification::Hold:
         if (bGrounded && Player.CanMantle())
         {
+            Player.ToggleWristTerminal();
+            if (!Player.IsWristTerminalOpen())
+            {
+                Fail(TEXT("the wrist terminal could not open before the climb"));
+                return;
+            }
             Space(IE_Pressed);
             MantleVerification = EMantleVerification::PullUp;
         }
@@ -177,6 +183,11 @@ void AVanguardRouteGameMode::VerifyMantle(AVanguardCharacter& Player, float Delt
     case EMantleVerification::PullUp:
         if (Player.IsMantling())
         {
+            if (Player.IsWristTerminalOpen() || Player.WristDisplay->IsVisible())
+            {
+                Fail(TEXT("the wrist terminal did not lower for the climb"));
+                return;
+            }
             Space(IE_Released);
             MantleVerification = EMantleVerification::WaitForTop;
         }

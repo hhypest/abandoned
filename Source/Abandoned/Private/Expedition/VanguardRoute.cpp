@@ -231,12 +231,21 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         ErrorMessage = TEXT("Could not spawn the Vanguard route device.");
         return;
     }
-    if (UVanguardSession* Session = GetSession(); AtStation() && Session && Session->Dose.Percent() > 0.0)
+    if (UVanguardSession* Session = GetSession())
     {
-        UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard station cleared remaining radiation dose: %.2f%%."),
-            Session->Dose.Percent());
-        Session->Dose.Clear();
-        bClearedRadiation = true;
+        using Abandoned::Domain::Expedition::SuitRecord;
+        if (Radiation)
+        {
+            Session->Archive.Reveal(SuitRecord::ForecastSynchronized);
+        }
+        if (AtStation() && Session->Dose.Percent() > 0.0)
+        {
+            UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard station cleared remaining radiation dose: %.2f%%."),
+                Session->Dose.Percent());
+            Session->Dose.Clear();
+            Session->Archive.Reveal(SuitRecord::Decontaminated);
+            bClearedRadiation = true;
+        }
     }
 #if WITH_DEV_AUTOMATION_TESTS
     bVerifyRoute = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse")) ||
@@ -245,7 +254,10 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     bCaptureRoute = FParse::Param(FCommandLine::Get(), TEXT("CaptureVanguard"));
     bVerifyFalls = !AtStation() && !Radiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardFalls"));
     bVerifyInjuryAudio = bVerifyFalls && FParse::Param(FCommandLine::Get(), TEXT("VerifyInjuryAudio"));
-    bVerifyRadiation = (Radiation || AtStation()) && FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation"));
+    bVerifyWristTerminal = (Radiation || AtStation()) && FParse::Param(FCommandLine::Get(), TEXT("VerifyWristTerminal"));
+    bCaptureWristTerminal = bVerifyWristTerminal && FParse::Param(FCommandLine::Get(), TEXT("CaptureWristTerminal"));
+    bVerifyRadiation = (Radiation || AtStation()) &&
+        (bVerifyWristTerminal || FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation")));
     bCaptureRadiation = FParse::Param(FCommandLine::Get(), TEXT("CaptureRadiation"));
 #endif
     UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard segment ready: %s."),
@@ -264,6 +276,7 @@ void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerContr
         const UVanguardSession* Session = GetSession();
         if (AVanguardCharacter* Pawn = Cast<AVanguardCharacter>(Player->GetPawn()))
         {
+            Pawn->ConfigureWristTerminal(BaseMaterial);
             const UVanguardFlashlightSettings& Settings = *GetDefault<UVanguardFlashlightSettings>();
             USpotLightComponent& Light = *Pawn->ShoulderLight;
             Light.SetRelativeLocation(Settings.ShoulderOffset);
@@ -325,6 +338,12 @@ std::optional<Abandoned::Domain::Expedition::DosimeterReading> AVanguardRouteGam
     return std::nullopt;
 }
 
+Abandoned::Application::Expedition::SuitTelemetry AVanguardRouteGameMode::GetSuitTelemetry() const
+{
+    const UVanguardSession* Session = GetSession();
+    return {GetOxygenPercent(), Session ? Session->Dose.Percent() : 0.0, GetDosimeter(), AtStation()};
+}
+
 bool AVanguardRouteGameMode::TickRadiation(const FVector& Position, float DeltaSeconds,
     Abandoned::Domain::Expedition::RadiationDose& Dose)
 {
@@ -359,6 +378,7 @@ void AVanguardRouteGameMode::Resupply()
     if (UVanguardSession* Session = GetSession(); AtStation() && Session)
     {
         Session->Suit.Refill();
+        Session->Archive.Reveal(Abandoned::Domain::Expedition::SuitRecord::OxygenRestored);
         bResupplied = true;
         UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard oxygen supply restored."));
     }
@@ -469,16 +489,25 @@ void AVanguardRouteGameMode::Tick(float DeltaSeconds)
     {
         TickPassage(*Player, DeltaSeconds);
     }
-#if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyRadiation && !bTravelling)
+    if (bTravelling)
     {
-        VerifyRadiation(*Player, DeltaSeconds);
+        Player->CloseWristTerminal();
+        return;
     }
-    else if (bVerifyFalls && !bTravelling)
+    Player->UpdateWristTerminal(*this);
+#if WITH_DEV_AUTOMATION_TESTS
+    if (bVerifyRadiation)
+    {
+        if (!bVerifyWristTerminal || VerifyWristTerminal(*Player, DeltaSeconds))
+        {
+            VerifyRadiation(*Player, DeltaSeconds);
+        }
+    }
+    else if (bVerifyFalls)
     {
         VerifyFalls(*Player, DeltaSeconds);
     }
-    else if (bVerifyRoute && !bTravelling)
+    else if (bVerifyRoute)
     {
         Verify(*Player, DeltaSeconds);
     }
@@ -702,6 +731,7 @@ AVanguardCharacter::AVanguardCharacter()
     InjuryBreath->bAllowSpatialization = false;
 
     CreateMantleVisuals();
+    CreateWristTerminal();
 }
 
 void AVanguardCharacter::PlayInjuryBreath()
@@ -728,6 +758,7 @@ void AVanguardCharacter::BindAdditionalInput(UEnhancedInputComponent& Input)
     Input.BindAction(MapAction(EKeys::E), ETriggerEvent::Started, this, &AVanguardCharacter::Interact);
     Input.BindAction(MapAction(EKeys::F), ETriggerEvent::Started, this, &AVanguardCharacter::ToggleFlashlight);
     Input.BindAction(MapAction(EKeys::R), ETriggerEvent::Started, this, &AVanguardCharacter::ResetRadiation);
+    BindWristTerminalInput(Input);
 }
 
 void AVanguardCharacter::ResetRadiation()
@@ -839,4 +870,14 @@ void AVanguardHUD::DrawHUD()
             FLinearColor::White, 24.0f, 198.0f);
         DrawText(TEXT("[R] Restart passage"), FLinearColor::White, 24.0f, 218.0f);
     }
+    if (!Player->IsMantling())
+    {
+        const float Y = Dosimeter ? 244.0f : 183.0f;
+        const TCHAR* Tip = Player->IsWristTerminalOpen()
+            ? TEXT("[T] Lower wrist  [Tab] Page  [PgUp/PgDn] Archive")
+            : TEXT("[T] Wrist terminal");
+        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, Y, Player->IsWristTerminalOpen() ? 370.0f : 145.0f, 23.0f);
+        DrawText(Tip, FLinearColor::White, 24.0f, Y + 3.0f);
+    }
+    DrawWristReadout(*Player);
 }

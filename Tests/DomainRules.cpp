@@ -2,6 +2,7 @@
 #include "Application/Expedition/Dev20Transfer.h"
 #include "Application/Expedition/MantleRequest.h"
 #include "Application/Expedition/PassageProgress.h"
+#include "Application/Expedition/SuitTerminal.h"
 #include "Application/Puzzles/OpticsCourse.h"
 #include "Application/Puzzles/TimedPassage.h"
 #include "Application/Puzzles/ChamberHintReader.h"
@@ -478,6 +479,48 @@ void TestPlateBalance()
     assert(!Balance.IsBalanced());
     static_assert(ParseSegment("Balance") == Segment::Balance);
 }
+
+void TestSuitTerminal()
+{
+    SuitArchive Archive;
+    SuitTerminal Terminal;
+    assert(!Archive.At(0));
+    Terminal.NextPage();
+    assert(!Terminal.Page());
+    Terminal.Toggle();
+    assert(Terminal.Page() == SuitPage::Status);
+    Terminal.NextPage();
+    assert(Terminal.Page() == SuitPage::Signal);
+    Terminal.NextPage();
+    assert(Terminal.Page() == SuitPage::Archive);
+    Terminal.MoveArchive(true, Archive);
+    assert(Terminal.ArchiveIndex() == 0);
+    Archive.Reveal(SuitRecord::ForecastSynchronized);
+    Archive.Reveal(SuitRecord::Decontaminated);
+    Archive.Reveal(SuitRecord::ForecastSynchronized);
+    assert(Archive.Size() == 2);
+    Terminal.MoveArchive(true, Archive);
+    Terminal.MoveArchive(true, Archive);
+    assert(Archive.At(Terminal.ArchiveIndex()) == SuitRecord::Decontaminated);
+    Terminal.MoveArchive(false, Archive);
+    Terminal.MoveArchive(false, Archive);
+    assert(Archive.At(Terminal.ArchiveIndex()) == SuitRecord::ForecastSynchronized);
+    Terminal.NextPage();
+    assert(Terminal.Page() == SuitPage::Status);
+    Terminal.MoveArchive(true, Archive);
+    assert(Terminal.ArchiveIndex() == 0);
+    Terminal.Close();
+    assert(!Terminal.Page());
+
+    RadiationExposure Exposure({4.5, 3.0, 2.0, 35.0, 3.0});
+    RadiationDose Dose;
+    const SuitTelemetry Approach{99.0f, 0.0, Exposure.Read(RadiationPosition::Outside, Dose), false};
+    assert(Approach.Signal() == SuitSignal::ExteriorForecast && Approach.Forecast->SecondsToChange == 4.5);
+    const SuitTelemetry Passage{99.0f, 0.0, std::nullopt, false};
+    assert(Passage.Signal() == SuitSignal::Unavailable);
+    const SuitTelemetry Station{98.0f, 0.0, std::nullopt, true};
+    assert(Station.Signal() == SuitSignal::VanguardStation && !Station.Forecast);
+}
 }
 
 int main()
@@ -498,4 +541,5 @@ int main()
     TestPortalTransit();
     TestDev20Transfer();
     TestPlateBalance();
+    TestSuitTerminal();
 }
