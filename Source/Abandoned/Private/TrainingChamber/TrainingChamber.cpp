@@ -124,9 +124,10 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
 #endif
     const UnrealCheckpointStore Store;
     Course = Abandoned::Application::Expedition::StartCourse(Requested, bReadCheckpoint ? &Store : nullptr, bCampaignTravel);
-    if (Course.CheckpointFallback)
+    if (Course.Issue != Abandoned::Application::Expedition::CheckpointIssue::None)
     {
-        UE_LOG(LogTrainingChamber, Warning, TEXT("Entry checkpoint is incompatible. Starting at the first chamber."));
+        UE_LOG(LogTrainingChamber, Warning, TEXT("%s Starting at the first chamber."),
+            Abandoned::Infrastructure::Expedition::CheckpointIssueText(Course.Issue));
     }
     if (Course.Current == Segment::Button)
     {
@@ -166,7 +167,8 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
     if (GetWorld()->WorldType == EWorldType::Game &&
         !Abandoned::Application::Expedition::RecordArrival(Course, UnrealCheckpointStore{}))
     {
-        UE_LOG(LogTrainingChamber, Warning, TEXT("Could not save the entry checkpoint."));
+        bCheckpointWriteFailed = true;
+        UE_LOG(LogTrainingChamber, Warning, TEXT("Could not save the entry checkpoint. Previous data preserved."));
     }
 }
 
@@ -1813,9 +1815,15 @@ void ATrainingChamberHUD::DrawHUD()
                 FLinearColor::White, 24.0f, 126.0f + 21.0f * Index);
         }
     }
-    if (Chamber->DidCheckpointFallback())
+    if (const auto Issue = Chamber->GetCheckpointIssue(); Issue != Abandoned::Application::Expedition::CheckpointIssue::None)
     {
-        DrawText(TEXT("Incompatible checkpoint. Starting from chamber 01."), FLinearColor::White, 24.0f, 125.0f);
+        const FString Notice = FString(Abandoned::Infrastructure::Expedition::CheckpointIssueText(Issue)) +
+            TEXT(" Starting from chamber 01.");
+        DrawText(Notice, FLinearColor::White, 24.0f, 125.0f);
+    }
+    else if (Chamber->HasCheckpointWriteFailed())
+    {
+        DrawText(TEXT("Could not save checkpoint. Previous data preserved."), FLinearColor::White, 24.0f, 125.0f);
     }
     if (Chamber->IsDev20Run())
     {

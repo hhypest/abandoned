@@ -98,6 +98,8 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         RadiationLayout = GetDefault<UVanguardRadiationLayout>();
     }
+    bCampaignRoute = !RadiationLayout && GetWorld()->WorldType == EWorldType::Game &&
+        UGameplayStatics::ParseOption(Options, TEXT("EntryCourse")) == TEXT("1");
     if (!AtStation() && !RadiationLayout)
     {
         const Abandoned::Infrastructure::Expedition::UnrealCheckpointStore Store;
@@ -221,6 +223,11 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     }
     if (UVanguardSession* Session = GetSession())
     {
+        if (bCampaignRoute)
+        {
+            const auto Saved = Abandoned::Infrastructure::Expedition::UnrealCheckpointStore{}.Read();
+            Session->Suit.RestoreRecords(Saved.Archive);
+        }
         if (AtStation())
         {
             const double ClearedDose = Session->Suit.EnterStation();
@@ -374,6 +381,18 @@ void AVanguardRouteGameMode::Resupply()
         Session->Suit.Resupply();
         bResupplied = true;
         UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard oxygen supply restored."));
+        if (bCampaignRoute
+#if WITH_DEV_AUTOMATION_TESTS
+            && (!bVerifyRoute || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint")))
+#endif
+        )
+        {
+            bCheckpointWriteFailed = !Abandoned::Infrastructure::Expedition::UnrealCheckpointStore{}.RecordResupply();
+            if (bCheckpointWriteFailed)
+            {
+                UE_LOG(LogVanguardRoute, Warning, TEXT("Could not save the resupply record. Previous data preserved."));
+            }
+        }
     }
 }
 
@@ -464,7 +483,7 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
         if (const auto Next = Abandoned::Domain::Expedition::NextSegment(Current))
         {
             bTravelling = true;
-            TravelToSegment(this, *Next);
+            TravelToSegment(this, *Next, bCampaignRoute ? std::optional{ReturnCheckpoint} : std::nullopt);
         }
     }
 }
@@ -871,6 +890,10 @@ void AVanguardHUD::DrawHUD()
             : TEXT("[T] Wrist terminal");
         DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, Y, Player->IsWristTerminalOpen() ? 370.0f : 145.0f, 23.0f);
         DrawText(Tip, FLinearColor::White, 24.0f, Y + 3.0f);
+    }
+    if (Mode->HasCheckpointWriteFailed())
+    {
+        DrawText(TEXT("Could not save resupply record. Previous data preserved."), FLinearColor::White, 24.0f, 270.0f);
     }
     DrawWristReadout(*Player);
 }
