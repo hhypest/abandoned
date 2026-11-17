@@ -19,7 +19,7 @@
 #include "Domain/Puzzles/SlidingDoorRules.h"
 #include "Infrastructure/Expedition/WorldRouteOptions.h"
 
-#include <cassert>
+#include "TestChecks.h"
 #include <limits>
 
 using namespace Abandoned::Domain::Expedition;
@@ -60,31 +60,31 @@ void TestRouteAndCheckpoint()
     static_assert(ParseSegment(SegmentKey(Segment::Weight)) == Segment::Weight);
 
     MemoryCheckpoint Store;
-    assert(StartCourse({}, &Store).Current == Segment::Stairs);
-    assert(RecordArrival({Segment::Weight}, Store));
-    assert(RecordArrival({Segment::Passage}, Store));
-    assert(RecordArrival({Segment::Vanguard}, Store));
-    assert(Store.Writes == 1);
-    assert(StartCourse({}, &Store).Current == Segment::Weight);
-    assert(StartCourse({Segment::Button}, &Store).Current == Segment::Button);
+    CHECK(StartCourse({}, &Store).Current == Segment::Stairs);
+    CHECK(RecordArrival({Segment::Weight}, Store));
+    CHECK(RecordArrival({Segment::Passage}, Store));
+    CHECK(RecordArrival({Segment::Vanguard}, Store));
+    CHECK(Store.Writes == 1);
+    CHECK(StartCourse({}, &Store).Current == Segment::Weight);
+    CHECK(StartCourse({Segment::Button}, &Store).Current == Segment::Button);
 
     const CourseStart Standalone = StartCourse({Segment::Balance}, &Store);
-    assert(Standalone.StandaloneBalance && !NextCourseDestination(Standalone));
-    assert(RecordArrival(Standalone, Store) && Store.Writes == 1);
-    assert(StartCourse({}, &Store).Current == Segment::Weight);
+    CHECK(Standalone.StandaloneBalance && !NextCourseDestination(Standalone));
+    CHECK(RecordArrival(Standalone, Store) && Store.Writes == 1);
+    CHECK(StartCourse({}, &Store).Current == Segment::Weight);
 
     const WorldDestination Passage = VanguardDestination{VanguardStop::Passage, RouteEntry::Campaign, Segment::Balance};
     const CourseStart Campaign = StartCourse({Segment::Balance, RouteEntry::Campaign}, &Store);
-    assert(!Campaign.StandaloneBalance && NextCourseDestination(Campaign) == Passage);
-    assert(RecordArrival(Campaign, Store) && Store.Writes == 2);
+    CHECK(!Campaign.StandaloneBalance && NextCourseDestination(Campaign) == Passage);
+    CHECK(RecordArrival(Campaign, Store) && Store.Writes == 2);
     const CourseStart Resumed = StartCourse({}, &Store);
-    assert(Resumed.Current == Segment::Balance && NextCourseDestination(Resumed) == Passage);
+    CHECK(Resumed.Current == Segment::Balance && NextCourseDestination(Resumed) == Passage);
 
     Store.Data = {Segment::Vanguard};
     const CourseStart Recovered = StartCourse({}, &Store);
-    assert(Recovered.Issue == CheckpointIssue::UnknownCheckpoint && Recovered.Current == Segment::Stairs);
-    assert(RecordArrival(Recovered, Store));
-    assert(Store.Writes == 2);
+    CHECK(Recovered.Issue == CheckpointIssue::UnknownCheckpoint && Recovered.Current == Segment::Stairs);
+    CHECK(RecordArrival(Recovered, Store));
+    CHECK(Store.Writes == 2);
 }
 
 void TestPassageRecovery()
@@ -98,22 +98,22 @@ void TestPassageRecovery()
     const WorldDestination ToBalance = ChamberDestination{Segment::Balance, RouteEntry::Campaign};
 
     Store.Data = {Segment::Button};
-    assert(PassageRecovery(Campaign, &Store) == ToBalance);
-    assert(PassageRecovery(Radiation, &Store) == WorldDestination{Radiation});
-    assert(Store.Reads == 0 && Store.Writes == 0);
-    assert(PassageRecovery(Standard, &Store) == ToButton);
-    assert((PassageRecovery({VanguardStop::Passage, RouteEntry::Direct, Segment::Sandbox}, &Store) == ToButton));
-    assert(PassageRecovery(Standard, nullptr) == ToWeight);
+    CHECK(PassageRecovery(Campaign, &Store) == ToBalance);
+    CHECK(PassageRecovery(Radiation, &Store) == WorldDestination{Radiation});
+    CHECK(Store.Reads == 0 && Store.Writes == 0);
+    CHECK(PassageRecovery(Standard, &Store) == ToButton);
+    CHECK((PassageRecovery({VanguardStop::Passage, RouteEntry::Direct, Segment::Sandbox}, &Store) == ToButton));
+    CHECK(PassageRecovery(Standard, nullptr) == ToWeight);
     Store.Data = {};
-    assert(PassageRecovery(Standard, &Store) == ToWeight);
+    CHECK(PassageRecovery(Standard, &Store) == ToWeight);
     Store.Data = {Segment::Vanguard};
-    assert(PassageRecovery(Standard, &Store) == ToWeight);
+    CHECK(PassageRecovery(Standard, &Store) == ToWeight);
     Store.Data = {Segment::Button, CheckpointIssue::UnsupportedVersion};
-    assert(PassageRecovery(Standard, &Store) == ToWeight);
-    assert((StationAfterPassage(Campaign, ToBalance) ==
+    CHECK(PassageRecovery(Standard, &Store) == ToWeight);
+    CHECK((StationAfterPassage(Campaign, ToBalance) ==
         VanguardDestination{VanguardStop::Station, RouteEntry::Campaign, Segment::Balance}));
-    assert(StationAfterPassage(Radiation, Radiation) == VanguardDestination{VanguardStop::Station});
-    assert(StationAfterPassage(Standard, ToWeight) == VanguardDestination{VanguardStop::Station});
+    CHECK(StationAfterPassage(Radiation, Radiation) == VanguardDestination{VanguardStop::Station});
+    CHECK(StationAfterPassage(Standard, ToWeight) == VanguardDestination{VanguardStop::Station});
 }
 
 void TestWorldRouteOptions()
@@ -134,20 +134,20 @@ void TestWorldRouteOptions()
     for (const auto& Destination : Routes)
     {
         const auto Decoded = DecodeWorldOptions(EncodeWorldOptions(Destination), WorldFor(Destination));
-        assert(Decoded.Destination == Destination && !Decoded.InvalidRecoveryOrigin);
+        CHECK(Decoded.Destination == Destination && !Decoded.InvalidRecoveryOrigin);
     }
     const auto Origin = DecodeWorldOptions("?Checkpoint=Sandbox?Chamber=Passage", EntryWorld::Vanguard);
-    assert(Origin.InvalidRecoveryOrigin && Origin.Destination == WorldDestination{VanguardDestination{}});
+    CHECK(Origin.InvalidRecoveryOrigin && Origin.Destination == WorldDestination{VanguardDestination{}});
     const auto Legacy = DecodeWorldOptions("?DEV20Run?Dev20Recovered?Name=Player", EntryWorld::Portal);
-    assert((Legacy.Destination == WorldDestination{Dev20Destination{Dev20Stage::Station, Dev20Entry::Recovery}}));
-    assert(!DecodeWorldOptions("?Chamber=Unknown", EntryWorld::Chamber).Destination);
-    assert(!DecodeWorldOptions("?Chamber=Button?chamber=Weight", EntryWorld::Chamber).Destination);
-    assert(!DecodeWorldOptions("?game=UnknownMode", EntryWorld::Chamber).Destination);
-    assert(!DecodeWorldOptions("?Chamber=Vanguard?RadiationRun=1", EntryWorld::Vanguard).Destination);
-    assert(!DecodeWorldOptions("?Chamber=Passage?RadiationRun=1?EntryCourse=1", EntryWorld::Vanguard).Destination);
-    assert(!DecodeWorldOptions("?Chamber=Sandbox?Dev20Run=1", EntryWorld::Chamber).Destination);
-    assert(!DecodeWorldOptions("?Dev20Recovered=1", EntryWorld::Portal).Destination);
-    assert(!DecodeWorldOptions("?EntryCourse=maybe", EntryWorld::Chamber).Destination);
+    CHECK((Legacy.Destination == WorldDestination{Dev20Destination{Dev20Stage::Station, Dev20Entry::Recovery}}));
+    CHECK(!DecodeWorldOptions("?Chamber=Unknown", EntryWorld::Chamber).Destination);
+    CHECK(!DecodeWorldOptions("?Chamber=Button?chamber=Weight", EntryWorld::Chamber).Destination);
+    CHECK(!DecodeWorldOptions("?game=UnknownMode", EntryWorld::Chamber).Destination);
+    CHECK(!DecodeWorldOptions("?Chamber=Vanguard?RadiationRun=1", EntryWorld::Vanguard).Destination);
+    CHECK(!DecodeWorldOptions("?Chamber=Passage?RadiationRun=1?EntryCourse=1", EntryWorld::Vanguard).Destination);
+    CHECK(!DecodeWorldOptions("?Chamber=Sandbox?Dev20Run=1", EntryWorld::Chamber).Destination);
+    CHECK(!DecodeWorldOptions("?Dev20Recovered=1", EntryWorld::Portal).Destination);
+    CHECK(!DecodeWorldOptions("?EntryCourse=maybe", EntryWorld::Chamber).Destination);
 }
 
 void TestCircuitAndBallast()
@@ -155,26 +155,26 @@ void TestCircuitAndBallast()
     ChamberCircuit Circuit;
     const CircuitRules Weight{20, 20, CircuitRules::Gate::ButtonAndPlate};
     Circuit.Observe(Weight, 20, false, 0.06f);
-    assert(!Circuit.GetState().PlatePressed);
+    CHECK(!Circuit.GetState().PlatePressed);
     Circuit.Observe(Weight, 20, false, 0.06f);
-    assert(Circuit.GetState().PlatePressed && !Circuit.GetState().ExitEnabled);
+    CHECK(Circuit.GetState().PlatePressed && !Circuit.GetState().ExitEnabled);
     Circuit.PressButton();
     Circuit.Observe(Weight, 15, false, 0.2f);
-    assert(!Circuit.GetState().ExitEnabled);
+    CHECK(!Circuit.GetState().ExitEnabled);
     Circuit.Observe(Weight, 20, false, 0.2f);
-    assert(Circuit.GetState().ExitEnabled);
+    CHECK(Circuit.GetState().ExitEnabled);
     Circuit.Observe(Weight, 25, false, 0.2f);
-    assert(!Circuit.GetState().ExitEnabled && Circuit.GetState().ButtonLatched);
+    CHECK(!Circuit.GetState().ExitEnabled && Circuit.GetState().ButtonLatched);
     Circuit.Observe(Weight, std::numeric_limits<float>::quiet_NaN(), false, 0.2f);
-    assert(!Circuit.GetState().PlatePressed);
+    CHECK(!Circuit.GetState().PlatePressed);
 
     Circuit.Reset();
     const CircuitRules Stairs{5, 99, CircuitRules::Gate::StackLatch};
     Circuit.Observe(Stairs, 0, true, 0.0f);
     Circuit.Observe(Stairs, 0, false, 0.0f);
-    assert(Circuit.GetState().ExitEnabled);
+    CHECK(Circuit.GetState().ExitEnabled);
     Circuit.Reset();
-    assert(!Circuit.GetState().ExitEnabled && !Circuit.GetState().ButtonLatched);
+    CHECK(!Circuit.GetState().ExitEnabled && !Circuit.GetState().ButtonLatched);
 
     static_assert(AssessStack(27.5, 40, false, true, 1) == StackBlock::Size);
     static_assert(AssessStack(40, 27.5, true, true, 1) == StackBlock::Occupied);
@@ -187,12 +187,12 @@ void TestCircuitAndBallast()
 void TestSupply()
 {
     SuitSupply Supply;
-    assert(!Supply.SpendInPassage(25));
-    assert(Supply.Percent() < 100);
+    CHECK(!Supply.SpendInPassage(25));
+    CHECK(Supply.Percent() < 100);
     Supply.Refill();
-    assert(Supply.Percent() == 100);
-    assert(Supply.SpendInPassage(600));
-    assert(Supply.Percent() == 0);
+    CHECK(Supply.Percent() == 100);
+    CHECK(Supply.SpendInPassage(600));
+    CHECK(Supply.Percent() == 0);
 }
 
 void TestParallelPlateCircuit()
@@ -201,52 +201,52 @@ void TestParallelPlateCircuit()
     ChamberCircuit Circuit;
     Circuit.Observe(Rules, 5, false, 0.06f);
     Circuit.Observe(Rules, 5, false, 0.06f, 5);
-    assert(Circuit.GetState().PlatePressed && !Circuit.GetState().AlternatePlatePressed);
-    assert(Circuit.GetState().ParallelOutput && !Circuit.GetState().ExitEnabled);
+    CHECK(Circuit.GetState().PlatePressed && !Circuit.GetState().AlternatePlatePressed);
+    CHECK(Circuit.GetState().ParallelOutput && !Circuit.GetState().ExitEnabled);
     Circuit.PressButton();
     Circuit.Observe(Rules, 5, false, 0.0f, 5);
-    assert(Circuit.GetState().ExitEnabled);
+    CHECK(Circuit.GetState().ExitEnabled);
     Circuit.Observe(Rules, 10, false, 0.06f, 5);
-    assert(Circuit.GetState().PlatePressed && Circuit.GetState().AlternatePlatePressed);
+    CHECK(Circuit.GetState().PlatePressed && Circuit.GetState().AlternatePlatePressed);
     Circuit.Observe(Rules, 85, false, 0.0f, 20);
-    assert(!Circuit.GetState().PlatePressed && Circuit.GetState().AlternatePlatePressed);
-    assert(Circuit.GetState().ExitEnabled);
+    CHECK(!Circuit.GetState().PlatePressed && Circuit.GetState().AlternatePlatePressed);
+    CHECK(Circuit.GetState().ExitEnabled);
     Circuit.Observe(Rules, 4, false, 1.0f, 21);
-    assert(!Circuit.GetState().ParallelOutput && !Circuit.GetState().ExitEnabled);
+    CHECK(!Circuit.GetState().ParallelOutput && !Circuit.GetState().ExitEnabled);
     Circuit.Observe(Rules, 0, false, 0.2f, 5);
-    assert(Circuit.GetState().ExitEnabled);
+    CHECK(Circuit.GetState().ExitEnabled);
     Circuit.Reset();
     Circuit.Observe(Rules, 0, false, 0.06f, 5);
-    assert(!Circuit.GetState().ButtonLatched && !Circuit.GetState().ParallelOutput);
+    CHECK(!Circuit.GetState().ButtonLatched && !Circuit.GetState().ParallelOutput);
 }
 
 void TestFallImpact()
 {
-    assert(AssessFall(0.0) == FallImpact::None);
-    assert(AssessFall(299.9) == FallImpact::None);
-    assert(AssessFall(300.0) == FallImpact::MinorInjury);
-    assert(AssessFall(300.1) == FallImpact::Fatal);
-    assert(AssessFall(std::numeric_limits<double>::quiet_NaN()) == FallImpact::None);
+    CHECK(AssessFall(0.0) == FallImpact::None);
+    CHECK(AssessFall(299.9) == FallImpact::None);
+    CHECK(AssessFall(300.0) == FallImpact::MinorInjury);
+    CHECK(AssessFall(300.1) == FallImpact::Fatal);
+    CHECK(AssessFall(std::numeric_limits<double>::quiet_NaN()) == FallImpact::None);
 
     constexpr InjuryRecoveryProfile Profile{2.5, 0.65f};
     MinorInjuryRecovery Recovery;
-    assert(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
+    CHECK(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
     Recovery.Start({0.0, 0.65f});
-    assert(!Recovery.IsActive());
+    CHECK(!Recovery.IsActive());
     Recovery.Start(Profile);
     Recovery.Advance(-1.0);
     Recovery.Advance(std::numeric_limits<double>::quiet_NaN());
-    assert(Recovery.IsActive() && Recovery.GroundSpeedScale() == Profile.InitialSpeedScale);
+    CHECK(Recovery.IsActive() && Recovery.GroundSpeedScale() == Profile.InitialSpeedScale);
     Recovery.Advance(1.25);
-    assert(std::abs(Recovery.GroundSpeedScale() - 0.825f) < 0.0001f);
+    CHECK(std::abs(Recovery.GroundSpeedScale() - 0.825f) < 0.0001f);
     Recovery.Advance(1.25);
-    assert(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
+    CHECK(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
     Recovery.Start(Profile);
     Recovery.Advance(2.0);
     Recovery.Start(Profile);
-    assert(Recovery.GroundSpeedScale() == Profile.InitialSpeedScale);
+    CHECK(Recovery.GroundSpeedScale() == Profile.InitialSpeedScale);
     Recovery.Reset();
-    assert(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
+    CHECK(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
 }
 
 void TestMantleRules()
@@ -261,56 +261,56 @@ void TestMantleRules()
     MantleRequest Gesture;
     Gesture.Press();
     Gesture.Advance(0.08);
-    assert(!Gesture.IsReady());
+    CHECK(!Gesture.IsReady());
     Gesture.Release();
     Gesture.Advance(1.0);
-    assert(!Gesture.IsReady());
+    CHECK(!Gesture.IsReady());
     Gesture.Press();
     Gesture.Advance(std::numeric_limits<double>::quiet_NaN());
-    assert(!Gesture.IsReady());
+    CHECK(!Gesture.IsReady());
     Gesture.Advance(MantleHoldSeconds);
-    assert(Gesture.IsReady());
+    CHECK(Gesture.IsReady());
     Gesture.Consume();
     Gesture.Press();
     Gesture.Advance(1.0);
-    assert(!Gesture.IsReady());
+    CHECK(!Gesture.IsReady());
     Gesture.Release();
     Gesture.Press();
     Gesture.Advance(MantleHoldSeconds);
-    assert(Gesture.IsReady());
+    CHECK(Gesture.IsReady());
 }
 
 void TestRadiationExposure()
 {
     using Position = RadiationPosition;
     const FlarePattern Pattern{4.0, 2.0, 2.0, 30.0, 3.0};
-    assert(Pattern.IsValid());
+    CHECK(Pattern.IsValid());
     const FlarePattern Invalid{0.0, 2.0, 2.0, 30.0, 3.0};
-    assert(!Invalid.IsValid());
+    CHECK(!Invalid.IsValid());
     const FlarePattern NoRecovery{4.0, 2.0, 2.0, 30.0, 0.0};
-    assert(!NoRecovery.IsValid());
+    CHECK(!NoRecovery.IsValid());
     RadiationDose Dose;
     RadiationExposure Radiation{Pattern};
-    assert(Radiation.Read(Position::Outside, Dose).SecondsToChange == 4.0);
-    assert(!Radiation.Advance(3.0, Position::Outside, Dose));
-    assert(Radiation.Read(Position::Outside, Dose).DosePercent == 0.0);
-    assert(!Radiation.Advance(1.5, Position::Exposed, Dose));
+    CHECK(Radiation.Read(Position::Outside, Dose).SecondsToChange == 4.0);
+    CHECK(!Radiation.Advance(3.0, Position::Outside, Dose));
+    CHECK(Radiation.Read(Position::Outside, Dose).DosePercent == 0.0);
+    CHECK(!Radiation.Advance(1.5, Position::Exposed, Dose));
     const auto Flare = Radiation.Read(Position::Exposed, Dose);
-    assert(Flare.FlareActive && Flare.DosePercent == 17.0 && Flare.DosePerSecond == 30.0 && Flare.SecondsToChange == 1.5);
-    assert(!Radiation.Advance(2.0, Position::Sheltered, Dose));
+    CHECK(Flare.FlareActive && Flare.DosePercent == 17.0 && Flare.DosePerSecond == 30.0 && Flare.SecondsToChange == 1.5);
+    CHECK(!Radiation.Advance(2.0, Position::Sheltered, Dose));
     const auto Shelter = Radiation.Read(Position::Sheltered, Dose);
-    assert(!Shelter.FlareActive && Shelter.DosePercent == 17.0 && Shelter.DosePerSecond == 0.0);
-    assert(Shelter.SecondsToChange == 3.5);
-    assert(!Radiation.Advance(0.5, Position::Outside, Dose));
-    assert(Dose.Percent() == 15.5 && Radiation.Read(Position::Outside, Dose).DosePerSecond == -3.0);
-    assert(!Radiation.Advance(6.0, Position::Outside, Dose));
-    assert(Dose.Percent() == 0.0 && Radiation.Read(Position::Outside, Dose).DosePerSecond == 0.0);
-    assert(!Radiation.Advance(std::numeric_limits<double>::quiet_NaN(), Position::Exposed, Dose));
-    assert(Radiation.Advance(18.0, Position::Exposed, Dose));
-    assert(Dose.Percent() == RadiationDose::Limit && Dose.IsLethal());
-    assert(Radiation.Advance(60.0, Position::Outside, Dose) && Dose.IsLethal());
+    CHECK(!Shelter.FlareActive && Shelter.DosePercent == 17.0 && Shelter.DosePerSecond == 0.0);
+    CHECK(Shelter.SecondsToChange == 3.5);
+    CHECK(!Radiation.Advance(0.5, Position::Outside, Dose));
+    CHECK(Dose.Percent() == 15.5 && Radiation.Read(Position::Outside, Dose).DosePerSecond == -3.0);
+    CHECK(!Radiation.Advance(6.0, Position::Outside, Dose));
+    CHECK(Dose.Percent() == 0.0 && Radiation.Read(Position::Outside, Dose).DosePerSecond == 0.0);
+    CHECK(!Radiation.Advance(std::numeric_limits<double>::quiet_NaN(), Position::Exposed, Dose));
+    CHECK(Radiation.Advance(18.0, Position::Exposed, Dose));
+    CHECK(Dose.Percent() == RadiationDose::Limit && Dose.IsLethal());
+    CHECK(Radiation.Advance(60.0, Position::Outside, Dose) && Dose.IsLethal());
     Dose.Clear();
-    assert(Dose.Percent() == 0.0);
+    CHECK(Dose.Percent() == 0.0);
 
     RadiationExposure Stepwise{Pattern};
     RadiationExposure Batched{Pattern};
@@ -318,10 +318,10 @@ void TestRadiationExposure()
     RadiationDose BatchedDose;
     for (int Index = 0; Index < 112; ++Index)
     {
-        assert(!Stepwise.Advance(0.0625, Position::Exposed, StepwiseDose));
+        CHECK(!Stepwise.Advance(0.0625, Position::Exposed, StepwiseDose));
     }
-    assert(!Batched.Advance(7.0, Position::Exposed, BatchedDose));
-    assert(StepwiseDose.Percent() == BatchedDose.Percent());
+    CHECK(!Batched.Advance(7.0, Position::Exposed, BatchedDose));
+    CHECK(StepwiseDose.Percent() == BatchedDose.Percent());
 
     static_assert(ResolvePassage({}) == PassageOutcome::Continue);
     static_assert(ResolvePassage({.ReachedExit = true}) == PassageOutcome::EnterSanctuary);
@@ -346,32 +346,32 @@ void TestChamberHints()
     using Abandoned::Application::Puzzles::ChamberHintReader;
     constexpr double Delay = 360.0;
     ChamberHintReader Reader;
-    assert(Reader.Page() == 0 && Reader.AvailablePages() == 1 && !Reader.HasNewEntry());
+    CHECK(Reader.Page() == 0 && Reader.AvailablePages() == 1 && !Reader.HasNewEntry());
     Reader.Activate();
-    assert(Reader.Page() == 1);
+    CHECK(Reader.Page() == 1);
     Reader.Activate();
-    assert(Reader.Page() == 0);
+    CHECK(Reader.Page() == 0);
     Reader.Observe(0, false, 300.0, Delay);
     Reader.Observe(ArmedButtonHintNode, false, 1.0, Delay);
     Reader.Observe(ArmedButtonHintNode, false, 200.0, Delay);
     Reader.Observe(0, false, 159.0, Delay);
-    assert(Reader.AvailablePages() == 1);
+    CHECK(Reader.AvailablePages() == 1);
     Reader.Observe(ArmedButtonHintNode, false, 1.0, Delay);
-    assert(Reader.AvailablePages() == 2 && Reader.HasNewEntry() && Reader.Page() == 0);
+    CHECK(Reader.AvailablePages() == 2 && Reader.HasNewEntry() && Reader.Page() == 0);
     Reader.Activate();
-    assert(Reader.HasNewEntry());
+    CHECK(Reader.HasNewEntry());
     Reader.Activate();
-    assert(Reader.Page() == 2 && !Reader.HasNewEntry());
+    CHECK(Reader.Page() == 2 && !Reader.HasNewEntry());
     Reader.Close();
     Reader.Observe(PressurePlateHintNode(0), false, 1.0, Delay);
     Reader.Observe(0, true, 360.0, Delay);
     Reader.Observe(0, false, std::numeric_limits<double>::quiet_NaN(), Delay);
     Reader.Observe(0, false, 359.0, Delay);
-    assert(Reader.AvailablePages() == 2);
+    CHECK(Reader.AvailablePages() == 2);
     Reader.Observe(0, false, 1.0, Delay);
-    assert(Reader.AvailablePages() == 3 && Reader.HasNewEntry());
+    CHECK(Reader.AvailablePages() == 3 && Reader.HasNewEntry());
     Reader = {};
-    assert(Reader.AvailablePages() == 1 && !Reader.HasNewEntry());
+    CHECK(Reader.AvailablePages() == 1 && !Reader.HasNewEntry());
     static_assert(PressurePlateHintNode(0) != PressurePlateHintNode(1));
     static_assert(PressurePlateHintNode(-1) == 0 && PressurePlateHintNode(MaximumHintPlates) == 0);
 }
@@ -380,53 +380,53 @@ void TestPowerSignalsAndOptics()
 {
     const bool Mixed[] = {false, true};
     const bool Live[] = {true, true};
-    assert(AnyPowered(Mixed) && !AllPowered(Mixed) && AllPowered(Live));
-    assert(!AnyPowered({}) && !AllPowered({}) && !InvertPower(true));
+    CHECK(AnyPowered(Mixed) && !AllPowered(Mixed) && AllPowered(Live));
+    CHECK(!AnyPowered({}) && !AllPowered({}) && !InvertPower(true));
 
     SignalOutput Toggle{SignalMode::Toggle};
-    assert(Toggle.Observe(true, 0.0f));
-    assert(Toggle.Observe(true, 10.0f));
-    assert(Toggle.Observe(false, 0.0f));
-    assert(!Toggle.Observe(true, 0.0f));
+    CHECK(Toggle.Observe(true, 0.0f));
+    CHECK(Toggle.Observe(true, 10.0f));
+    CHECK(Toggle.Observe(false, 0.0f));
+    CHECK(!Toggle.Observe(true, 0.0f));
 
     SignalOutput Pulse{SignalMode::Pulse, 0.25f};
-    assert(Pulse.Observe(true, 0.1f));
-    assert(Pulse.Observe(true, 0.2f));
-    assert(!Pulse.Observe(true, 0.1f));
-    assert(!Pulse.Observe(false, 0.0f));
-    assert(Pulse.Observe(true, 0.0f));
+    CHECK(Pulse.Observe(true, 0.1f));
+    CHECK(Pulse.Observe(true, 0.2f));
+    CHECK(!Pulse.Observe(true, 0.1f));
+    CHECK(!Pulse.Observe(false, 0.0f));
+    CHECK(Pulse.Observe(true, 0.0f));
     Pulse.Reset();
-    assert(!Pulse.IsPowered());
+    CHECK(!Pulse.IsPowered());
 
     PowerBudget Budget{3};
-    assert(!Budget.PowerBranch(false, 2));
-    assert(!Budget.PowerBranch(true, 4));
-    assert(Budget.PowerBranch(true, 2));
-    assert(!Budget.PowerBranch(true, 2));
-    assert(Budget.PowerBranch(true, 1));
+    CHECK(!Budget.PowerBranch(false, 2));
+    CHECK(!Budget.PowerBranch(true, 4));
+    CHECK(Budget.PowerBranch(true, 2));
+    CHECK(!Budget.PowerBranch(true, 2));
+    CHECK(Budget.PowerBranch(true, 1));
 
     Abandoned::Application::Puzzles::OpticsCourse Optics;
-    assert(!Optics.ObserveReceivers(false, true, 1.0f).Interruption);
+    CHECK(!Optics.ObserveReceivers(false, true, 1.0f).Interruption);
     Optics.PressSupplyButton();
-    assert(Optics.GetPower().DirectEmitter && !Optics.GetPower().ReflectionEmitter);
-    assert(!Optics.ObserveReceivers(false, false, 0.15f).Interruption);
-    assert(!Optics.ObserveReceivers(true, false, 0.15f).Interruption);
-    assert(!Optics.ObserveReceivers(false, false, 0.15f).Interruption);
-    assert(Optics.ObserveReceivers(false, false, 0.2f).Interruption);
-    assert(Optics.GetPower().ReflectionEmitter);
-    assert(Optics.ObserveReceivers(true, true, 0.3f).Reflection);
-    assert(!Optics.ObserveReceivers(true, false, 0.0f).Reflection);
+    CHECK(Optics.GetPower().DirectEmitter && !Optics.GetPower().ReflectionEmitter);
+    CHECK(!Optics.ObserveReceivers(false, false, 0.15f).Interruption);
+    CHECK(!Optics.ObserveReceivers(true, false, 0.15f).Interruption);
+    CHECK(!Optics.ObserveReceivers(false, false, 0.15f).Interruption);
+    CHECK(Optics.ObserveReceivers(false, false, 0.2f).Interruption);
+    CHECK(Optics.GetPower().ReflectionEmitter);
+    CHECK(Optics.ObserveReceivers(true, true, 0.3f).Reflection);
+    CHECK(!Optics.ObserveReceivers(true, false, 0.0f).Reflection);
     Optics.Reset();
-    assert(!Optics.GetPower().DirectEmitter && !Optics.GetPower().ReflectionEmitter);
+    CHECK(!Optics.GetPower().DirectEmitter && !Optics.GetPower().ReflectionEmitter);
 }
 
 void TestOpticalReflector()
 {
-    assert(IsReflectorSettled(1.0, 25.0, 36.0));
-    assert(!IsReflectorSettled(0.2, 0.0, 0.0));
-    assert(!IsReflectorSettled(1.0, 400.0, 0.0));
-    assert(!IsReflectorSettled(1.0, 0.0, 400.0));
-    assert(!IsReflectorSettled(1.0, std::numeric_limits<double>::quiet_NaN(), 0.0));
+    CHECK(IsReflectorSettled(1.0, 25.0, 36.0));
+    CHECK(!IsReflectorSettled(0.2, 0.0, 0.0));
+    CHECK(!IsReflectorSettled(1.0, 400.0, 0.0));
+    CHECK(!IsReflectorSettled(1.0, 0.0, 400.0));
+    CHECK(!IsReflectorSettled(1.0, std::numeric_limits<double>::quiet_NaN(), 0.0));
     static_assert(CanReflectFromFace(1.0, -0.5));
     static_assert(!CanReflectFromFace(-1.0, -0.5));
     static_assert(!CanReflectFromFace(0.0, -0.5));
@@ -442,43 +442,43 @@ void TestGravityFields()
         {GravityDirection::Right, 4.0f, 9000.0f, 2, true},
     };
     const GravityField* Field = SelectGravityField(Contact);
-    assert(Field == &Contact[2]);
-    assert(!SelectGravityField({}));
-    assert(!SelectGravityField(std::span(Contact, 1)));
-    assert(GravityForceForBody(*Field, 5.0f) / 5.0f == 2.0f * GravityForceForBody(*Field, 10.0f) / 10.0f);
-    assert(GravityForceForBody(*Field, 0.0f) == 0.0f);
-    assert(GravityRollDegrees(GravityDirection::Left) == -90.0f);
-    assert(GravityRollDegrees(GravityDirection::Right) == 90.0f);
-    assert(GravityRollDegrees(GravityDirection::Up) == 180.0f);
+    CHECK(Field == &Contact[2]);
+    CHECK(!SelectGravityField({}));
+    CHECK(!SelectGravityField(std::span(Contact, 1)));
+    CHECK(GravityForceForBody(*Field, 5.0f) / 5.0f == 2.0f * GravityForceForBody(*Field, 10.0f) / 10.0f);
+    CHECK(GravityForceForBody(*Field, 0.0f) == 0.0f);
+    CHECK(GravityRollDegrees(GravityDirection::Left) == -90.0f);
+    CHECK(GravityRollDegrees(GravityDirection::Right) == 90.0f);
+    CHECK(GravityRollDegrees(GravityDirection::Up) == 180.0f);
 }
 
 void TestTimedPassage()
 {
     Abandoned::Application::Puzzles::TimedPassage Passage{3.5f};
-    assert(!Passage.IsPowered() && !Passage.IsComplete() && Passage.RemainingSeconds() == 0.0f);
+    CHECK(!Passage.IsPowered() && !Passage.IsComplete() && Passage.RemainingSeconds() == 0.0f);
     Passage.Press();
     Passage.Observe(0.5f, false);
     Passage.Press();
     Passage.Observe(std::numeric_limits<float>::quiet_NaN(), false);
-    assert(Passage.IsPowered() && Passage.RemainingSeconds() == 3.0f);
+    CHECK(Passage.IsPowered() && Passage.RemainingSeconds() == 3.0f);
     Passage.Observe(3.0f, false);
-    assert(!Passage.IsPowered() && !Passage.IsComplete());
+    CHECK(!Passage.IsPowered() && !Passage.IsComplete());
     Passage.Press();
-    assert(Passage.RemainingSeconds() == 3.5f);
+    CHECK(Passage.RemainingSeconds() == 3.5f);
     Passage.Observe(0.25f, true);
     Passage.Observe(3.5f, false);
-    assert(!Passage.IsPowered() && Passage.IsComplete());
+    CHECK(!Passage.IsPowered() && Passage.IsComplete());
     Passage.Press();
-    assert(Passage.IsPowered() && Passage.IsComplete());
+    CHECK(Passage.IsPowered() && Passage.IsComplete());
     Passage.Reset();
-    assert(!Passage.IsPowered() && !Passage.IsComplete() && Passage.RemainingSeconds() == 0.0f);
+    CHECK(!Passage.IsPowered() && !Passage.IsComplete() && Passage.RemainingSeconds() == 0.0f);
 }
 
 void TestPortalTransit()
 {
-    assert(FitsPortal(0, -53, 118, 145, 30, 90));
-    assert(!FitsPortal(96, 0, 118, 145, 30, 90));
-    assert(!FitsPortal(0, 75, 118, 145, 30, 90));
+    CHECK(FitsPortal(0, -53, 118, 145, 30, 90));
+    CHECK(!FitsPortal(96, 0, 118, 145, 30, 90));
+    CHECK(!FitsPortal(0, 75, 118, 145, 30, 90));
     static_assert(ObservePortal(false, false, true, false, true, false) == PortalEvent::None);
     static_assert(ObservePortal(true, false, true, false, true, false) == PortalEvent::Approach);
     static_assert(ObservePortal(true, true, false, true, true, true) == PortalEvent::Transfer);
@@ -497,22 +497,22 @@ void TestDev20Transfer()
     static_assert(Dev20MassKg == 34.0f && Dev20MassKg <= MaximumCarryKg);
     static_assert(CarrySpeedScale(Dev20MassKg) < CarrySpeedScale(10.0f));
     Dev20Transfer Transfer;
-    assert(!Transfer.Arrive(Stage::Button));
-    assert(!Transfer.Depart(Stage::Station, false));
-    assert(!Transfer.Depart(Stage::Button, true));
-    assert(Transfer.Depart(Stage::Station, true) == Stage::Button);
-    assert(!Transfer.Depart(Stage::Station, true));
-    assert(!Transfer.Arrive(Stage::Weight));
-    assert(Transfer.Arrive(Stage::Button));
-    assert(!Transfer.Arrive(Stage::Button));
-    assert(Transfer.Depart(Stage::Button, true) == Stage::Weight);
+    CHECK(!Transfer.Arrive(Stage::Button));
+    CHECK(!Transfer.Depart(Stage::Station, false));
+    CHECK(!Transfer.Depart(Stage::Button, true));
+    CHECK(Transfer.Depart(Stage::Station, true) == Stage::Button);
+    CHECK(!Transfer.Depart(Stage::Station, true));
+    CHECK(!Transfer.Arrive(Stage::Weight));
+    CHECK(Transfer.Arrive(Stage::Button));
+    CHECK(!Transfer.Arrive(Stage::Button));
+    CHECK(Transfer.Depart(Stage::Button, true) == Stage::Weight);
     Transfer.RecoverAtStation();
-    assert(!Transfer.Arrive(Stage::Weight));
-    assert(Transfer.Depart(Stage::Station, true) == Stage::Button);
-    assert(Transfer.Arrive(Stage::Button));
-    assert(Transfer.Depart(Stage::Button, true) == Stage::Weight);
-    assert(Transfer.Arrive(Stage::Weight));
-    assert(!Transfer.Depart(Stage::Weight, true));
+    CHECK(!Transfer.Arrive(Stage::Weight));
+    CHECK(Transfer.Depart(Stage::Station, true) == Stage::Button);
+    CHECK(Transfer.Arrive(Stage::Button));
+    CHECK(Transfer.Depart(Stage::Button, true) == Stage::Weight);
+    CHECK(Transfer.Arrive(Stage::Weight));
+    CHECK(!Transfer.Depart(Stage::Weight, true));
 }
 
 void TestPlateBalance()
@@ -525,25 +525,25 @@ void TestPlateBalance()
     const float Invalid[] = {10, std::numeric_limits<float>::quiet_NaN(), 10};
     PlateBalance Balance;
     Balance.Observe(Rules, {}, 1.0f);
-    assert(!Balance.IsBalanced());
+    CHECK(!Balance.IsBalanced());
     Balance.Observe(Rules, Underload, 1.0f);
-    assert(!Balance.IsBalanced());
+    CHECK(!Balance.IsBalanced());
     Balance.Observe(Rules, Uneven, 1.0f);
-    assert(!Balance.IsBalanced());
+    CHECK(!Balance.IsBalanced());
     Balance.Observe(Rules, Target, 0.15f);
-    assert(!Balance.IsBalanced());
+    CHECK(!Balance.IsBalanced());
     Balance.Observe(Rules, Target, 0.10f);
-    assert(Balance.IsBalanced());
+    CHECK(Balance.IsBalanced());
     Balance.Observe(Rules, PlayerLoad, 0.0f);
-    assert(!Balance.IsBalanced());
+    CHECK(!Balance.IsBalanced());
     Balance.Observe(Rules, Target, 0.15f);
     Balance.Observe(Rules, Invalid, 0.0f);
     Balance.Observe(Rules, Target, 0.15f);
-    assert(!Balance.IsBalanced());
+    CHECK(!Balance.IsBalanced());
     Balance.Observe(Rules, Target, 1.0f);
-    assert(Balance.IsBalanced());
+    CHECK(Balance.IsBalanced());
     Balance.Reset();
-    assert(!Balance.IsBalanced());
+    CHECK(!Balance.IsBalanced());
     static_assert(ParseSegment("Balance") == Segment::Balance);
 }
 
@@ -551,109 +551,127 @@ void TestSuitTerminal()
 {
     SuitArchive Archive;
     SuitTerminal Terminal;
-    assert(!Archive.At(0));
+    CHECK(!Archive.At(0));
     Terminal.NextPage();
-    assert(!Terminal.Page());
+    CHECK(!Terminal.Page());
     Terminal.Toggle();
-    assert(Terminal.Page() == SuitPage::Status);
+    CHECK(Terminal.Page() == SuitPage::Status);
     Terminal.NextPage();
-    assert(Terminal.Page() == SuitPage::Signal);
+    CHECK(Terminal.Page() == SuitPage::Signal);
     Terminal.NextPage();
-    assert(Terminal.Page() == SuitPage::Archive);
+    CHECK(Terminal.Page() == SuitPage::Archive);
     Terminal.MoveArchive(true, Archive);
-    assert(Terminal.ArchiveIndex() == 0);
+    CHECK(Terminal.ArchiveIndex() == 0);
     Archive.Reveal(SuitRecord::ForecastSynchronized);
     Archive.Reveal(SuitRecord::Decontaminated);
     Archive.Reveal(SuitRecord::ForecastSynchronized);
-    assert(Archive.Size() == 2);
+    CHECK(Archive.Size() == 2);
     Terminal.MoveArchive(true, Archive);
     Terminal.MoveArchive(true, Archive);
-    assert(Archive.At(Terminal.ArchiveIndex()) == SuitRecord::Decontaminated);
+    CHECK(Archive.At(Terminal.ArchiveIndex()) == SuitRecord::Decontaminated);
     Terminal.MoveArchive(false, Archive);
     Terminal.MoveArchive(false, Archive);
-    assert(Archive.At(Terminal.ArchiveIndex()) == SuitRecord::ForecastSynchronized);
+    CHECK(Archive.At(Terminal.ArchiveIndex()) == SuitRecord::ForecastSynchronized);
     Terminal.NextPage();
-    assert(Terminal.Page() == SuitPage::Status);
+    CHECK(Terminal.Page() == SuitPage::Status);
     Terminal.MoveArchive(true, Archive);
-    assert(Terminal.ArchiveIndex() == 0);
+    CHECK(Terminal.ArchiveIndex() == 0);
     Terminal.Close();
-    assert(!Terminal.Page());
+    CHECK(!Terminal.Page());
 
     RadiationExposure Exposure({4.5, 3.0, 2.0, 35.0, 3.0});
     RadiationDose Dose;
     const SuitTelemetry Approach{99.0f, 0.0, Exposure.Read(RadiationPosition::Outside, Dose), false};
-    assert(Approach.Signal() == SuitSignal::ExteriorForecast && Approach.Forecast->SecondsToChange == 4.5);
+    CHECK(Approach.Signal() == SuitSignal::ExteriorForecast && Approach.Forecast->SecondsToChange == 4.5);
     const SuitTelemetry Passage{99.0f, 0.0, std::nullopt, false};
-    assert(Passage.Signal() == SuitSignal::Unavailable);
+    CHECK(Passage.Signal() == SuitSignal::Unavailable);
     const SuitTelemetry Station{98.0f, 0.0, std::nullopt, true};
-    assert(Station.Signal() == SuitSignal::VanguardStation && !Station.Forecast);
+    CHECK(Station.Signal() == SuitSignal::VanguardStation && !Station.Forecast);
 }
 
 void TestSuitSessionRecovery()
 {
     SuitSession Suit;
-    assert(Suit.EnterStation() == 0.0);
-    assert(Suit.Records().Size() == 0);
+    CHECK(Suit.EnterStation() == 0.0);
+    CHECK(Suit.Records().Size() == 0);
     Suit.EnterPassage(false);
-    assert(Suit.Records().Size() == 0);
+    CHECK(Suit.Records().Size() == 0);
 
     constexpr FlarePattern Schedule{4.5, 3.0, 2.0, 35.0, 3.0};
     RadiationExposure FirstRun(Schedule);
     Suit.EnterPassage(true);
     Suit.SetFlashlight(true);
-    assert(!Suit.SpendInPassage(40.0f));
-    assert(Suit.AdvanceExposure(FirstRun, RadiationPosition::Exposed, 20.0));
-    assert(Suit.RadiationDose().IsLethal());
+    CHECK(!Suit.SpendInPassage(40.0f));
+    CHECK(Suit.AdvanceExposure(FirstRun, RadiationPosition::Exposed, 20.0));
+    CHECK(Suit.RadiationDose().IsLethal());
 
     // A fresh passage world starts a fresh forecast cycle while retaining the session archive.
     Suit.EnterPassage(true);
-    assert(Suit.OxygenPercent() == 100.0f);
-    assert(Suit.RadiationDose().Percent() == 0.0);
-    assert(!Suit.IsFlashlightOn());
-    assert(Suit.Records().Size() == 1);
-    assert(Suit.Records().At(0) == SuitRecord::ForecastSynchronized);
+    CHECK(Suit.OxygenPercent() == 100.0f);
+    CHECK(Suit.RadiationDose().Percent() == 0.0);
+    CHECK(!Suit.IsFlashlightOn());
+    CHECK(Suit.Records().Size() == 1);
+    CHECK(Suit.Records().At(0) == SuitRecord::ForecastSynchronized);
 
     RadiationExposure Retry(Schedule);
-    assert(!Suit.AdvanceExposure(Retry, RadiationPosition::Exposed, 2.0));
-    assert(!Suit.SpendInPassage(25.0f));
+    CHECK(!Suit.AdvanceExposure(Retry, RadiationPosition::Exposed, 2.0));
+    CHECK(!Suit.SpendInPassage(25.0f));
     Suit.SetFlashlight(true);
     const float RemainingOxygen = Suit.OxygenPercent();
-    assert(RemainingOxygen < 100.0f);
-    assert(Suit.EnterStation() == 4.0);
-    assert(Suit.EnterStation() == 0.0);
-    assert(Suit.RadiationDose().Percent() == 0.0);
-    assert(Suit.OxygenPercent() == RemainingOxygen && Suit.IsFlashlightOn());
-    assert(Suit.Records().At(1) == SuitRecord::Decontaminated);
+    CHECK(RemainingOxygen < 100.0f);
+    CHECK(Suit.EnterStation() == 4.0);
+    CHECK(Suit.EnterStation() == 0.0);
+    CHECK(Suit.RadiationDose().Percent() == 0.0);
+    CHECK(Suit.OxygenPercent() == RemainingOxygen && Suit.IsFlashlightOn());
+    CHECK(Suit.Records().At(1) == SuitRecord::Decontaminated);
 
     Suit.Resupply();
     Suit.Resupply();
-    assert(Suit.OxygenPercent() == 100.0f && Suit.IsFlashlightOn());
-    assert(Suit.Records().Size() == 3);
-    assert(Suit.Records().At(2) == SuitRecord::OxygenRestored);
-    assert(SuitSession{}.Records().Size() == 0);
+    CHECK(Suit.OxygenPercent() == 100.0f && Suit.IsFlashlightOn());
+    CHECK(Suit.Records().Size() == 3);
+    CHECK(Suit.Records().At(2) == SuitRecord::OxygenRestored);
+    CHECK(SuitSession{}.Records().Size() == 0);
 }
 }
 
-int main()
+int main(int Count, char** Arguments)
 {
-    TestRouteAndCheckpoint();
-    TestPassageRecovery();
-    TestWorldRouteOptions();
-    TestCircuitAndBallast();
-    TestParallelPlateCircuit();
-    TestSupply();
-    TestFallImpact();
-    TestMantleRules();
-    TestRadiationExposure();
-    TestChamberHints();
-    TestSlidingDoor();
-    TestPowerSignalsAndOptics();
-    TestOpticalReflector();
-    TestTimedPassage();
-    TestGravityFields();
-    TestPortalTransit();
-    TestDev20Transfer();
-    TestPlateBalance();
-    TestSuitTerminal();
-    TestSuitSessionRecovery();
+    if (Count == 2 && std::string_view(Arguments[1]) == "--verify-failure-path")
+    {
+        TestChecks::CurrentTest = "FailurePath";
+        CHECK(false);
+    }
+    struct TestCase
+    {
+        const char* Name;
+        void (*Run)();
+    };
+    const TestCase Tests[] = {
+        {"TestRouteAndCheckpoint", TestRouteAndCheckpoint},
+        {"TestPassageRecovery", TestPassageRecovery},
+        {"TestWorldRouteOptions", TestWorldRouteOptions},
+        {"TestCircuitAndBallast", TestCircuitAndBallast},
+        {"TestParallelPlateCircuit", TestParallelPlateCircuit},
+        {"TestSupply", TestSupply},
+        {"TestFallImpact", TestFallImpact},
+        {"TestMantleRules", TestMantleRules},
+        {"TestRadiationExposure", TestRadiationExposure},
+        {"TestChamberHints", TestChamberHints},
+        {"TestSlidingDoor", TestSlidingDoor},
+        {"TestPowerSignalsAndOptics", TestPowerSignalsAndOptics},
+        {"TestOpticalReflector", TestOpticalReflector},
+        {"TestTimedPassage", TestTimedPassage},
+        {"TestGravityFields", TestGravityFields},
+        {"TestPortalTransit", TestPortalTransit},
+        {"TestDev20Transfer", TestDev20Transfer},
+        {"TestPlateBalance", TestPlateBalance},
+        {"TestSuitTerminal", TestSuitTerminal},
+        {"TestSuitSessionRecovery", TestSuitSessionRecovery},
+    };
+    for (const TestCase& Test : Tests)
+    {
+        TestChecks::CurrentTest = Test.Name;
+        Test.Run();
+        std::cout << Test.Name << " passed\n";
+    }
 }

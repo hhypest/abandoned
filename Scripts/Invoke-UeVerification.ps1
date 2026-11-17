@@ -3,11 +3,16 @@ param(
     [Parameter(Mandatory)]
     [string]$EngineRoot,
 
-    [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative')]
-    [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative'),
+    [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals')]
+    [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
     [int]$FramesPerSecond = 60,
+
+    [ValidateSet('1280x720', '1920x1080')]
+    [string]$Resolution = '1920x1080',
+
+    [switch]$Capture,
 
     [ValidateRange(1, 3600)]
     [int]$TimeoutSeconds = 180
@@ -27,18 +32,26 @@ if ($buildVersion.MajorVersion -ne 5 -or $buildVersion.MinorVersion -ne 7) {
 }
 
 $entry = '/Engine/Maps/Entry'
+$dimensions = $Resolution.Split('x')
+$renderQueries = @(
+    'r.DynamicGlobalIlluminationMethod', 'r.ReflectionMethod', 'r.GenerateMeshDistanceFields',
+    'r.Lumen.HardwareRayTracing', 'r.Nanite.ProjectEnabled', 'r.Shadow.Virtual.Enable',
+    'r.AntiAliasingMethod', 'sg.GlobalIlluminationQuality', 'sg.ReflectionQuality'
+) -join ','
 $vanguard = "${entry}?game=/Script/Abandoned.VanguardRouteGameMode"
 $wristSuccess = @('Wrist terminal verification passed', 'Radiation passage verification passed')
 $scenarios = @{
     EntryCourse = @{
         Map = $entry
         Flag = '-VerifyEntryCourse'
+        CaptureFlag = '-CaptureVanguard'
         Success = @('Training chamber ready. Balance', 'Entry course verification passed',
                     'Passage handhold verified', 'Vanguard verification passed')
     }
     WristTerminal = @{
         Map = "${vanguard}?Chamber=Passage?RadiationRun=1"
         Flag = '-VerifyWristTerminal'
+        CaptureFlag = '-CaptureWristTerminal'
         Success = $wristSuccess
     }
     WristTerminalNegative = @{
@@ -46,6 +59,18 @@ $scenarios = @{
         Flag = '-VerifyWristTerminal'
         Success = $wristSuccess
         ExpectedError = 'LogWristTerminal: Error: Wrist terminal verification failed: acquired record should survive travel and occur once'
+    }
+    DoorClamp = @{
+        Map = $entry
+        Flag = '-VerifyDoorClamp'
+        CaptureFlag = '-CaptureDoorClamp'
+        Success = @('Door clamp verification passed')
+    }
+    Portals = @{
+        Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode"
+        Flag = '-VerifyPortalLab'
+        CaptureFlag = '-CapturePortalLab'
+        Success = @('Portal lab verification passed')
     }
 }
 
@@ -61,6 +86,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         TimedOut = $false
         Vulkan = $false
         Gpu = $null
+        RendererSettings = @()
         SuccessMarkers = @()
         FailureMarkers = @()
         Outcome = 'Failed'
@@ -71,10 +97,11 @@ function Invoke-Scenario($name, $definition, $profile) {
     $start.UseShellExecute = $false
     $start.WorkingDirectory = $repo
     foreach ($arg in @($project, $definition.Map, $definition.Flag, '-game', '-vulkan', '-unattended',
-                       '-windowed', '-ResX=1280', '-ResY=720', '-benchmark', "-fps=$FramesPerSecond",
-                       "-UserDir=$profile", "-abslog=$log")) {
+                       '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])", '-benchmark', "-fps=$FramesPerSecond",
+                       "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$renderQueries")) {
         $start.ArgumentList.Add($arg)
     }
+    if ($Capture -and $definition.CaptureFlag) { $start.ArgumentList.Add($definition.CaptureFlag) }
     $process = [System.Diagnostics.Process]::Start($start)
     try {
         if ($process.WaitForExit($TimeoutSeconds * 1000)) {
@@ -100,9 +127,10 @@ function Invoke-Scenario($name, $definition, $profile) {
     }
 
     $lines = Get-Content -LiteralPath $log
-    $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM5: VULKAN_SM5')
+    $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6')
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1
     if ($gpuLine -match 'DeviceName:\s*(.+)$') { $result.Gpu = $Matches[1].Trim() }
+    $result.RendererSettings = @($lines -match '(?:r\.(?:DynamicGlobalIlluminationMethod|ReflectionMethod|GenerateMeshDistanceFields|Lumen.HardwareRayTracing|Nanite.ProjectEnabled|Shadow.Virtual.Enable|AntiAliasingMethod)|sg\.(?:GlobalIlluminationQuality|ReflectionQuality))\s*=')
     $exitRequestPattern = 'FPlatformMisc::RequestExitWithStatus\(\s*\d+\s*,\s*[1-9]\d*\s*,'
     $result.FailureMarkers = @($lines -match ": Error:|Fatal error:|$exitRequestPattern")
     $result.SuccessMarkers = @($definition.Success | Where-Object {
@@ -111,7 +139,7 @@ function Invoke-Scenario($name, $definition, $profile) {
 
     # Use the same verdict for the positive cases and the negative control.
     if (!$result.Vulkan) {
-        $result.Reason = 'Vulkan SM5 was not confirmed in the game log.'
+        $result.Reason = 'Vulkan SM6 was not confirmed in the game log.'
     } elseif ($result.FailureMarkers.Count -gt 0) {
         $result.Reason = $result.FailureMarkers[0]
     } elseif ($result.ExitCode -ne 0) {
@@ -147,7 +175,7 @@ $root = Join-Path $repo "Saved/UeVerification/$runId"
 $null = New-Item -ItemType Directory -Path $root -Force
 
 $results = @(foreach ($name in ($Scenario | Select-Object -Unique)) {
-    Write-Host "Running $name on Vulkan SM5..."
+    Write-Host "Running $name on Vulkan SM6..."
     $profile = Join-Path $root $name
     try {
         Invoke-Scenario $name $scenarios[$name] $profile
@@ -160,8 +188,8 @@ $report = [ordered]@{
     TrackedChanges = [bool]$trackedChanges
     Unreal = "$($buildVersion.MajorVersion).$($buildVersion.MinorVersion).$($buildVersion.PatchVersion)"
     OperatingSystem = $PSVersionTable.OS
-    Rhi = 'VULKAN_SM5'
-    Resolution = '1280x720'
+    Rhi = 'VULKAN_SM6'
+    Resolution = $Resolution
     FramesPerSecond = $FramesPerSecond
     Scenarios = $results
 }

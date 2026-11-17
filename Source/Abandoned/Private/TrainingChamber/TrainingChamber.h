@@ -54,6 +54,7 @@ public:
     UBoxComponent* GetPlate(int32 Index = 0) const { return Plates.IsValidIndex(Index) ? Plates[Index].Body.Get() : nullptr; }
     bool IsPressurePlate(const UBoxComponent* Body) const;
     UBoxComponent* GetButton() const { return Button; }
+    UBoxComponent* GetDoor() const { return Door; }
     UBoxComponent* GetHintTerminal() const { return HintTerminal; }
     const Abandoned::Application::Puzzles::ChamberHintReader& GetHints() const { return HintReader; }
     void ReadNextHint() { HintReader.Activate(); }
@@ -99,7 +100,6 @@ private:
     void VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyBalanceChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyHints(ATrainingChamberCharacter& Player, float DeltaSeconds);
-    void VerifyDoorClamp(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyParallelCircuit(ATrainingChamberCharacter& Player, float DeltaSeconds);
     EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
     float VerificationElapsed = 0.0f;
@@ -111,15 +111,9 @@ private:
     bool bVerifyDev20 = false;
     bool bVerifyBalance = false;
     bool bVerifyHints = false;
-    bool bVerifyDoorClamp = false;
     bool bVerifyParallelCircuit = false;
     int32 RelayTestStep = 0;
     float RelayTestSeconds = 0.0f;
-    enum class EDoorClampTest { PowerOn, Open, Clamp, Hold, Release, Reopen, ClampForReset, OpenForPlayer, CrushPlayer };
-    EDoorClampTest DoorClampTest = EDoorClampTest::PowerOn;
-    double DoorClampTestSeconds = 0.0;
-    FVector ClampedObjectPosition = FVector::ZeroVector;
-    FVector ObstructedDoorPosition = FVector::ZeroVector;
     double HintTestSeconds = 0.0;
     int HintTestStep = 0;
     int32 Dev20TestPhase = 0;

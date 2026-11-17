@@ -17,10 +17,30 @@ foreach ($layer in @('Domain', 'Application')) {
 $output = Join-Path $repo 'Saved/Architecture'
 $null = New-Item -ItemType Directory -Path $output -Force
 $test = Join-Path $repo 'Tests/DomainRules.cpp'
-$executable = Join-Path $output 'DomainRules.exe'
-$object = Join-Path $output 'DomainRules.obj'
-& cl.exe /nologo /std:c++20 /EHsc /W4 /WX "/I$private" "/Fo$object" "/Fe$executable" $test
-if ($LASTEXITCODE -ne 0) { throw 'Independent C++20 build failed.' }
-& $executable
-if ($LASTEXITCODE -ne 0) { throw 'Domain or application test failed.' }
+foreach ($configuration in @('Checks', 'NDebug')) {
+    $executable = Join-Path $output "DomainRules-$configuration.exe"
+    $object = Join-Path $output "DomainRules-$configuration.obj"
+    $defines = @()
+    if ($configuration -eq 'NDebug') { $defines = @('/DNDEBUG') }
+    & cl.exe /nologo /std:c++20 /EHsc /W4 /WX @defines "/I$private" "/Fo$object" "/Fe$executable" $test
+    if ($LASTEXITCODE -ne 0) { throw "Independent C++20 build failed ($configuration)." }
+    & $executable
+    if ($LASTEXITCODE -ne 0) { throw "Domain or application test failed ($configuration)." }
+
+    $start = [Diagnostics.ProcessStartInfo]::new($executable)
+    $start.UseShellExecute = $false
+    $start.RedirectStandardError = $true
+    $start.ArgumentList.Add('--verify-failure-path')
+    $process = [Diagnostics.Process]::Start($start)
+    try {
+        $diagnostic = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        if ($process.ExitCode -eq 0 -or !$diagnostic.Contains('FailurePath failed at')) {
+            throw "The failed-check control was not detected ($configuration)."
+        }
+    } finally {
+        $process.Dispose()
+    }
+    Write-Output "Named tests and failed-check control passed ($configuration)."
+}
 Write-Output 'Architecture boundaries and rule tests passed.'
