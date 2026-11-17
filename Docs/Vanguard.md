@@ -56,5 +56,5 @@ $env:ABANDONED_FAB_SOURCES = (Resolve-Path .\AssetSource\FabVanguard).Path
 
 - Начало обычного маршрута — **Play**. Для сквозного автопрогона используйте `-game -vulkan -benchmark -fps=60 -VerifyEntryCourse -CaptureVanguard`. Прогон проходит четыре камеры, движущуюся дверь перехода, загружает станцию и пользуется её стойкой снабжения.
 - Для прогона от перехода используйте карту `/Engine/Maps/Entry?game=/Script/Abandoned.VanguardRouteGameMode?Chamber=Passage` и флаги `-game -vulkan -benchmark -fps=60 -VerifyVanguard`.
-- В журнале ищите активный Vulkan SM5, `Passage artwork: frame=loaded, leaf=loaded, Fab floor=loaded, Fab walls=loaded.`, `Verification crossed the moving passage airlock` и `Vanguard verification passed`. Кадры с флагом захвата сохраняются в `Saved/Screenshots`.
+- В журнале ищите активный Vulkan SM6, `Passage artwork: frame=loaded, leaf=loaded, Fab floor=loaded, Fab walls=loaded.`, `Verification crossed the moving passage airlock` и `Vanguard verification passed`. Кадры с флагом захвата сохраняются в `Saved/Screenshots`.
 - Метки `Passage ledge stopped walking`, `Passage climb rejected an obstructed landing`, `Passage handhold verified` и `Passage climb verified` подтверждают проверки уступа. Флаг `-CaptureVanguard` сохраняет кадры подсказки, контакта рук `Vanguard-Climb-Handhold.png` и верхней площадки.

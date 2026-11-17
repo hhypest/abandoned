@@ -162,6 +162,8 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
     ViewTexture->AddressX = TA_Clamp;
     ViewTexture->AddressY = TA_Clamp;
     ViewTexture->InitAutoFormat(960, 540);
+    // Publish the render resource before a material caches its Vulkan texture reference.
+    ViewTexture->UpdateResourceImmediate();
     UMaterialInstanceDynamic* View = UMaterialInstanceDynamic::Create(WindowMaterial, this);
     View->SetTextureParameterValue(TEXT("PortalView"), ViewTexture);
 

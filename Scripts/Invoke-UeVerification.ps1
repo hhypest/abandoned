@@ -77,6 +77,7 @@ $scenarios = @{
         Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode"
         Flag = '-VerifyPortalLab'
         CaptureFlag = '-CapturePortalLab'
+        CheckPortalFrame = $true
         Success = @('Portal lab verification passed')
     }
 }
@@ -95,6 +96,8 @@ function Invoke-Scenario($name, $definition, $profile) {
         Gpu = $null
         RendererSettings = @()
         RendererMismatches = @()
+        RhiWarnings = @()
+        DisplayedPortal = $null
         SuccessMarkers = @()
         FailureMarkers = @()
         Outcome = 'Failed'
@@ -109,7 +112,9 @@ function Invoke-Scenario($name, $definition, $profile) {
                        "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$renderQueries")) {
         $start.ArgumentList.Add($arg)
     }
-    if ($Capture -and $definition.CaptureFlag) { $start.ArgumentList.Add($definition.CaptureFlag) }
+    if (($Capture -or $definition.CheckPortalFrame) -and $definition.CaptureFlag) {
+        $start.ArgumentList.Add($definition.CaptureFlag)
+    }
     $process = [System.Diagnostics.Process]::Start($start)
     try {
         if ($process.WaitForExit($TimeoutSeconds * 1000)) {
@@ -143,6 +148,13 @@ function Invoke-Scenario($name, $definition, $profile) {
         $pattern = [regex]::Escape($_) + '\s*=\s*"?' + $expectedRenderer[$_] + '"?(?:\s|$)'
         !($result.RendererSettings -match $pattern)
     })
+    $result.RhiWarnings = @($lines -match 'Log(?:VulkanRHI|RHI): Warning:')
+    if ($definition.CheckPortalFrame) {
+        $frame = Join-Path $profile 'Saved/Screenshots/WindowsEditor/PortalLab-Active.png'
+        if (Test-Path -LiteralPath $frame -PathType Leaf) {
+            $result.DisplayedPortal = & (Join-Path $PSScriptRoot 'Read-PortalFrame.ps1') -Path $frame
+        }
+    }
     $exitRequestPattern = 'FPlatformMisc::RequestExitWithStatus\(\s*\d+\s*,\s*[1-9]\d*\s*,'
     $result.FailureMarkers = @($lines -match ": Error:|Fatal error:|$exitRequestPattern")
     $result.SuccessMarkers = @($definition.Success | Where-Object {
@@ -158,6 +170,9 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = $result.FailureMarkers[0]
     } elseif ($result.ExitCode -ne 0) {
         $result.Reason = "Unreal exited with code $($result.ExitCode)."
+    } elseif ($definition.CheckPortalFrame -and (!$result.DisplayedPortal -or !$result.DisplayedPortal.WarmWall -or
+        $result.DisplayedPortal.Width -ne [int]$dimensions[0] -or $result.DisplayedPortal.Height -ne [int]$dimensions[1])) {
+        $result.Reason = 'The displayed portal aperture frame was not confirmed.'
     } elseif ($result.SuccessMarkers.Count -ne $definition.Success.Count) {
         $missing = $definition.Success | Where-Object { $_ -notin $result.SuccessMarkers }
         $result.Reason = "Missing success markers: $($missing -join ', ')"
