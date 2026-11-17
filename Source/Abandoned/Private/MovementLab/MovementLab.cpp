@@ -1,4 +1,5 @@
 #include "MovementLab.h"
+#include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Player/AbandonedTestController.h"
 
 #include "Player/MovementProfile.h"
@@ -97,7 +98,8 @@ AMovementLabGameMode::AMovementLabGameMode()
 void AMovementLabGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
     Super::InitGame(MapName, Options, ErrorMessage);
-    if (!ErrorMessage.IsEmpty())
+    using namespace Abandoned::Infrastructure::Expedition;
+    if (!ErrorMessage.IsEmpty() || !ReadWorldDestination(Options, EntryWorld::Movement, ErrorMessage))
     {
         return;
     }

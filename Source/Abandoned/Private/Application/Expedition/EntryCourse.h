@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Domain/Expedition/EntryRoute.h"
+#include "Application/Expedition/WorldRoute.h"
 #include "Domain/Expedition/SuitArchive.h"
 
 namespace Abandoned::Application::Expedition
@@ -31,29 +31,29 @@ struct CourseStart
     bool StandaloneBalance = false;
 };
 
-inline CourseStart StartCourse(std::optional<Segment> Requested, const CheckpointStore* Store, bool CampaignTravel = false)
+inline Checkpoint ReadCourseCheckpoint(const CheckpointStore* Store)
 {
-    if (Requested)
+    Checkpoint Saved = Store ? Store->Read() : Checkpoint{};
+    if (Saved.Issue == CheckpointIssue::None && Saved.Chamber && !Domain::Expedition::IsCheckpoint(*Saved.Chamber))
     {
-        return {*Requested, CheckpointIssue::None, *Requested == Segment::Balance && !CampaignTravel};
+        Saved.Issue = CheckpointIssue::UnknownCheckpoint;
     }
-    if (Store)
+    if (Saved.Issue != CheckpointIssue::None)
     {
-        const Checkpoint Existing = Store->Read();
-        if (Existing.Issue != CheckpointIssue::None)
-        {
-            return {Segment::Stairs, Existing.Issue};
-        }
-        if (Existing.Chamber && !Domain::Expedition::IsCheckpoint(*Existing.Chamber))
-        {
-            return {Segment::Stairs, CheckpointIssue::UnknownCheckpoint};
-        }
-        if (Existing.Chamber)
-        {
-            return {*Existing.Chamber};
-        }
+        Saved.Chamber.reset();
     }
-    return {};
+    return Saved;
+}
+
+inline CourseStart StartCourse(ChamberDestination Destination, const CheckpointStore* Store)
+{
+    if (Destination.Chamber)
+    {
+        return {*Destination.Chamber, CheckpointIssue::None,
+            *Destination.Chamber == Segment::Balance && Destination.Entry == RouteEntry::Direct};
+    }
+    const Checkpoint Saved = ReadCourseCheckpoint(Store);
+    return {Saved.Chamber.value_or(Segment::Stairs), Saved.Issue};
 }
 
 inline bool RecordArrival(CourseStart State, const CheckpointStore& Store)
@@ -62,22 +62,42 @@ inline bool RecordArrival(CourseStart State, const CheckpointStore& Store)
         !Domain::Expedition::IsCheckpoint(State.Current) || Store.Write(State.Current);
 }
 
-inline std::optional<Segment> NextCourseSegment(CourseStart State)
+inline std::optional<WorldDestination> NextCourseDestination(CourseStart State)
 {
-    return State.StandaloneBalance ? std::nullopt : Domain::Expedition::NextSegment(State.Current);
+    const auto Next = State.StandaloneBalance ? std::nullopt : Domain::Expedition::NextSegment(State.Current);
+    if (!Next)
+    {
+        return std::nullopt;
+    }
+    if (*Next == Segment::Passage)
+    {
+        return VanguardDestination{VanguardStop::Passage, RouteEntry::Campaign, State.Current};
+    }
+    return ChamberDestination{*Next, RouteEntry::Campaign};
 }
 
-inline Segment PassageCheckpoint(std::optional<Segment> Origin, const CheckpointStore* Store)
+inline WorldDestination PassageRecovery(VanguardDestination Passage, const CheckpointStore* Store)
 {
-    if (Origin && Domain::Expedition::IsCheckpoint(*Origin))
+    if (Passage.Stop == VanguardStop::RadiationPassage)
     {
-        return *Origin;
+        return VanguardDestination{VanguardStop::RadiationPassage};
     }
-    const Checkpoint Existing = Store ? Store->Read() : Checkpoint{};
-    if (Existing.Issue == CheckpointIssue::None && Existing.Chamber && Domain::Expedition::IsCheckpoint(*Existing.Chamber))
+    if (Passage.Origin && Domain::Expedition::IsCheckpoint(*Passage.Origin))
     {
-        return *Existing.Chamber;
+        return ChamberDestination{*Passage.Origin, RouteEntry::Campaign};
     }
-    return Segment::Weight;
+    return ChamberDestination{ReadCourseCheckpoint(Store).Chamber.value_or(Segment::Weight), RouteEntry::Campaign};
+}
+
+inline VanguardDestination StationAfterPassage(VanguardDestination Passage, const WorldDestination& Recovery)
+{
+    if (Passage.Stop == VanguardStop::Passage && Passage.Entry == RouteEntry::Campaign)
+    {
+        if (const auto* Chamber = std::get_if<ChamberDestination>(&Recovery))
+        {
+            return {VanguardStop::Station, RouteEntry::Campaign, Chamber->Chamber};
+        }
+    }
+    return {VanguardStop::Station};
 }
 }

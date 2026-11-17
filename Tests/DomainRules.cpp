@@ -17,6 +17,7 @@
 #include "Domain/Puzzles/PortalTransit.h"
 #include "Domain/Puzzles/PlateBalance.h"
 #include "Domain/Puzzles/SlidingDoorRules.h"
+#include "Infrastructure/Expedition/WorldRouteOptions.h"
 
 #include <cassert>
 #include <limits>
@@ -31,8 +32,13 @@ struct MemoryCheckpoint final : CheckpointStore
 {
     mutable Checkpoint Data;
     mutable int Writes = 0;
+    mutable int Reads = 0;
 
-    Checkpoint Read() const override { return Data; }
+    Checkpoint Read() const override
+    {
+        ++Reads;
+        return Data;
+    }
     bool Write(Segment Value) const override
     {
         ++Writes;
@@ -54,34 +60,94 @@ void TestRouteAndCheckpoint()
     static_assert(ParseSegment(SegmentKey(Segment::Weight)) == Segment::Weight);
 
     MemoryCheckpoint Store;
-    assert(StartCourse(std::nullopt, &Store).Current == Segment::Stairs);
+    assert(StartCourse({}, &Store).Current == Segment::Stairs);
     assert(RecordArrival({Segment::Weight}, Store));
     assert(RecordArrival({Segment::Passage}, Store));
     assert(RecordArrival({Segment::Vanguard}, Store));
     assert(Store.Writes == 1);
-    assert(StartCourse(std::nullopt, &Store).Current == Segment::Weight);
-    assert(StartCourse(Segment::Button, &Store).Current == Segment::Button);
-    assert(PassageCheckpoint(Segment::Balance, &Store) == Segment::Balance);
-    assert(PassageCheckpoint(std::nullopt, &Store) == Segment::Weight);
+    assert(StartCourse({}, &Store).Current == Segment::Weight);
+    assert(StartCourse({Segment::Button}, &Store).Current == Segment::Button);
 
-    const CourseStart Standalone = StartCourse(Segment::Balance, &Store);
-    assert(Standalone.StandaloneBalance && !NextCourseSegment(Standalone));
+    const CourseStart Standalone = StartCourse({Segment::Balance}, &Store);
+    assert(Standalone.StandaloneBalance && !NextCourseDestination(Standalone));
     assert(RecordArrival(Standalone, Store) && Store.Writes == 1);
-    assert(StartCourse(std::nullopt, &Store).Current == Segment::Weight);
+    assert(StartCourse({}, &Store).Current == Segment::Weight);
 
-    const CourseStart Campaign = StartCourse(Segment::Balance, &Store, true);
-    assert(!Campaign.StandaloneBalance && NextCourseSegment(Campaign) == Segment::Passage);
+    const WorldDestination Passage = VanguardDestination{VanguardStop::Passage, RouteEntry::Campaign, Segment::Balance};
+    const CourseStart Campaign = StartCourse({Segment::Balance, RouteEntry::Campaign}, &Store);
+    assert(!Campaign.StandaloneBalance && NextCourseDestination(Campaign) == Passage);
     assert(RecordArrival(Campaign, Store) && Store.Writes == 2);
-    const CourseStart Resumed = StartCourse(std::nullopt, &Store);
-    assert(Resumed.Current == Segment::Balance && NextCourseSegment(Resumed) == Segment::Passage);
-    assert(PassageCheckpoint(Segment::Sandbox, &Store) == Segment::Balance);
+    const CourseStart Resumed = StartCourse({}, &Store);
+    assert(Resumed.Current == Segment::Balance && NextCourseDestination(Resumed) == Passage);
 
     Store.Data = {Segment::Vanguard};
-    const CourseStart Recovered = StartCourse(std::nullopt, &Store);
+    const CourseStart Recovered = StartCourse({}, &Store);
     assert(Recovered.Issue == CheckpointIssue::UnknownCheckpoint && Recovered.Current == Segment::Stairs);
     assert(RecordArrival(Recovered, Store));
     assert(Store.Writes == 2);
-    assert(PassageCheckpoint(std::nullopt, &Store) == Segment::Weight);
+}
+
+void TestPassageRecovery()
+{
+    MemoryCheckpoint Store;
+    const VanguardDestination Standard{};
+    const VanguardDestination Campaign{VanguardStop::Passage, RouteEntry::Campaign, Segment::Balance};
+    const VanguardDestination Radiation{VanguardStop::RadiationPassage};
+    const WorldDestination ToWeight = ChamberDestination{Segment::Weight, RouteEntry::Campaign};
+    const WorldDestination ToButton = ChamberDestination{Segment::Button, RouteEntry::Campaign};
+    const WorldDestination ToBalance = ChamberDestination{Segment::Balance, RouteEntry::Campaign};
+
+    Store.Data = {Segment::Button};
+    assert(PassageRecovery(Campaign, &Store) == ToBalance);
+    assert(PassageRecovery(Radiation, &Store) == WorldDestination{Radiation});
+    assert(Store.Reads == 0 && Store.Writes == 0);
+    assert(PassageRecovery(Standard, &Store) == ToButton);
+    assert((PassageRecovery({VanguardStop::Passage, RouteEntry::Direct, Segment::Sandbox}, &Store) == ToButton));
+    assert(PassageRecovery(Standard, nullptr) == ToWeight);
+    Store.Data = {};
+    assert(PassageRecovery(Standard, &Store) == ToWeight);
+    Store.Data = {Segment::Vanguard};
+    assert(PassageRecovery(Standard, &Store) == ToWeight);
+    Store.Data = {Segment::Button, CheckpointIssue::UnsupportedVersion};
+    assert(PassageRecovery(Standard, &Store) == ToWeight);
+    assert((StationAfterPassage(Campaign, ToBalance) ==
+        VanguardDestination{VanguardStop::Station, RouteEntry::Campaign, Segment::Balance}));
+    assert(StationAfterPassage(Radiation, Radiation) == VanguardDestination{VanguardStop::Station});
+    assert(StationAfterPassage(Standard, ToWeight) == VanguardDestination{VanguardStop::Station});
+}
+
+void TestWorldRouteOptions()
+{
+    using namespace Abandoned::Infrastructure::Expedition;
+    const WorldDestination Routes[] = {
+        ChamberDestination{}, ChamberDestination{Segment::Stairs}, ChamberDestination{Segment::Button, RouteEntry::Campaign},
+        ChamberDestination{Segment::Weight, RouteEntry::Campaign}, ChamberDestination{Segment::Balance},
+        ChamberDestination{Segment::Balance, RouteEntry::Campaign}, ChamberDestination{Segment::Sandbox},
+        VanguardDestination{}, VanguardDestination{VanguardStop::Station},
+        VanguardDestination{VanguardStop::Passage, RouteEntry::Campaign, Segment::Balance},
+        VanguardDestination{VanguardStop::Station, RouteEntry::Campaign, Segment::Balance},
+        VanguardDestination{VanguardStop::RadiationPassage},
+        Dev20Destination{Dev20Stage::Station}, Dev20Destination{Dev20Stage::Station, Dev20Entry::Recovery},
+        Dev20Destination{Dev20Stage::Button}, Dev20Destination{Dev20Stage::Weight},
+        LabDestination::Movement, LabDestination::Optics, LabDestination::Gravity, LabDestination::Portals
+    };
+    for (const auto& Destination : Routes)
+    {
+        const auto Decoded = DecodeWorldOptions(EncodeWorldOptions(Destination), WorldFor(Destination));
+        assert(Decoded.Destination == Destination && !Decoded.InvalidRecoveryOrigin);
+    }
+    const auto Origin = DecodeWorldOptions("?Checkpoint=Sandbox?Chamber=Passage", EntryWorld::Vanguard);
+    assert(Origin.InvalidRecoveryOrigin && Origin.Destination == WorldDestination{VanguardDestination{}});
+    const auto Legacy = DecodeWorldOptions("?DEV20Run?Dev20Recovered?Name=Player", EntryWorld::Portal);
+    assert((Legacy.Destination == WorldDestination{Dev20Destination{Dev20Stage::Station, Dev20Entry::Recovery}}));
+    assert(!DecodeWorldOptions("?Chamber=Unknown", EntryWorld::Chamber).Destination);
+    assert(!DecodeWorldOptions("?Chamber=Button?chamber=Weight", EntryWorld::Chamber).Destination);
+    assert(!DecodeWorldOptions("?game=UnknownMode", EntryWorld::Chamber).Destination);
+    assert(!DecodeWorldOptions("?Chamber=Vanguard?RadiationRun=1", EntryWorld::Vanguard).Destination);
+    assert(!DecodeWorldOptions("?Chamber=Passage?RadiationRun=1?EntryCourse=1", EntryWorld::Vanguard).Destination);
+    assert(!DecodeWorldOptions("?Chamber=Sandbox?Dev20Run=1", EntryWorld::Chamber).Destination);
+    assert(!DecodeWorldOptions("?Dev20Recovered=1", EntryWorld::Portal).Destination);
+    assert(!DecodeWorldOptions("?EntryCourse=maybe", EntryWorld::Chamber).Destination);
 }
 
 void TestCircuitAndBallast()
@@ -434,17 +500,17 @@ void TestDev20Transfer()
     assert(!Transfer.Arrive(Stage::Button));
     assert(!Transfer.Depart(Stage::Station, false));
     assert(!Transfer.Depart(Stage::Button, true));
-    assert(Transfer.Depart(Stage::Station, true));
+    assert(Transfer.Depart(Stage::Station, true) == Stage::Button);
     assert(!Transfer.Depart(Stage::Station, true));
     assert(!Transfer.Arrive(Stage::Weight));
     assert(Transfer.Arrive(Stage::Button));
     assert(!Transfer.Arrive(Stage::Button));
-    assert(Transfer.Depart(Stage::Button, true));
+    assert(Transfer.Depart(Stage::Button, true) == Stage::Weight);
     Transfer.RecoverAtStation();
     assert(!Transfer.Arrive(Stage::Weight));
-    assert(Transfer.Depart(Stage::Station, true));
+    assert(Transfer.Depart(Stage::Station, true) == Stage::Button);
     assert(Transfer.Arrive(Stage::Button));
-    assert(Transfer.Depart(Stage::Button, true));
+    assert(Transfer.Depart(Stage::Button, true) == Stage::Weight);
     assert(Transfer.Arrive(Stage::Weight));
     assert(!Transfer.Depart(Stage::Weight, true));
 }
@@ -571,6 +637,8 @@ void TestSuitSessionRecovery()
 int main()
 {
     TestRouteAndCheckpoint();
+    TestPassageRecovery();
+    TestWorldRouteOptions();
     TestCircuitAndBallast();
     TestParallelPlateCircuit();
     TestSupply();

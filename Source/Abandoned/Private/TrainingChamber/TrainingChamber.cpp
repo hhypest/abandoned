@@ -20,6 +20,7 @@
 #include "HAL/PlatformMisc.h"
 #include "InputCoreTypes.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
+#include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -66,26 +67,22 @@ ATrainingChamberGameMode::ATrainingChamberGameMode()
     SurfaceMaterial = Material.Object;
 }
 
-void ATrainingChamberGameMode::SelectLayout(const FString& Options)
+void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedition::WorldDestination& Destination)
 {
-    auto Requested = Abandoned::Infrastructure::Expedition::ReadSegment(
-        UGameplayStatics::ParseOption(Options, TEXT("Chamber")));
-    if (Requested == Segment::Passage || Requested == Segment::Vanguard)
+    using namespace Abandoned::Application::Expedition;
+    const auto* Dev20Route = std::get_if<Dev20Destination>(&Destination);
+    bDev20Run = Dev20Route != nullptr;
+    ChamberDestination Arrival = Dev20Route ? ChamberDestination{Dev20Chamber(Dev20Route->Stage)}
+                                           : std::get<ChamberDestination>(Destination);
+    if (Dev20Route)
     {
-        Requested.reset();
-    }
-    bDev20Run = UGameplayStatics::HasOption(Options, TEXT("Dev20Run"));
-    if (bDev20Run && (Requested == Segment::Button || Requested == Segment::Weight))
-    {
-        const Dev20Step Stage = Requested == Segment::Button ? Dev20Step::Button : Dev20Step::Weight;
         if (const auto* Session = Abandoned::Infrastructure::Expedition::Dev20Session(this);
-            Session && Session->Transfer.IsExpected(Stage))
+            Session && Session->Transfer.IsExpected(Dev20Route->Stage))
         {
-            Dev20Stage = Stage;
+            Dev20Stage = Dev20Route->Stage;
         }
     }
     bool bReadCheckpoint = !bDev20Run && GetWorld()->WorldType == EWorldType::Game;
-    bool bCampaignTravel = UGameplayStatics::ParseOption(Options, TEXT("EntryCourse")) == TEXT("1");
 #if WITH_DEV_AUTOMATION_TESTS
     bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
     bVerifyHints = FParse::Param(FCommandLine::Get(), TEXT("VerifyChamberHints"));
@@ -97,25 +94,23 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
     bVerifyEntryCourse = bVerifyDev20 || bVerifyEntryCheckpoint || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
     if (bVerifyHints || bVerifyDoorClamp)
     {
-        Requested = Segment::Weight;
+        Arrival.Chamber = Segment::Weight;
         bReadCheckpoint = false;
     }
     else if (bVerifyParallelCircuit)
     {
-        Requested = Segment::Button;
+        Arrival = {Segment::Button};
         bReadCheckpoint = false;
-        bCampaignTravel = false;
     }
     else if (bVerifyBalance)
     {
-        Requested = Segment::Balance;
-        bCampaignTravel = false;
+        Arrival = {Segment::Balance};
         bVerifyEntryCourse = false;
         bVerifyChamber = false;
     }
     else if (bVerifyChamber)
     {
-        Requested = Segment::Sandbox;
+        Arrival.Chamber = Segment::Sandbox;
     }
     else if (bVerifyEntryCourse && !bVerifyEntryCheckpoint)
     {
@@ -123,7 +118,7 @@ void ATrainingChamberGameMode::SelectLayout(const FString& Options)
     }
 #endif
     const UnrealCheckpointStore Store;
-    Course = Abandoned::Application::Expedition::StartCourse(Requested, bReadCheckpoint ? &Store : nullptr, bCampaignTravel);
+    Course = StartCourse(Arrival, bReadCheckpoint ? &Store : nullptr);
     if (Course.Issue != Abandoned::Application::Expedition::CheckpointIssue::None)
     {
         UE_LOG(LogTrainingChamber, Warning, TEXT("%s Starting at the first chamber."),
@@ -202,9 +197,9 @@ void ATrainingChamberGameMode::AdvanceCourse(const ATrainingChamberCharacter& Pl
         UE_LOG(LogTrainingChamber, Display, TEXT("Entry course verification passed: balance released the passage."));
     }
 #endif
-    if (const auto Next = Abandoned::Application::Expedition::NextCourseSegment(Course))
+    if (const auto Next = Abandoned::Application::Expedition::NextCourseDestination(Course))
     {
-        Abandoned::Infrastructure::Expedition::TravelToSegment(this, *Next, Course.Current);
+        Abandoned::Infrastructure::Expedition::TravelToWorld(this, *Next);
     }
 }
 
@@ -216,7 +211,14 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         return;
     }
 
-    SelectLayout(Options);
+    using Abandoned::Infrastructure::Expedition::EntryWorld;
+    using Abandoned::Infrastructure::Expedition::ReadWorldDestination;
+    const auto Destination = ReadWorldDestination(Options, EntryWorld::Chamber, ErrorMessage);
+    if (!Destination)
+    {
+        return;
+    }
+    SelectLayout(*Destination);
     if (!Layout->IsValid())
     {
         ErrorMessage = TEXT("Invalid training chamber data in DefaultGame.ini.");
@@ -675,7 +677,8 @@ void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
         if (!bDev20Recovering)
         {
             bDev20Recovering = true;
-            Abandoned::Infrastructure::Expedition::ReturnToDev20Station(this, true);
+            Abandoned::Infrastructure::Expedition::ReturnToDev20Station(
+                this, Abandoned::Application::Expedition::Dev20Entry::Recovery);
         }
         return;
     }

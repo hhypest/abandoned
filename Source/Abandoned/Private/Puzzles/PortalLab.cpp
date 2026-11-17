@@ -17,6 +17,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
+#include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Player/AbandonedTestController.h"
@@ -93,10 +94,17 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
     {
         return;
     }
+    using namespace Abandoned::Infrastructure::Expedition;
+    const auto Destination = ReadWorldDestination(Options, EntryWorld::Portal, Error);
+    if (!Destination)
+    {
+        return;
+    }
     SetActorTickEnabled(false);
     Layout = GetDefault<UPortalLabLayout>();
-    bDev20Run = UGameplayStatics::HasOption(Options, TEXT("Dev20Run"));
-    bDev20Recovered = UGameplayStatics::HasOption(Options, TEXT("Dev20Recovered"));
+    const auto* Dev20Route = std::get_if<Dev20Destination>(&*Destination);
+    bDev20Run = Dev20Route != nullptr;
+    bDev20Recovered = Dev20Route && Dev20Route->Entry == Dev20Entry::Recovery;
     CubeMesh = Abandoned::Blockout::LoadCube();
     UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
     const auto MouthValid = [](const FPortalMouthLayout& Mouth)

@@ -6,8 +6,7 @@
 #include "GameFramework/GameUserSettings.h"
 #include "InputCoreTypes.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
-#include "Infrastructure/Expedition/UnrealEntryCourse.h"
-#include "Kismet/GameplayStatics.h"
+#include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Input/SButton.h"
@@ -20,8 +19,6 @@
 
 namespace
 {
-const FName EntryMap(TEXT("/Engine/Maps/Entry"));
-
 class STestMenu final : public SCompoundWidget
 {
 public:
@@ -249,6 +246,9 @@ void AAbandonedTestController::ToggleFullscreen()
 
 FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
 {
+    using namespace Abandoned::Application::Expedition;
+    using Abandoned::Domain::Expedition::Segment;
+    using Abandoned::Infrastructure::Expedition::TravelToWorld;
     switch (Action)
     {
     case EMenuAction::Resume:
@@ -256,27 +256,27 @@ FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
         break;
     case EMenuAction::TrainingChamber:
         CloseMenu();
-        UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.TrainingChamberGameMode"));
+        TravelToWorld(this, ChamberDestination{});
         break;
     case EMenuAction::Balance:
         CloseMenu();
-        UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.TrainingChamberGameMode?Chamber=Balance"));
+        TravelToWorld(this, ChamberDestination{Segment::Balance});
         break;
     case EMenuAction::MovementLab:
         CloseMenu();
-        UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.MovementLabGameMode"));
+        TravelToWorld(this, LabDestination::Movement);
         break;
     case EMenuAction::PowerLab:
         CloseMenu();
-        UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.PowerLabGameMode"));
+        TravelToWorld(this, LabDestination::Optics);
         break;
     case EMenuAction::GravityLab:
         CloseMenu();
-        UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.GravityLabGameMode"));
+        TravelToWorld(this, LabDestination::Gravity);
         break;
     case EMenuAction::PortalLab:
         CloseMenu();
-        UGameplayStatics::OpenLevel(this, EntryMap, true, TEXT("game=/Script/Abandoned.PortalLabGameMode"));
+        TravelToWorld(this, LabDestination::Portals);
         break;
     case EMenuAction::Dev20:
         CloseMenu();
@@ -284,7 +284,7 @@ FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
         break;
     case EMenuAction::Radiation:
         CloseMenu();
-        Abandoned::Infrastructure::Expedition::TravelToRadiationPassage(this);
+        TravelToWorld(this, VanguardDestination{VanguardStop::RadiationPassage});
         break;
     case EMenuAction::Fullscreen:
         ToggleFullscreen();

@@ -8,6 +8,7 @@
 #include "EnhancedInputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
 #include "Puzzles/GravityLabLayout.h"
@@ -53,7 +54,8 @@ AGravityLabGameMode::AGravityLabGameMode()
 void AGravityLabGameMode::InitGame(const FString& Map, const FString& Options, FString& Error)
 {
     Super::InitGame(Map, Options, Error);
-    if (!Error.IsEmpty())
+    using namespace Abandoned::Infrastructure::Expedition;
+    if (!Error.IsEmpty() || !ReadWorldDestination(Options, EntryWorld::Gravity, Error))
     {
         return;
     }

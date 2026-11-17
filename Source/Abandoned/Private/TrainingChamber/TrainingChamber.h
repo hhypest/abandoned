@@ -84,7 +84,7 @@ private:
     bool SpawnRelayTraces(UStaticMesh& Mesh, UMaterialInterface* Idle, UMaterialInterface* Powered);
     void UpdateRelayTraces();
     bool HasStackAtExit() const;
-    void SelectLayout(const FString& Options);
+    void SelectLayout(const Abandoned::Application::Expedition::WorldDestination& Destination);
     void SaveEntryCheckpoint();
     bool bCheckpointWriteFailed = false;
     void AdvanceCourse(const ATrainingChamberCharacter& Player);
