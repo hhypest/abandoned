@@ -33,11 +33,18 @@ if ($buildVersion.MajorVersion -ne 5 -or $buildVersion.MinorVersion -ne 7) {
 
 $entry = '/Engine/Maps/Entry'
 $dimensions = $Resolution.Split('x')
-$renderQueries = @(
-    'r.DynamicGlobalIlluminationMethod', 'r.ReflectionMethod', 'r.GenerateMeshDistanceFields',
-    'r.Lumen.HardwareRayTracing', 'r.Nanite.ProjectEnabled', 'r.Shadow.Virtual.Enable',
-    'r.AntiAliasingMethod', 'sg.GlobalIlluminationQuality', 'sg.ReflectionQuality'
-) -join ','
+$expectedRenderer = [ordered]@{
+    'r.DynamicGlobalIlluminationMethod' = 1
+    'r.ReflectionMethod' = 1
+    'r.GenerateMeshDistanceFields' = 1
+    'r.Lumen.HardwareRayTracing' = 0
+    'r.Nanite.ProjectEnabled' = 1
+    'r.Shadow.Virtual.Enable' = 1
+    'r.AntiAliasingMethod' = 4
+    'sg.GlobalIlluminationQuality' = 2
+    'sg.ReflectionQuality' = 2
+}
+$renderQueries = $expectedRenderer.Keys -join ','
 $vanguard = "${entry}?game=/Script/Abandoned.VanguardRouteGameMode"
 $wristSuccess = @('Wrist terminal verification passed', 'Radiation passage verification passed')
 $scenarios = @{
@@ -87,6 +94,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         Vulkan = $false
         Gpu = $null
         RendererSettings = @()
+        RendererMismatches = @()
         SuccessMarkers = @()
         FailureMarkers = @()
         Outcome = 'Failed'
@@ -131,6 +139,10 @@ function Invoke-Scenario($name, $definition, $profile) {
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1
     if ($gpuLine -match 'DeviceName:\s*(.+)$') { $result.Gpu = $Matches[1].Trim() }
     $result.RendererSettings = @($lines -match '(?:r\.(?:DynamicGlobalIlluminationMethod|ReflectionMethod|GenerateMeshDistanceFields|Lumen.HardwareRayTracing|Nanite.ProjectEnabled|Shadow.Virtual.Enable|AntiAliasingMethod)|sg\.(?:GlobalIlluminationQuality|ReflectionQuality))\s*=')
+    $result.RendererMismatches = @($expectedRenderer.Keys | Where-Object {
+        $pattern = [regex]::Escape($_) + '\s*=\s*"?' + $expectedRenderer[$_] + '"?(?:\s|$)'
+        !($result.RendererSettings -match $pattern)
+    })
     $exitRequestPattern = 'FPlatformMisc::RequestExitWithStatus\(\s*\d+\s*,\s*[1-9]\d*\s*,'
     $result.FailureMarkers = @($lines -match ": Error:|Fatal error:|$exitRequestPattern")
     $result.SuccessMarkers = @($definition.Success | Where-Object {
@@ -140,6 +152,8 @@ function Invoke-Scenario($name, $definition, $profile) {
     # Use the same verdict for the positive cases and the negative control.
     if (!$result.Vulkan) {
         $result.Reason = 'Vulkan SM6 was not confirmed in the game log.'
+    } elseif ($result.RendererMismatches.Count -gt 0) {
+        $result.Reason = "Renderer profile was not confirmed: $($result.RendererMismatches -join ', ')"
     } elseif ($result.FailureMarkers.Count -gt 0) {
         $result.Reason = $result.FailureMarkers[0]
     } elseif ($result.ExitCode -ne 0) {
@@ -154,7 +168,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     if ($definition.ExpectedError) {
         $expected = [regex]::Escape($definition.ExpectedError)
         $unexpected = $result.FailureMarkers -notmatch "$expected|$exitRequestPattern"
-        if ($result.Outcome -eq 'Failed' -and $result.Vulkan -and $result.ExitCode -in @(0, 1) -and
+        if ($result.Outcome -eq 'Failed' -and $result.Vulkan -and $result.RendererMismatches.Count -eq 0 -and $result.ExitCode -in @(0, 1) -and
             $result.FailureMarkers -match $expected -and $result.FailureMarkers -match $exitRequestPattern -and
             !$unexpected -and $result.SuccessMarkers.Count -eq 0) {
             $result.Outcome = 'ExpectedFailure'
