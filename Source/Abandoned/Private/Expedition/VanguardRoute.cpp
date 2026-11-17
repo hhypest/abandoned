@@ -191,18 +191,6 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
                 Abandoned::Infrastructure::Expedition::MarkMantleLedge(*Collision);
             }
         }
-        if (UVanguardSession* Session = GetSession())
-        {
-            Session->Suit.Refill();
-            Session->Dose.Clear();
-            Session->bFlashlightOn = false;
-#if WITH_DEV_AUTOMATION_TESTS
-            if (!Radiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardOxygen")))
-            {
-                Session->Suit.SpendInPassage(555.0f);
-            }
-#endif
-        }
         const auto DoorVisual = SpawnBlock(Passage->Door, EComponentMobility::Movable);
         Door = DoorVisual.Collision;
         const bool bLeaf = FitsMesh(DoorVisual.Visual, Passage->LeafMesh.LoadSynchronous(), Passage->Door.Size,
@@ -233,18 +221,24 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     }
     if (UVanguardSession* Session = GetSession())
     {
-        using Abandoned::Domain::Expedition::SuitRecord;
-        if (Radiation)
+        if (AtStation())
         {
-            Session->Archive.Reveal(SuitRecord::ForecastSynchronized);
+            const double ClearedDose = Session->Suit.EnterStation();
+            bClearedRadiation = ClearedDose > 0.0;
+            if (bClearedRadiation)
+            {
+                UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard station cleared remaining radiation dose: %.2f%%."), ClearedDose);
+            }
         }
-        if (AtStation() && Session->Dose.Percent() > 0.0)
+        else
         {
-            UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard station cleared remaining radiation dose: %.2f%%."),
-                Session->Dose.Percent());
-            Session->Dose.Clear();
-            Session->Archive.Reveal(SuitRecord::Decontaminated);
-            bClearedRadiation = true;
+            Session->Suit.EnterPassage(Radiation.has_value());
+#if WITH_DEV_AUTOMATION_TESTS
+            if (!Radiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardOxygen")))
+            {
+                Session->Suit.SpendInPassage(555.0f);
+            }
+#endif
         }
     }
 #if WITH_DEV_AUTOMATION_TESTS
@@ -284,7 +278,7 @@ void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerContr
             Light.SetAttenuationRadius(Settings.RangeCm);
             Light.SetOuterConeAngle(Settings.OuterConeDegrees);
             Light.SetInnerConeAngle(Settings.InnerConeDegrees);
-            Light.SetVisibility(Session && Session->bFlashlightOn);
+            Light.SetVisibility(Session && Session->Suit.IsFlashlightOn());
             if (!AtStation())
             {
                 if (CastChecked<UVanguardPassageLayout>(Layout.Get())->bEnableMantle)
@@ -326,14 +320,14 @@ bool AVanguardRouteGameMode::AtStation() const
 float AVanguardRouteGameMode::GetOxygenPercent() const
 {
     const UVanguardSession* Session = GetSession();
-    return Session ? Session->Suit.Percent() : 100.0f;
+    return Session ? Session->Suit.OxygenPercent() : 100.0f;
 }
 
 std::optional<Abandoned::Domain::Expedition::DosimeterReading> AVanguardRouteGameMode::GetDosimeter() const
 {
     if (const UVanguardSession* Session = GetSession(); Radiation && Session)
     {
-        return Radiation->Read(RadiationPosition, Session->Dose);
+        return Radiation->Read(RadiationPosition, Session->Suit.RadiationDose());
     }
     return std::nullopt;
 }
@@ -341,11 +335,11 @@ std::optional<Abandoned::Domain::Expedition::DosimeterReading> AVanguardRouteGam
 Abandoned::Application::Expedition::SuitTelemetry AVanguardRouteGameMode::GetSuitTelemetry() const
 {
     const UVanguardSession* Session = GetSession();
-    return {GetOxygenPercent(), Session ? Session->Dose.Percent() : 0.0, GetDosimeter(), AtStation()};
+    return {GetOxygenPercent(), Session ? Session->Suit.RadiationDose().Percent() : 0.0, GetDosimeter(), AtStation()};
 }
 
 bool AVanguardRouteGameMode::TickRadiation(const FVector& Position, float DeltaSeconds,
-    Abandoned::Domain::Expedition::RadiationDose& Dose)
+    Abandoned::Application::Expedition::SuitSession& Suit)
 {
     if (!Radiation)
     {
@@ -361,7 +355,7 @@ bool AVanguardRouteGameMode::TickRadiation(const FVector& Position, float DeltaS
         RadiationPosition = bSheltered ? Abandoned::Domain::Expedition::RadiationPosition::Sheltered
                                       : Abandoned::Domain::Expedition::RadiationPosition::Exposed;
     }
-    return Radiation->Advance(DeltaSeconds, RadiationPosition, Dose);
+    return Suit.AdvanceExposure(*Radiation, RadiationPosition, DeltaSeconds);
 }
 
 void AVanguardRouteGameMode::RestartRadiationPassage()
@@ -377,8 +371,7 @@ void AVanguardRouteGameMode::Resupply()
 {
     if (UVanguardSession* Session = GetSession(); AtStation() && Session)
     {
-        Session->Suit.Refill();
-        Session->Archive.Reveal(Abandoned::Domain::Expedition::SuitRecord::OxygenRestored);
+        Session->Suit.Resupply();
         bResupplied = true;
         UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard oxygen supply restored."));
     }
@@ -431,7 +424,7 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
     Door->SetWorldLocation(DoorPosition, true);
 
     UVanguardSession* Session = GetSession();
-    const bool bRadiationLimit = Session && TickRadiation(Position, DeltaSeconds, Session->Dose);
+    const bool bRadiationLimit = Session && TickRadiation(Position, DeltaSeconds, Session->Suit);
     const bool bOxygenDepleted = Session && Session->Suit.SpendInPassage(DeltaSeconds);
     using namespace Abandoned::Application::Expedition;
     const auto Outcome = ResolvePassage({
@@ -782,7 +775,7 @@ void AVanguardCharacter::ToggleFlashlight()
     {
         if (UVanguardSession* Session = Mode->GetSession())
         {
-            Session->bFlashlightOn = bOn;
+            Session->Suit.SetFlashlight(bOn);
         }
     }
 }

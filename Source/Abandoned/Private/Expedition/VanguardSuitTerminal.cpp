@@ -131,7 +131,7 @@ void AVanguardCharacter::MoveArchive(bool Forward)
     const AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>();
     if (const UVanguardSession* Session = Mode ? Mode->GetSession() : nullptr)
     {
-        WristTerminal.MoveArchive(Forward, Session->Archive);
+        WristTerminal.MoveArchive(Forward, Session->Suit.Records());
     }
 }
 
@@ -176,10 +176,10 @@ void AVanguardCharacter::UpdateWristTerminal(const AVanguardRouteGameMode& Mode)
         break;
     case SuitPage::Archive:
         Heading = TEXT("SUIT / ARCHIVE");
-        if (const auto Record = Session->Archive.At(WristTerminal.ArchiveIndex()))
+        if (const auto Record = Session->Suit.Records().At(WristTerminal.ArchiveIndex()))
         {
             Body = FString::Printf(TEXT("%d / %d\n%s"), static_cast<int32>(WristTerminal.ArchiveIndex() + 1),
-                static_cast<int32>(Session->Archive.Size()), RecordText(*Record));
+                static_cast<int32>(Session->Suit.Records().Size()), RecordText(*Record));
         }
         else
         {

@@ -92,7 +92,7 @@ bool AVanguardRouteGameMode::VerifyWristTerminal(AVanguardCharacter& Player, flo
     case 5: Send(EKeys::Tab, IE_Released); break;
     case 6:
         if (!Shows(SuitPage::Archive, TEXT("Flare forecast acquired.")) ||
-            Session->Archive.Size() != (AtStation() ? 2u : 1u))
+            Session->Suit.Records().Size() != (AtStation() ? 2u : 1u))
         {
             return Fail(TEXT("acquired record should survive travel and occur once"));
         }
@@ -130,7 +130,8 @@ bool AVanguardRouteGameMode::VerifyWristTerminal(AVanguardCharacter& Player, flo
     case 9: Send(EKeys::E); break;
     case 10: Send(EKeys::E, IE_Released); break;
     case 11:
-        if (!HasResupplied() || GetOxygenPercent() != 100.0f || Session->Archive.At(2) != SuitRecord::OxygenRestored)
+        if (!HasResupplied() || GetOxygenPercent() != 100.0f ||
+            Session->Suit.Records().At(2) != SuitRecord::OxygenRestored)
         {
             return Fail(TEXT("resupply should restore oxygen and append an entry with the wrist raised"));
         }

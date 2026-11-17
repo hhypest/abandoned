@@ -2,6 +2,7 @@
 #include "Application/Expedition/Dev20Transfer.h"
 #include "Application/Expedition/MantleRequest.h"
 #include "Application/Expedition/PassageProgress.h"
+#include "Application/Expedition/SuitSession.h"
 #include "Application/Expedition/SuitTerminal.h"
 #include "Application/Puzzles/OpticsCourse.h"
 #include "Application/Puzzles/TimedPassage.h"
@@ -521,6 +522,50 @@ void TestSuitTerminal()
     const SuitTelemetry Station{98.0f, 0.0, std::nullopt, true};
     assert(Station.Signal() == SuitSignal::VanguardStation && !Station.Forecast);
 }
+
+void TestSuitSessionRecovery()
+{
+    SuitSession Suit;
+    assert(Suit.EnterStation() == 0.0);
+    assert(Suit.Records().Size() == 0);
+    Suit.EnterPassage(false);
+    assert(Suit.Records().Size() == 0);
+
+    constexpr FlarePattern Schedule{4.5, 3.0, 2.0, 35.0, 3.0};
+    RadiationExposure FirstRun(Schedule);
+    Suit.EnterPassage(true);
+    Suit.SetFlashlight(true);
+    assert(!Suit.SpendInPassage(40.0f));
+    assert(Suit.AdvanceExposure(FirstRun, RadiationPosition::Exposed, 20.0));
+    assert(Suit.RadiationDose().IsLethal());
+
+    // A fresh passage world starts a fresh forecast cycle while retaining the session archive.
+    Suit.EnterPassage(true);
+    assert(Suit.OxygenPercent() == 100.0f);
+    assert(Suit.RadiationDose().Percent() == 0.0);
+    assert(!Suit.IsFlashlightOn());
+    assert(Suit.Records().Size() == 1);
+    assert(Suit.Records().At(0) == SuitRecord::ForecastSynchronized);
+
+    RadiationExposure Retry(Schedule);
+    assert(!Suit.AdvanceExposure(Retry, RadiationPosition::Exposed, 2.0));
+    assert(!Suit.SpendInPassage(25.0f));
+    Suit.SetFlashlight(true);
+    const float RemainingOxygen = Suit.OxygenPercent();
+    assert(RemainingOxygen < 100.0f);
+    assert(Suit.EnterStation() == 4.0);
+    assert(Suit.EnterStation() == 0.0);
+    assert(Suit.RadiationDose().Percent() == 0.0);
+    assert(Suit.OxygenPercent() == RemainingOxygen && Suit.IsFlashlightOn());
+    assert(Suit.Records().At(1) == SuitRecord::Decontaminated);
+
+    Suit.Resupply();
+    Suit.Resupply();
+    assert(Suit.OxygenPercent() == 100.0f && Suit.IsFlashlightOn());
+    assert(Suit.Records().Size() == 3);
+    assert(Suit.Records().At(2) == SuitRecord::OxygenRestored);
+    assert(SuitSession{}.Records().Size() == 0);
+}
 }
 
 int main()
@@ -542,4 +587,5 @@ int main()
     TestDev20Transfer();
     TestPlateBalance();
     TestSuitTerminal();
+    TestSuitSessionRecovery();
 }
