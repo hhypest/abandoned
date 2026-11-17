@@ -29,7 +29,7 @@ void AVanguardRouteGameMode::VerifyRadiation(AVanguardCharacter& Player, float D
     if (AtStation())
     {
         if (Reading || !Session || !Session->bRecoveredFromRadiation || !HasClearedRadiation() ||
-            Session->Dose.Percent() != 0.0)
+            Session->Suit.RadiationDose().Percent() != 0.0)
         {
             Fail(TEXT("the station should clear the remaining dose after a full passage run"));
             return;

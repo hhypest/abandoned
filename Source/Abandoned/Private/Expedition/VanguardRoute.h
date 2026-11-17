@@ -4,11 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Application/Expedition/MantleRequest.h"
+#include "Application/Expedition/SuitSession.h"
 #include "Application/Expedition/SuitTerminal.h"
 #include "Domain/Expedition/EntryRoute.h"
 #include "Domain/Expedition/FallImpact.h"
 #include "Domain/Expedition/RadiationExposure.h"
-#include "Domain/Expedition/SuitSupply.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
 #include "Infrastructure/Expedition/UnrealMantle.h"
@@ -32,10 +32,7 @@ class UVanguardSession final : public UGameInstanceSubsystem
     GENERATED_BODY()
 
 public:
-    Abandoned::Domain::Expedition::SuitSupply Suit;
-    Abandoned::Domain::Expedition::RadiationDose Dose;
-    Abandoned::Domain::Expedition::SuitArchive Archive;
-    bool bFlashlightOn = false;
+    Abandoned::Application::Expedition::SuitSession Suit;
 #if WITH_DEV_AUTOMATION_TESTS
     bool bRecoveredFromRadiation = false;
 #endif
@@ -65,7 +62,7 @@ private:
     UVanguardSession* GetSession() const;
     Abandoned::Application::Expedition::SuitTelemetry GetSuitTelemetry() const;
     void RecordLanding(double SurfaceHeight);
-    bool TickRadiation(const FVector& Position, float DeltaSeconds, Abandoned::Domain::Expedition::RadiationDose& Dose);
+    bool TickRadiation(const FVector& Position, float DeltaSeconds, Abandoned::Application::Expedition::SuitSession& Suit);
     void RestartRadiationPassage();
     void TickPassage(AVanguardCharacter& Player, float DeltaSeconds);
 #if WITH_DEV_AUTOMATION_TESTS
