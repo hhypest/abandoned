@@ -1,15 +1,19 @@
 #pragma once
 
 #include "Domain/Expedition/EntryRoute.h"
+#include "Domain/Expedition/SuitArchive.h"
 
 namespace Abandoned::Application::Expedition
 {
 using Domain::Expedition::Segment;
 
+enum class CheckpointIssue { None, Unreadable, UnsupportedVersion, UnknownCheckpoint, InvalidArchive };
+
 struct Checkpoint
 {
     std::optional<Segment> Chamber;
-    bool Incompatible = false;
+    CheckpointIssue Issue = CheckpointIssue::None;
+    Domain::Expedition::SuitArchive Archive;
 };
 
 class CheckpointStore
@@ -23,7 +27,7 @@ public:
 struct CourseStart
 {
     Segment Current = Segment::Stairs;
-    bool CheckpointFallback = false;
+    CheckpointIssue Issue = CheckpointIssue::None;
     bool StandaloneBalance = false;
 };
 
@@ -31,18 +35,22 @@ inline CourseStart StartCourse(std::optional<Segment> Requested, const Checkpoin
 {
     if (Requested)
     {
-        return {*Requested, false, *Requested == Segment::Balance && !CampaignTravel};
+        return {*Requested, CheckpointIssue::None, *Requested == Segment::Balance && !CampaignTravel};
     }
     if (Store)
     {
         const Checkpoint Existing = Store->Read();
-        if (Existing.Incompatible || (Existing.Chamber && !Domain::Expedition::IsCheckpoint(*Existing.Chamber)))
+        if (Existing.Issue != CheckpointIssue::None)
         {
-            return {Segment::Stairs, true};
+            return {Segment::Stairs, Existing.Issue};
+        }
+        if (Existing.Chamber && !Domain::Expedition::IsCheckpoint(*Existing.Chamber))
+        {
+            return {Segment::Stairs, CheckpointIssue::UnknownCheckpoint};
         }
         if (Existing.Chamber)
         {
-            return {*Existing.Chamber, false};
+            return {*Existing.Chamber};
         }
     }
     return {};
@@ -50,7 +58,7 @@ inline CourseStart StartCourse(std::optional<Segment> Requested, const Checkpoin
 
 inline bool RecordArrival(CourseStart State, const CheckpointStore& Store)
 {
-    return State.CheckpointFallback || State.StandaloneBalance ||
+    return State.Issue != CheckpointIssue::None || State.StandaloneBalance ||
         !Domain::Expedition::IsCheckpoint(State.Current) || Store.Write(State.Current);
 }
 
@@ -66,7 +74,7 @@ inline Segment PassageCheckpoint(std::optional<Segment> Origin, const Checkpoint
         return *Origin;
     }
     const Checkpoint Existing = Store ? Store->Read() : Checkpoint{};
-    if (!Existing.Incompatible && Existing.Chamber && Domain::Expedition::IsCheckpoint(*Existing.Chamber))
+    if (Existing.Issue == CheckpointIssue::None && Existing.Chamber && Domain::Expedition::IsCheckpoint(*Existing.Chamber))
     {
         return *Existing.Chamber;
     }

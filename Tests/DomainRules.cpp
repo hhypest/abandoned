@@ -36,7 +36,7 @@ struct MemoryCheckpoint final : CheckpointStore
     bool Write(Segment Value) const override
     {
         ++Writes;
-        Data = {Value, false};
+        Data = {Value};
         return true;
     }
 };
@@ -76,9 +76,9 @@ void TestRouteAndCheckpoint()
     assert(Resumed.Current == Segment::Balance && NextCourseSegment(Resumed) == Segment::Passage);
     assert(PassageCheckpoint(Segment::Sandbox, &Store) == Segment::Balance);
 
-    Store.Data = {Segment::Vanguard, false};
+    Store.Data = {Segment::Vanguard};
     const CourseStart Recovered = StartCourse(std::nullopt, &Store);
-    assert(Recovered.CheckpointFallback && Recovered.Current == Segment::Stairs);
+    assert(Recovered.Issue == CheckpointIssue::UnknownCheckpoint && Recovered.Current == Segment::Stairs);
     assert(RecordArrival(Recovered, Store));
     assert(Store.Writes == 2);
     assert(PassageCheckpoint(std::nullopt, &Store) == Segment::Weight);

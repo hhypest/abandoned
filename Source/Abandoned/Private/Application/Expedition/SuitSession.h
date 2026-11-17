@@ -40,6 +40,16 @@ public:
     float OxygenPercent() const { return Supply.Percent(); }
     const Domain::Expedition::RadiationDose& RadiationDose() const { return Dose; }
     const Domain::Expedition::SuitArchive& Records() const { return Archive; }
+    void RestoreRecords(const Domain::Expedition::SuitArchive& Saved)
+    {
+        for (std::size_t Index = 0; Index < Saved.Size(); ++Index)
+        {
+            if (const auto Record = Saved.At(Index))
+            {
+                Archive.Reveal(*Record);
+            }
+        }
+    }
     bool IsFlashlightOn() const { return FlashlightOn; }
     void SetFlashlight(bool On) { FlashlightOn = On; }
     bool SpendInPassage(float DeltaSeconds) { return Supply.SpendInPassage(DeltaSeconds); }

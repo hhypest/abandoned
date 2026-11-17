@@ -63,7 +63,8 @@ public:
     float GetMeasuredMass(int32 Index = 0) const { return PlateLoads.IsValidIndex(Index) ? PlateLoads[Index] : 0.0f; }
     const TArray<float>& GetPlateLoads() const { return PlateLoads; }
     bool IsExitEnabled() const;
-    bool DidCheckpointFallback() const { return Course.CheckpointFallback; }
+    Abandoned::Application::Expedition::CheckpointIssue GetCheckpointIssue() const { return Course.Issue; }
+    bool HasCheckpointWriteFailed() const { return bCheckpointWriteFailed; }
     void PressButton();
     bool IsPlatePressed(int32 Index = 0) const { return Plates.IsValidIndex(Index) && Plates[Index].bPressed; }
     bool IsDoorOpen() const;
@@ -85,6 +86,7 @@ private:
     bool HasStackAtExit() const;
     void SelectLayout(const FString& Options);
     void SaveEntryCheckpoint();
+    bool bCheckpointWriteFailed = false;
     void AdvanceCourse(const ATrainingChamberCharacter& Player);
 
 #if WITH_DEV_AUTOMATION_TESTS

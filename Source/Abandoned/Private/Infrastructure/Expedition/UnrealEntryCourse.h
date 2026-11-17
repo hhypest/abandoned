@@ -10,8 +10,14 @@ class UnrealCheckpointStore final : public Application::Expedition::CheckpointSt
 public:
     Application::Expedition::Checkpoint Read() const override;
     bool Write(Domain::Expedition::Segment Chamber) const override;
+    bool RecordResupply() const;
+
+private:
+    bool Update(std::optional<Domain::Expedition::Segment> Chamber,
+        std::optional<Domain::Expedition::SuitRecord> Record) const;
 };
 
+const TCHAR* CheckpointIssueText(Application::Expedition::CheckpointIssue Issue);
 std::optional<Domain::Expedition::Segment> ReadSegment(const FString& Id);
 FString WriteSegment(Domain::Expedition::Segment Value);
 void TravelToSegment(const UObject* WorldContext, Domain::Expedition::Segment Destination,

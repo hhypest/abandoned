@@ -51,6 +51,7 @@ public:
     bool AtStation() const;
     bool HasResupplied() const { return bResupplied; }
     bool HasClearedRadiation() const { return bClearedRadiation; }
+    bool HasCheckpointWriteFailed() const { return bCheckpointWriteFailed; }
     float GetOxygenPercent() const;
     std::optional<Abandoned::Domain::Expedition::DosimeterReading> GetDosimeter() const;
     bool HasMinorInjuryNotice() const { return InjuryRecovery.IsActive(); }
@@ -132,6 +133,8 @@ private:
     bool bTravelling = false;
     bool bResupplied = false;
     bool bClearedRadiation = false;
+    bool bCampaignRoute = false;
+    bool bCheckpointWriteFailed = false;
     std::optional<double> LastGroundHeight;
     Abandoned::Domain::Expedition::FallImpact LandingImpact = Abandoned::Domain::Expedition::FallImpact::None;
     Abandoned::Domain::Expedition::MinorInjuryRecovery InjuryRecovery;
