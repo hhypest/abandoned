@@ -1,0 +1,47 @@
+name: Architecture checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  cpp20-and-lfs:
+    name: C++20 and Git LFS
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+
+      - name: Check the diff
+        shell: pwsh
+        env:
+          DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Could not identify the tested revision.' }
+          git diff --check $env:DIFF_BASE HEAD --
+          if ($LASTEXITCODE -ne 0) { throw 'Diff checks failed.' }
+
+      - name: Check Git LFS
+        shell: pwsh
+        run: ./Scripts/Test-GitLfs.ps1
+
+      - name: Build and run standalone C++20 tests
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -products '*' -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0 -or !$vs) { throw 'Visual Studio 2022 with MSVC x64 is required.' }
+          & (Join-Path $vs 'Common7/Tools/Launch-VsDevShell.ps1') -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
+          Write-Output "MSVC $env:VCToolsVersion, Windows SDK $env:WindowsSDKVersion"
+          ./Scripts/Test-Architecture.ps1
