@@ -1,4 +1,5 @@
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
+#include "Infrastructure/Expedition/UnrealWorldTravel.h"
 
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -13,28 +14,24 @@ UDev20TransferSession* Dev20Session(const UObject* Context)
     return Game ? Game->GetSubsystem<UDev20TransferSession>() : nullptr;
 }
 
-void ReturnToDev20Station(const UObject* Context, bool bRecovering)
+void ReturnToDev20Station(const UObject* Context, Dev20Entry Entry)
 {
     if (auto* Session = Dev20Session(Context))
     {
         Session->Transfer.RecoverAtStation();
-        UGameplayStatics::OpenLevel(Context, FName(TEXT("/Engine/Maps/Entry")), true, bRecovering
-            ? TEXT("game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1?Dev20Recovered=1")
-            : TEXT("game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"));
+        TravelToWorld(Context, Dev20Destination{Dev20Stage::Station, Entry});
     }
 }
 
 bool TravelWithDev20(const UObject* Context, Dev20Stage From, bool bHeld)
 {
     auto* Session = Dev20Session(Context);
-    if (!Session || !Session->Transfer.Depart(From, bHeld))
+    const auto Next = Session ? Session->Transfer.Depart(From, bHeld) : std::nullopt;
+    if (!Next)
     {
         return false;
     }
-    // Stage identifiers are translated at the world boundary. The payload stays in GameInstance.
-    UGameplayStatics::OpenLevel(Context, FName(TEXT("/Engine/Maps/Entry")), true, From == Dev20Stage::Station
-        ? TEXT("game=/Script/Abandoned.TrainingChamberGameMode?Chamber=Button?Dev20Run=1")
-        : TEXT("game=/Script/Abandoned.TrainingChamberGameMode?Chamber=Weight?Dev20Run=1"));
+    TravelToWorld(Context, Dev20Destination{*Next});
     return true;
 }
 }

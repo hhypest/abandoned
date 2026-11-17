@@ -10,15 +10,15 @@ class Dev20Transfer
 public:
     using Stage = Domain::Expedition::Dev20Stage;
 
-    bool Depart(Stage From, bool Held)
+    std::optional<Stage> Depart(Stage From, bool Held)
     {
         const auto Next = Domain::Expedition::NextDev20Stage(From);
         if (!Held || Current != From || Pending || !Next)
         {
-            return false;
+            return std::nullopt;
         }
         Pending = Next;
-        return true;
+        return Pending;
     }
 
     bool IsExpected(Stage Destination) const { return Pending == Destination; }

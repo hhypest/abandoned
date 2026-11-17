@@ -6,6 +6,7 @@
 #include "Application/Expedition/MantleRequest.h"
 #include "Application/Expedition/SuitSession.h"
 #include "Application/Expedition/SuitTerminal.h"
+#include "Application/Expedition/WorldRoute.h"
 #include "Domain/Expedition/EntryRoute.h"
 #include "Domain/Expedition/FallImpact.h"
 #include "Domain/Expedition/RadiationExposure.h"
@@ -128,12 +129,11 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> SupplyCabinet;
 
-    Abandoned::Domain::Expedition::Segment Current = Abandoned::Domain::Expedition::Segment::Passage;
-    Abandoned::Domain::Expedition::Segment ReturnCheckpoint = Abandoned::Domain::Expedition::Segment::Weight;
+    Abandoned::Application::Expedition::VanguardDestination Destination;
+    std::optional<Abandoned::Application::Expedition::WorldDestination> RecoveryDestination;
     bool bTravelling = false;
     bool bResupplied = false;
     bool bClearedRadiation = false;
-    bool bCampaignRoute = false;
     bool bCheckpointWriteFailed = false;
     std::optional<double> LastGroundHeight;
     Abandoned::Domain::Expedition::FallImpact LandingImpact = Abandoned::Domain::Expedition::FallImpact::None;

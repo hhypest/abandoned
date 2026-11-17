@@ -16,9 +16,9 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformMisc.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
+#include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "InputCoreTypes.h"
 #include "InputKeyEventArgs.h"
-#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -32,12 +32,12 @@ DEFINE_LOG_CATEGORY_STATIC(LogVanguardRoute, Log, All);
 
 namespace
 {
-using Abandoned::Domain::Expedition::Segment;
+using Abandoned::Application::Expedition::RouteEntry;
+using Abandoned::Application::Expedition::VanguardDestination;
+using Abandoned::Application::Expedition::VanguardStop;
 using Abandoned::Domain::Expedition::FallImpact;
 using Abandoned::Domain::Expedition::RadiationPosition;
-using Abandoned::Infrastructure::Expedition::TravelToRadiationPassage;
-using Abandoned::Infrastructure::Expedition::ReadSegment;
-using Abandoned::Infrastructure::Expedition::TravelToSegment;
+using Abandoned::Infrastructure::Expedition::TravelToWorld;
 constexpr double VanguardAirlockTravelCm = 280.0;
 constexpr double SupplyReach = 240.0;
 
@@ -92,20 +92,26 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         ErrorMessage = TEXT("Invalid Vanguard flashlight configuration.");
         return;
     }
-    Current = ReadSegment(UGameplayStatics::ParseOption(Options, TEXT("Chamber"))) == Segment::Vanguard
-        ? Segment::Vanguard : Segment::Passage;
-    if (!AtStation() && UGameplayStatics::ParseOption(Options, TEXT("RadiationRun")) == TEXT("1"))
+    using namespace Abandoned::Infrastructure::Expedition;
+    const auto Route = ReadWorldDestination(Options, EntryWorld::Vanguard, ErrorMessage);
+    if (!Route)
+    {
+        return;
+    }
+    Destination = std::get<VanguardDestination>(*Route);
+    if (Destination.Stop == VanguardStop::RadiationPassage)
     {
         RadiationLayout = GetDefault<UVanguardRadiationLayout>();
     }
-    bCampaignRoute = !RadiationLayout && GetWorld()->WorldType == EWorldType::Game &&
-        UGameplayStatics::ParseOption(Options, TEXT("EntryCourse")) == TEXT("1");
-    if (!AtStation() && !RadiationLayout)
+    if (GetWorld()->WorldType != EWorldType::Game)
     {
-        const Abandoned::Infrastructure::Expedition::UnrealCheckpointStore Store;
-        const auto Origin = ReadSegment(UGameplayStatics::ParseOption(Options, TEXT("Checkpoint")));
-        ReturnCheckpoint = Abandoned::Application::Expedition::PassageCheckpoint(
-            Origin, GetWorld()->WorldType == EWorldType::Game ? &Store : nullptr);
+        Destination.Entry = RouteEntry::Direct;
+    }
+    if (!AtStation())
+    {
+        const UnrealCheckpointStore Store;
+        RecoveryDestination = Abandoned::Application::Expedition::PassageRecovery(
+            Destination, GetWorld()->WorldType == EWorldType::Game ? &Store : nullptr);
     }
     const auto* Passage = RadiationLayout ? static_cast<const UVanguardPassageLayout*>(RadiationLayout.Get())
                                           : GetDefault<UVanguardPassageLayout>();
@@ -223,7 +229,7 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     }
     if (UVanguardSession* Session = GetSession())
     {
-        if (bCampaignRoute)
+        if (Destination.Entry == RouteEntry::Campaign)
         {
             const auto Saved = Abandoned::Infrastructure::Expedition::UnrealCheckpointStore{}.Read();
             Session->Suit.RestoreRecords(Saved.Archive);
@@ -321,7 +327,7 @@ UVanguardSession* AVanguardRouteGameMode::GetSession() const
 
 bool AVanguardRouteGameMode::AtStation() const
 {
-    return Current == Segment::Vanguard;
+    return Destination.Stop == VanguardStop::Station;
 }
 
 float AVanguardRouteGameMode::GetOxygenPercent() const
@@ -367,10 +373,10 @@ bool AVanguardRouteGameMode::TickRadiation(const FVector& Position, float DeltaS
 
 void AVanguardRouteGameMode::RestartRadiationPassage()
 {
-    if (Radiation && !bTravelling)
+    if (Destination.Stop == VanguardStop::RadiationPassage && RecoveryDestination && !bTravelling)
     {
         bTravelling = true;
-        TravelToRadiationPassage(this);
+        TravelToWorld(this, *RecoveryDestination);
     }
 }
 
@@ -381,7 +387,7 @@ void AVanguardRouteGameMode::Resupply()
         Session->Suit.Resupply();
         bResupplied = true;
         UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard oxygen supply restored."));
-        if (bCampaignRoute
+        if (Destination.Entry == RouteEntry::Campaign
 #if WITH_DEV_AUTOMATION_TESTS
             && (!bVerifyRoute || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint")))
 #endif
@@ -464,27 +470,20 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
             }
 #endif
         }
-        if (Radiation)
+        if (const auto* Chamber = std::get_if<ChamberDestination>(&*RecoveryDestination); Chamber && Chamber->Chamber)
         {
-            RestartRadiationPassage();
-        }
-        else
-        {
-            bTravelling = true;
             UE_LOG(LogVanguardRoute, Display, TEXT("Passage checkpoint recovery: %s (%s)."),
-                *Abandoned::Infrastructure::Expedition::WriteSegment(ReturnCheckpoint),
+                *Abandoned::Infrastructure::Expedition::WriteSegment(*Chamber->Chamber),
                 bOxygenDepleted ? TEXT("oxygen depleted") : TEXT("fall"));
-            TravelToSegment(this, ReturnCheckpoint);
         }
+        bTravelling = true;
+        TravelToWorld(this, *RecoveryDestination);
         return;
     }
     if (Outcome == PassageOutcome::EnterSanctuary)
     {
-        if (const auto Next = Abandoned::Domain::Expedition::NextSegment(Current))
-        {
-            bTravelling = true;
-            TravelToSegment(this, *Next, bCampaignRoute ? std::optional{ReturnCheckpoint} : std::nullopt);
-        }
+        bTravelling = true;
+        TravelToWorld(this, StationAfterPassage(Destination, *RecoveryDestination));
     }
 }
 
@@ -497,7 +496,7 @@ void AVanguardRouteGameMode::Tick(float DeltaSeconds)
     {
         return;
     }
-    if (!AtStation() && IsValid(Door))
+    if (!AtStation() && RecoveryDestination && IsValid(Door))
     {
         TickPassage(*Player, DeltaSeconds);
     }

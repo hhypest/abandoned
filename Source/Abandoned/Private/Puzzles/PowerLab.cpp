@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
 #include "Puzzles/PowerLabLayout.h"
@@ -50,7 +51,8 @@ APowerLabGameMode::APowerLabGameMode()
 void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FString& Error)
 {
     Super::InitGame(Map, Options, Error);
-    if (!Error.IsEmpty())
+    using namespace Abandoned::Infrastructure::Expedition;
+    if (!Error.IsEmpty() || !ReadWorldDestination(Options, EntryWorld::Optics, Error))
     {
         return;
     }
