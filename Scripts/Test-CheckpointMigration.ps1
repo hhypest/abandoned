@@ -31,9 +31,11 @@ function Invoke-Game($Profile, $Name, $Map, $Markers, $Flag = '') {
     try {
         while ($watch.Elapsed.TotalSeconds -lt 90) {
             if (Test-Path -LiteralPath $log) {
-                $text = [string](Get-Content -LiteralPath $log -Raw)
-                if ($text -match ': Error:|Fatal error:') { throw "Unexpected error in $log" }
-                if (!($expected | Where-Object { !$text.Contains($_) })) { return }
+                $text = Get-Content -LiteralPath $log -Raw
+                if ($text) {
+                    if ($text -match ': Error:|Fatal error:') { throw "Unexpected error in $log" }
+                    if (!($expected | Where-Object { !$text.Contains($_) })) { return }
+                }
             }
             if ($game.HasExited) { break }
             Start-Sleep -Milliseconds 300
