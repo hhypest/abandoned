@@ -25,7 +25,19 @@
 
 ## Автопрогоны Vulkan
 
-Из корня проекта подставьте путь к своему UE 5.7. Меняйте `$map` и `$test` по таблице. Для повтора на 120 Гц задайте `$hz = 120`. Проверяйте код завершения и журнал. Запускатель задаёт отдельный каталог пользовательских данных.
+Соберите `AbandonedEditor Win64 Development` для проверяемого коммита. Запустите из корня проекта в PowerShell 7, подставив путь к UE 5.7.
+
+```powershell
+pwsh -NoProfile -File Scripts/Invoke-UeVerification.ps1 -EngineRoot 'C:\Program Files\Epic Games\UE_5.7'
+```
+
+Запускатель проверяет `EntryCourse`, `WristTerminal` и `WristTerminalNegative`. У каждого сценария отдельный профиль внутри `Saved/UeVerification/<запуск>`. Там находятся журналы и общий `report.json` с SHA, состоянием отслеживаемых файлов, версией UE, RHI, GPU и результатами. Для одного сценария добавьте `-Scenario WristTerminal`, для шага 120 кадров/с — `-FramesPerSecond 120`. Параметр `-TimeoutSeconds` ограничивает время ожидания каждого процесса.
+
+Успех требует Vulkan SM5, кода `0`, всех ожидаемых маркеров и отсутствия ошибок. Отрицательный контроль запускает проверку терминала сразу на станции с пустым архивом. Он должен зарегистрировать предусмотренный провал с `ExpectedFailure`, даже если Unreal завершится с кодом `0`. Таймаут, посторонняя ошибка, отсутствие маркеров или неожиданное поведение отрицательного контроля дают `Failed` и ненулевой код запускателя. GitHub Actions выполняет автономные C++20-тесты и Git LFS. UE-прогон выполняется локально на доверенной Windows-машине с Vulkan.
+
+### Остальные сценарии и ручной запуск
+
+Меняйте `$map` и `$test` по таблице. Для повтора на 120 Гц задайте `$hz = 120`. Смотрите код завершения и маркеры конкретного сценария в журнале.
 
 ```powershell
 $editor = 'C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor.exe'
@@ -38,7 +50,7 @@ $test = '-VerifyEntryCourse'
 $hz = 60
 $args = '"{0}" "{1}" {2} -game -vulkan -unattended -windowed -ResX=1280 -ResY=720 -benchmark -fps={3} -UserDir="{4}" -abslog="{5}"' -f $project, $map, $test, $hz, $profile, $log
 $run = Start-Process $editor -ArgumentList $args -Wait -PassThru
-if ($run.ExitCode -ne 0) { throw "Unreal exit code $($run.ExitCode). See $log" }
+"Unreal exit code $($run.ExitCode). See $log"
 ```
 
 | Сценарий | Суффикс карты `/Engine/Maps/Entry` | Флаги | Признак успеха в журнале |
