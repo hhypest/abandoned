@@ -19,7 +19,7 @@
 
 | Область | Решение проекта |
 | --- | --- |
-| RHI и шейдеры | Vulkan Desktop, `SF_VULKAN_SM6`, Deferred Rendering |
+| RHI и шейдеры | Vulkan Desktop, `SF_VULKAN_SM6`, Deferred Rendering. HLSL 2021 компилируется через DXC в SPIR-V. |
 | Геометрия | Поддержка Nanite включена. При импорте флаг Nanite выбирается для конкретного Static Mesh после проверки материалов и формы. |
 | Освещение | Lumen GI и Lumen Reflections с программной трассировкой по distance fields. Генерация Mesh Distance Fields включена. |
 | Тени | Virtual Shadow Maps. Качество теней меняется через штатную scalability-группу. |
@@ -28,7 +28,7 @@
 | Аппаратная трассировка | В текущем профиле `r.RayTracing=False`, `r.Lumen.HardwareRayTracing=False`. |
 | Переносимость | Общий профиль для AMD, NVIDIA и Intel Arc. Механика головоломок и сигналы питания читаются при снижении качества. |
 
-В установленной UE 5.7.4 секция `ShaderPlatform VULKAN_SM6` в `Engine/Config/VulkanPC/DataDrivenPlatformInfo.ini` объявляет поддержку Nanite, Lumen GI, distance fields и 64-разрядных image atomics. Драйвер и устройство должны пройти проверку возможностей Vulkan при запуске. Профиль SM6 позволяет использовать современные возможности рендера с тем же API Vulkan. [Возможности рендер-путей Epic](https://dev.epicgames.com/documentation/en-us/unreal-engine/supported-features-by-rendering-path-for-desktop-with-unreal-engine?application_version=5.7)
+В установленной UE 5.7.4 секция `ShaderPlatform VULKAN_SM6` в `Engine/Config/VulkanPC/DataDrivenPlatformInfo.ini` объявляет поддержку Nanite, Lumen GI, distance fields и 64-разрядных image atomics. `VulkanShaderCompiler.cpp` выбирает для SM6 целевое окружение Vulkan 1.3. Драйвер и устройство должны поддерживать этот профиль и пройти проверку возможностей Vulkan при запуске. Профиль SM6 позволяет использовать современные возможности рендера с тем же API Vulkan. [Возможности рендер-путей Epic](https://dev.epicgames.com/documentation/en-us/unreal-engine/supported-features-by-rendering-path-for-desktop-with-unreal-engine?application_version=5.7)
 
 High выбран как исходный бюджет под 60 FPS. Epic использует High для своего бюджета 60 FPS Lumen, а стоимость сцены Abandoned измеряется отдельно. Программная трассировка поддерживает общий путь освещения выбранных GPU. [Руководство производительности Lumen](https://dev.epicgames.com/documentation/en-us/unreal-engine/lumen-performance-guide-for-unreal-engine?application_version=5.7)
 
