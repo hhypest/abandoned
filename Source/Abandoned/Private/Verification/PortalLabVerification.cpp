@@ -140,6 +140,10 @@ void UPortalLabVerification::Fail(const TCHAR* Reason)
 void UPortalLabVerification::EndPlay(const EEndPlayReason::Type Reason)
 {
     Input.Release();
+    if (APlayerController* Viewer = ScriptedViewer.Get())
+    {
+        Viewer->SetIgnoreLookInput(false);
+    }
     Super::EndPlay(Reason);
 }
 
@@ -208,6 +212,9 @@ void UPortalLabVerification::Check(FPortalLabFixture& Fixture)
                 Fail(TEXT("The unpowered portal was not solid"));
                 return;
             }
+            // The scenario stages its own view. Desktop mouse motion must not rotate the camera between screenshots.
+            ScriptedViewer = &Fixture.Controller;
+            ScriptedViewer->SetIgnoreLookInput(true);
             Fixture.AimFrom(Layout.Arrival.Console + FVector(0, 120, 0), Layout.Arrival.Console);
             Input.Press(Fixture.Controller, EKeys::E);
             Next(EPhase::Power, TEXT("Testing the console from the closed entrance."));

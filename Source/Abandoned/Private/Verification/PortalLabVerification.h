@@ -32,6 +32,7 @@ private:
     EPhase Phase = EPhase::Closed;
     float Elapsed = 0.0f;
     TWeakObjectPtr<APuzzleCube> HeldCube;
+    TWeakObjectPtr<APlayerController> ScriptedViewer;
     FVerificationKeyPress Input;
     bool bCapture = false;
     bool bCapturedFirstFrame = false;
