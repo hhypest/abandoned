@@ -5,6 +5,7 @@
 #include "Verification/ParallelCircuitVerification.h"
 #include "Verification/PlateBalanceVerification.h"
 #include "Verification/TrainingVerification.h"
+#include "Verification/EntryChamberVerification.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
@@ -21,13 +22,9 @@
 #include "Expedition/Dev20Actor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "HAL/PlatformMisc.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
-#include "Kismet/GameplayStatics.h"
-#include "Misc/CommandLine.h"
-#include "Misc/Parse.h"
 #include "Infrastructure/Puzzles/CubePlacementComponent.h"
 #include "Puzzles/PuzzleCube.h"
 #include "Player/AbandonedTestController.h"
@@ -105,15 +102,12 @@ void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedi
         Layout = GetDefault<UTrainingChamberLayout>();
         return;
     }
-    bVerifyEntryCheckpoint = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint"));
-    bVerifyDev20 = Dev20Stage.has_value() && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
-    bVerifyEntryCourse = bVerifyDev20 || bVerifyEntryCheckpoint || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
     if (bVerifyDoorClamp)
     {
         Arrival.Chamber = Segment::Weight;
         bReadCheckpoint = false;
     }
-    else if (bVerifyEntryCourse && !bVerifyEntryCheckpoint)
+    else if (UEntryChamberVerification::IsRequested(bDev20Run) && !UEntryChamberVerification::UsesCheckpoint())
     {
         bReadCheckpoint = false;
     }
@@ -154,7 +148,8 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (UTrainingVerification::IsRequested() || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || UPlateBalanceVerification::IsStandaloneRequested() ||
+    if (UTrainingVerification::IsRequested() || (UEntryChamberVerification::IsRequested(bDev20Run) && !UEntryChamberVerification::UsesCheckpoint()) ||
+        UPlateBalanceVerification::IsStandaloneRequested() ||
         UChamberHintsVerification::IsRequested() ||
         Abandoned::Verification::WantsDoorClampVerification() || UParallelCircuitVerification::IsRequested())
     {
@@ -178,13 +173,6 @@ void ATrainingChamberGameMode::AdvanceCourse(const ATrainingChamberCharacter& Pl
             bReachedExit = Abandoned::Infrastructure::Expedition::TravelWithDev20(
                 this, Dev20Step::Button, IsValid(Dev20) && Player.GetHeldDev20() == Dev20);
         }
-#if WITH_DEV_AUTOMATION_TESTS
-        else if (bVerifyDev20 && Dev20Stage == Dev20Step::Weight)
-        {
-            UE_LOG(LogTrainingChamber, Display, TEXT("DEV-20 verification passed: portal, Button, Weight and final exit."));
-            FPlatformMisc::RequestExitWithStatus(false, 0);
-        }
-#endif
         return;
     }
     if (const auto Next = Abandoned::Application::Expedition::NextCourseDestination(Course))
@@ -337,18 +325,26 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     }
     SaveEntryCheckpoint();
 #if WITH_DEV_AUTOMATION_TESTS
+    const bool bVerifyCourse = UEntryChamberVerification::IsRequested(bDev20Run);
     if (Course.Current == Segment::Sandbox && UTrainingVerification::IsRequested())
     {
         UTrainingVerification::Attach(*this, Cubes, Plates);
     }
-    UChamberHintsVerification::Attach(*this);
-    if (Course.Current == Segment::Balance && (UPlateBalanceVerification::IsStandaloneRequested() || bVerifyEntryCourse))
+    else if (UChamberHintsVerification::IsRequested())
+    {
+        UChamberHintsVerification::Attach(*this);
+    }
+    else if (Course.Current == Segment::Button && UParallelCircuitVerification::IsRequested())
+    {
+        UParallelCircuitVerification::Attach(*this, Cubes, RelayTraces, RelayIdleMaterial, RelayPoweredMaterial);
+    }
+    else if (Course.Current == Segment::Balance && (UPlateBalanceVerification::IsStandaloneRequested() || bVerifyCourse))
     {
         UPlateBalanceVerification::Attach(*this, Cubes, Plates);
     }
-    if (Course.Current == Segment::Button && UParallelCircuitVerification::IsRequested())
+    else if (bVerifyCourse && (Course.Current == Segment::Stairs || Course.Current == Segment::Button || Course.Current == Segment::Weight))
     {
-        UParallelCircuitVerification::Attach(*this, Cubes, RelayTraces, RelayIdleMaterial, RelayPoweredMaterial);
+        UEntryChamberVerification::Attach(*this, Course.Current, Cubes);
     }
 #endif
     UDoorClampVerification::Attach(*this);
@@ -442,15 +438,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         bReachedExit = true;
         UE_LOG(LogTrainingChamber, Display, TEXT("Player reached the exit."));
         AdvanceCourse(*Player);
-        return;
     }
-
-#if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyEntryCourse && Course.Current != Segment::Balance)
-    {
-        VerifyEntryChamber(*Player, DeltaSeconds);
-    }
-#endif
 }
 
 bool ATrainingChamberGameMode::MoveDoor(ATrainingChamberCharacter& Player, float DeltaSeconds)
@@ -689,303 +677,6 @@ void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
     }
     bReachedExit = false;
 }
-
-#if WITH_DEV_AUTOMATION_TESTS
-void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds)
-{
-    CourseTestTime += DeltaSeconds;
-    const auto Fail = [this, &Player](const TCHAR* Reason)
-    {
-        UE_LOG(LogTrainingChamber, Error, TEXT("Entry test failed at %s step %d: %s. Mass %.2f, player %s."),
-            *WriteSegment(Course.Current), CourseTestStep, Reason, GetMeasuredMass(), *Player.GetActorLocation().ToCompactString());
-        bVerifyEntryCourse = false;
-        FPlatformMisc::RequestExitWithStatus(false, 1);
-    };
-    if (CourseTestTime > 9.0f)
-    {
-        Fail(TEXT("Timed out waiting for gameplay"));
-        return;
-    }
-    const bool bWeight = Course.Current == Segment::Weight;
-    const int32 ExitPlateIndex = Layout->UsesParallelPlates() &&
-        FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryAlternatePlate")) ? 1 : 0;
-    const bool bAlternateWeight = bWeight && FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryAlternateWeight"));
-    const int32 RequiredCubes = Course.Current == Segment::Stairs ? 3 : bAlternateWeight ? 4 : bWeight ? 2 : 1;
-    if (Cubes.Num() < RequiredCubes ||
-        Cubes.ContainsByPredicate([](const APuzzleCube* Cube) { return !IsValid(Cube); }))
-    {
-        Fail(TEXT("Missing cubes from the test layout"));
-        return;
-    }
-    if (CourseTestStep == 0 && CourseTestTime >= 0.3f && !bCapturedCourseScreenshot &&
-        FParse::Param(FCommandLine::Get(), TEXT("CaptureEntryCourse")))
-    {
-        FScreenshotRequest::RequestScreenshot(TEXT("Entry-") + WriteSegment(Course.Current), false, false);
-        bCapturedCourseScreenshot = true;
-        return;
-    }
-    const auto Step = [this](int32 Next)
-    {
-        CourseTestStep = Next;
-        CourseTestTime = 0.0f;
-    };
-    const auto AimFrom = [&Player](const FVector& From, const FVector& Target)
-    {
-        const FVector Eye = From + FVector(0.0, 0.0, Abandoned::MovementProfile::CameraHeight);
-        Player.PlaceAt(FTransform((Target - Eye).Rotation(), From));
-    };
-    if (bVerifyDev20 && Dev20TestPhase < 2)
-    {
-        if (Dev20TestPhase == 0 && CourseTestTime >= 0.25f)
-        {
-            TArray<AActor*> Units;
-            UGameplayStatics::GetAllActorsOfClass(this, ADev20Actor::StaticClass(), Units);
-            if (Units.Num() != 1 || Player.GetHeldDev20() != Dev20 ||
-                !FMath::IsNearlyEqual(Dev20->GetBody()->GetMass(), Dev20MassKg, 0.05f))
-            {
-                Fail(TEXT("Exactly one 34 kg DEV-20 must arrive in the grip"));
-                return;
-            }
-            Player.Interact();
-            if (Dev20Stage == Dev20Step::Button && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20Recovery")))
-            {
-                const FVector Below = Layout->GetCubeBounds().Min - FVector(0, 0, 100);
-                Dev20->RestoreAt(Below);
-                UE_LOG(LogTrainingChamber, Display, TEXT("DEV-20: exercising loss outside the Button chamber bounds."));
-                return;
-            }
-            Dev20->RestoreAt(FVector(Layout->Plate.Center.X, Layout->Plate.Center.Y,
-                Layout->GetPlateTop() + Dev20->GetBody()->GetUnscaledBoxExtent().Z + 0.2));
-            const FVector ButtonStart = Layout->Button.Center - FVector(156.0, 0.0, 0.0);
-            AimFrom(FVector(ButtonStart.X, ButtonStart.Y, Layout->Spawn.Z), Layout->Button.Center);
-            Player.Interact();
-            Dev20TestPhase = 1;
-            CourseTestTime = 0.0f;
-        }
-        else if (Dev20TestPhase == 1 && CourseTestTime >= 0.35f)
-        {
-            if (!IsButtonLatched() || !FMath::IsNearlyEqual(GetMeasuredMass(), Dev20MassKg, 0.05f) || IsExitEnabled())
-            {
-                Fail(TEXT("The armed chamber must weigh and reject a 34 kg DEV-20"));
-                return;
-            }
-            UE_LOG(LogTrainingChamber, Display, TEXT("DEV-20: %s measured and rejected 34 kg."),
-                *WriteSegment(Course.Current));
-            Dev20->RestoreAt(FVector(Layout->Door.Center.X - 360.0, Layout->Door.Center.Y, 20.0));
-            Dev20TestPhase = 2;
-            CourseTestTime = 0.0f;
-        }
-        return;
-    }
-    const auto Pickup = [&Player, &AimFrom, this](APuzzleCube& Cube, FVector Approach)
-    {
-        const FVector Body = Cube.GetActorLocation();
-        const FVector Start = Body - Approach * 156.0;
-        AimFrom(FVector(Start.X, Start.Y, Layout->Spawn.Z), Body);
-        Player.Interact();
-        return Player.GetHeldCube() == &Cube;
-    };
-    const auto AimHold = [&AimFrom, this](const FVector& Target, FVector Approach)
-    {
-        const double Height = Target.Z - Layout->Spawn.Z - Abandoned::MovementProfile::CameraHeight;
-        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(APuzzleCharacter::HoldDistanceCm) - FMath::Square(Height)));
-        const FVector Start = Target - Approach * Forward;
-        AimFrom(FVector(Start.X, Start.Y, Layout->Spawn.Z), Target);
-    };
-    const auto Aligned = [&Player](const UBoxComponent* Support)
-    {
-        const APuzzleCube* Held = Player.GetHeldCube();
-        return Held && Player.GetPlacementPreview().GetPreviewSupport() == Support && !Player.GetPlacementPreview().IsPreviewBlocked() &&
-            Held->GetBody()->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(28.0);
-    };
-
-    APuzzleCube& First = *Cubes[0];
-    if (Course.Current == Segment::Stairs)
-    {
-        APuzzleCube& Base = *Cubes[1];
-        APuzzleCube& Low = *Cubes[2];
-        if (CourseTestStep == 0 && CourseTestTime >= 0.35f)
-        {
-            if (!Pickup(First, FVector::ForwardVector))
-            {
-                Fail(TEXT("Could not pick up the small cube"));
-                return;
-            }
-            AimHold(Base.GetActorLocation() + FVector(0.0, 0.0, Base.GetHalfSize() + First.GetHalfSize() + 40.0),
-                FVector::RightVector);
-            Step(1);
-        }
-        else if (CourseTestStep == 1 && Aligned(Base.GetBody()))
-        {
-            Player.Interact();
-            if (First.GetSupport() != Base.GetBody())
-            {
-                Fail(TEXT("Small cube did not snap to the large one"));
-                return;
-            }
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Low.GetActorLocation() + FVector(-6.0, 0.0,
-                Low.GetHalfSize() + Abandoned::MovementProfile::StandingHalfHeight + 1.0)));
-            Step(2);
-        }
-        else if (CourseTestStep == 2 && Player.GetMovementBase() == Low.GetBody())
-        {
-            Player.AddMovementInput(FVector::ForwardVector);
-            if (Player.GetActorLocation().X >= Low.GetActorLocation().X + 7.0)
-            {
-                Player.Jump();
-                Step(3);
-            }
-        }
-        else if (CourseTestStep == 3)
-        {
-            Player.AddMovementInput(FVector::ForwardVector * 0.35);
-            if (Player.GetMovementBase() == First.GetBody())
-            {
-                Player.StopJumping();
-                Player.Jump();
-                Step(4);
-            }
-        }
-        else if (CourseTestStep == 4)
-        {
-            Player.AddMovementInput(FVector::ForwardVector);
-        }
-        return;
-    }
-
-    if (CourseTestStep == 0 && CourseTestTime >= 0.35f)
-    {
-        const FVector Position = Layout->Button.Center - FVector(156.0, 0.0, 0.0);
-        AimFrom(FVector(Position.X, Position.Y, Layout->Spawn.Z), Layout->Button.Center);
-        Player.Interact();
-        if (!IsButtonLatched() || IsExitEnabled() || !Pickup(First, FVector::ForwardVector))
-        {
-            Fail(TEXT("Wall button should arm the circuit and leave the unloaded door closed"));
-            return;
-        }
-        const FSceneBlock& ExitPlate = Layout->GetPlateAt(ExitPlateIndex);
-        const FVector HeldTarget = ExitPlate.Center + FVector(0.0, 0.0,
-            ExitPlate.Size.Z * 0.5 + First.GetHalfSize() + 40.0);
-        AimHold(HeldTarget, FVector::ForwardVector);
-        Step(1);
-    }
-    else if (CourseTestStep == 1 && Aligned(GetPlate(ExitPlateIndex)))
-    {
-        Player.Interact();
-        if (First.GetSupport() != GetPlate(ExitPlateIndex))
-        {
-            Fail(TEXT("Cube did not snap to the plate"));
-            return;
-        }
-        if (ExitPlateIndex == 1)
-        {
-            UE_LOG(LogTrainingChamber, Display, TEXT("Entry alternate solution: cube snapped to plate B."));
-        }
-        Step(2);
-    }
-    else if (CourseTestStep == 2 && bWeight && CourseTestTime >= 0.35f)
-    {
-        APuzzleCube& Second = *Cubes[bAlternateWeight ? 2 : 1];
-        if (GetMeasuredMass() != 10.0f || IsExitEnabled() || !Pickup(Second, FVector::ForwardVector))
-        {
-            Fail(TEXT("Weight lock must reject 10 kg even with its circuit armed"));
-            return;
-        }
-        const FVector HeldTarget = First.GetActorLocation() + FVector(0.0, 0.0,
-            First.GetHalfSize() + Second.GetHalfSize() + 35.0);
-        AimHold(HeldTarget, FVector::ForwardVector);
-        Step(3);
-    }
-    else if (CourseTestStep == 3 && Aligned(First.GetBody()))
-    {
-        Player.Interact();
-        if (Cubes[bAlternateWeight ? 2 : 1]->GetSupport() != First.GetBody())
-        {
-            Fail(TEXT("Second cube did not snap to the stack"));
-            return;
-        }
-        Step(bAlternateWeight ? 6 : 4);
-    }
-    else if (CourseTestStep == 6 && CourseTestTime >= 0.35f)
-    {
-        APuzzleCube& Middle = *Cubes[2];
-        APuzzleCube& Third = *Cubes[3];
-        if (GetMeasuredMass() != 15.0f || IsExitEnabled() || !Pickup(Third, FVector::ForwardVector))
-        {
-            Fail(TEXT("Weight lock must reject 15 kg"));
-            return;
-        }
-        AimHold(Middle.GetActorLocation() + FVector(0.0, 0.0,
-            Middle.GetHalfSize() + Third.GetHalfSize() + 35.0), FVector::ForwardVector);
-        Step(7);
-    }
-    else if (CourseTestStep == 7 && Aligned(Cubes[2]->GetBody()))
-    {
-        Player.Interact();
-        if (Cubes[3]->GetSupport() != Cubes[2]->GetBody() || Cubes[3]->CanSupportCube(*Cubes[2]))
-        {
-            Fail(TEXT("The third cube must snap on top, and the stack must reject a fourth cube"));
-            return;
-        }
-        UE_LOG(LogTrainingChamber, Display, TEXT("Entry test: alternate solution assembled, 10 + 5 + 5 kg."));
-        Step(4);
-    }
-    else if (((CourseTestStep == 2 && !bWeight) || CourseTestStep == 4) && IsDoorOpen())
-    {
-        if (bWeight && !bVerifyDev20 && !bVerifiedWeightReset)
-        {
-            Player.ResetChamber();
-            if (IsButtonLatched() || GetMeasuredMass() != 0.0f || IsExitEnabled() ||
-                !Door->GetComponentLocation().Equals(Layout->Door.Center))
-            {
-                Fail(TEXT("Reset did not restore chamber 03 after solving its weight lock"));
-                return;
-            }
-            bVerifiedWeightReset = true;
-            UE_LOG(LogTrainingChamber, Display, TEXT("Entry test: reset restored the weight lock, then the solution will be repeated."));
-            Step(0);
-            return;
-        }
-        UE_LOG(LogTrainingChamber, Display, TEXT("Entry test: %s accepted %.0f kg after the wall button."),
-            *WriteSegment(Course.Current), GetMeasuredMass(ExitPlateIndex));
-        Player.PlaceAt(FTransform(FRotator::ZeroRotator, FVector(Layout->Door.Center.X - 175.0,
-            Layout->Door.Center.Y, Layout->Spawn.Z)));
-        Step(5);
-    }
-    else if (CourseTestStep == 5)
-    {
-        Player.AddMovementInput(FVector::ForwardVector);
-        if (bVerifyDev20 && Layout->GetExitBounds().IsInside(Player.GetActorLocation()))
-        {
-            const FVector Item = Dev20->GetActorLocation();
-            AimFrom(FVector(Item.X - 140.0, Item.Y, Layout->Spawn.Z), Item);
-            Player.Interact();
-            if (Player.GetHeldDev20() != Dev20)
-            {
-                Fail(TEXT("Could not retrieve DEV-20 after solving the chamber"));
-                return;
-            }
-            if (AController* Controller = Player.GetController())
-            {
-                Controller->SetControlRotation(FRotator(-14, 0, 0));
-            }
-            UE_LOG(LogTrainingChamber, Display, TEXT("DEV-20: %s held the player at the exit until the unit was retrieved."),
-                *WriteSegment(Course.Current));
-            Step(8);
-        }
-    }
-    else if (CourseTestStep == 8 && bVerifyDev20)
-    {
-        if (Player.GetHeldDev20() != Dev20)
-        {
-            Fail(TEXT("Lost DEV-20 on the final approach to the exit"));
-            return;
-        }
-        Player.AddMovementInput(FVector::ForwardVector);
-    }
-}
-
-#endif
 
 bool ATrainingChamberGameMode::UseDevice(APuzzleCharacter&, UPrimitiveComponent& Target)
 {

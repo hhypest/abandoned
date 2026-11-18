@@ -37,6 +37,20 @@ pwsh -NoProfile -File Scripts/Invoke-UeVerification.ps1 -EngineRoot 'C:\Program 
 
 ### Остальные сценарии и ручной запуск
 
+Для регрессии сквозного маршрута, сохранений и переноса DEV‑20 используйте отдельный процесс Vulkan для каждого сценария.
+
+```powershell
+./Scripts/Invoke-UeVerification.ps1 -EngineRoot $ueRoot -Scenario EntryCourse,EntryCourseAlternate,EntryCheckpoint,EntryWeightNegative,Dev20,Dev20Recovery
+```
+
+| Сценарий | Критерий |
+| --- | --- |
+| `EntryCourse` | Камеры Stairs → Button → Weight → Balance в заданном порядке, затем уступ в переходе и станция. В Weight сброс возвращает весовую блокировку, и игрок собирает 20 кг повторно. |
+| `EntryCourseAlternate` | Тот же маршрут через плиту B в Button и стопку 10 + 5 + 5 кг в Weight. С `-Capture` сохраняются снимки первых трёх камер. |
+| `EntryCheckpoint` | Запускатель создаёт изолированный слот v2 с Weight и пустым архивом. UE восстанавливает Weight, переходит в Balance и доходит до станции. После завершения слот должен содержать Balance и одну запись `oxygen-restored`. |
+| `EntryWeightNegative` | Порог весовой камеры снижен до 10 кг в одном процессе. Преждевременное питание двери при частичной нагрузке должно дать `ExpectedFailure`. |
+| `Dev20` и `Dev20Recovery` | После портала узел приходит в Button и Weight в руках. Плиты измеряют 34 кг, выход пропускает игрока только с узлом. В отдельном прогоне потеря узла в Button возвращает игрока на станцию. |
+
 Для проверки постановки, переноски и команд устройств в камерах и на трёх стендах выполните команду в PowerShell 7.
 
 ```powershell

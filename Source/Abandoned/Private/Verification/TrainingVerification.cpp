@@ -1,4 +1,5 @@
 #include "Verification/TrainingVerification.h"
+#include "Verification/VerificationPlayerPose.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Components/BoxComponent.h"
@@ -18,21 +19,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogTrainingVerification, Log, All);
 
-namespace
-{
-void PlacePlayer(ATrainingChamberCharacter& Player, const FTransform& Start)
-{
-    const FRotator View = Start.Rotator();
-    Player.StopJumping();
-    Player.ConsumeMovementInputVector();
-    Player.SetBase(nullptr);
-    Player.SetActorLocationAndRotation(Start.GetLocation(), FRotator(0, View.Yaw, 0), false, nullptr, ETeleportType::TeleportPhysics);
-    Player.GetController()->SetControlRotation(View);
-    auto* Movement = Player.GetCharacterMovement();
-    Movement->StopMovementImmediately();
-    Movement->SetMovementMode(MOVE_Falling);
-}
-}
+using Abandoned::Verification::PlacePlayer;
 #endif
 
 UTrainingVerification::UTrainingVerification()
