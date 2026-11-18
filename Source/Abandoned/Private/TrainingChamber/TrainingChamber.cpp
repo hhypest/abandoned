@@ -1,6 +1,7 @@
 #include "TrainingChamber.h"
 #include "TrainingChamberLayout.h"
 #include "Verification/DoorClampVerification.h"
+#include "Verification/ChamberHintsVerification.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
@@ -76,15 +77,21 @@ void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedi
     }
     bool bReadCheckpoint = !bDev20Run && GetWorld()->WorldType == EWorldType::Game;
 #if WITH_DEV_AUTOMATION_TESTS
+    if (UChamberHintsVerification::IsRequested())
+    {
+        Arrival.Chamber = Segment::Weight;
+        Course = StartCourse(Arrival, nullptr);
+        Layout = UChamberHintsVerification::CreateFixtureLayout(*this);
+        return;
+    }
     bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
-    bVerifyHints = FParse::Param(FCommandLine::Get(), TEXT("VerifyChamberHints"));
     const bool bVerifyDoorClamp = Abandoned::Verification::WantsDoorClampVerification();
     bVerifyParallelCircuit = FParse::Param(FCommandLine::Get(), TEXT("VerifyParallelCircuit"));
     bVerifyBalance = FParse::Param(FCommandLine::Get(), TEXT("VerifyBalanceChamber"));
     bVerifyEntryCheckpoint = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint"));
     bVerifyDev20 = Dev20Stage.has_value() && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
     bVerifyEntryCourse = bVerifyDev20 || bVerifyEntryCheckpoint || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
-    if (bVerifyHints || bVerifyDoorClamp)
+    if (bVerifyDoorClamp)
     {
         Arrival.Chamber = Segment::Weight;
         bReadCheckpoint = false;
@@ -145,7 +152,7 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || bVerifyHints ||
+    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || UChamberHintsVerification::IsRequested() ||
         Abandoned::Verification::WantsDoorClampVerification() || bVerifyParallelCircuit)
     {
         return;
@@ -338,6 +345,9 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         Abandoned::Scene::AddLight(World, Light);
     }
     SaveEntryCheckpoint();
+#if WITH_DEV_AUTOMATION_TESTS
+    UChamberHintsVerification::Attach(*this);
+#endif
     UDoorClampVerification::Attach(*this);
     UE_LOG(LogTrainingChamber, Display, TEXT("Training chamber ready. %s, %d cubes, plate released, exit closed."),
         *WriteSegment(Course.Current), Cubes.Num());
@@ -433,11 +443,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     }
 
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyHints)
-    {
-        VerifyHints(*Player, DeltaSeconds);
-    }
-    else if (bVerifyParallelCircuit)
+    if (bVerifyParallelCircuit)
     {
         VerifyParallelCircuit(*Player, DeltaSeconds);
     }
