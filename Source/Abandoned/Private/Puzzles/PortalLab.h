@@ -82,6 +82,7 @@ private:
     bool bVerifyDev20 = false;
     bool bVerifyDev20RecoveryArrival = false;
     bool bCapture = false;
+    bool bRequestedFirstPortalFrame = false;
     int32 VerificationStep = 0;
     float VerificationTime = 0.0f;
     int32 Transfers = 0;
