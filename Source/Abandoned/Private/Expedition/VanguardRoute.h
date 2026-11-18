@@ -70,16 +70,9 @@ private:
     void Verify(AVanguardCharacter& Player, float DeltaSeconds);
     friend class UVanguardFallVerification;
     TWeakObjectPtr<class UVanguardFallVerification> FallCheck;
-    void VerifyRadiation(AVanguardCharacter& Player, float DeltaSeconds);
-    TWeakObjectPtr<class UVanguardWristTerminalVerification> WristCheck;
+    TWeakObjectPtr<class UVanguardRadiationVerification> RadiationCheck;
     TWeakObjectPtr<class UVanguardMantleVerification> MantleCheck;
-    enum class ERadiationVerification
-    {
-        Gate, WaitForFlare, LeaveShelter, ReturnToShelter, HoldInShelter, RecoverOutside, LethalExposure, RunToStation
-    };
     bool bVerifyRoute = false;
-    bool bVerifyRadiation = false;
-    bool bCaptureRadiation = false;
     bool bCaptureRoute = false;
     float VerificationSeconds = 0.0f;
     bool bCaptured = false;
@@ -87,9 +80,6 @@ private:
     bool bDoorPassed = false;
     bool bMovedToSupply = false;
     int FlashlightInputStep = 0;
-    ERadiationVerification RadiationVerification = ERadiationVerification::Gate;
-    double ProtectedDose = 0.0;
-    float ShelterSeconds = 0.0f;
 #endif
 
     UPROPERTY()
@@ -142,6 +132,7 @@ private:
     void ToggleFlashlight();
     void PlayInjuryBreath();
 #if WITH_DEV_AUTOMATION_TESTS
+    friend class UVanguardRadiationVerification;
     friend class UVanguardWristTerminalVerification;
     friend class UVanguardMantleVerification;
     friend class UVanguardFallVerification;

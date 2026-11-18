@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)]
     [string]$EngineRoot,
 
-    [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
+    [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
                  'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
@@ -47,6 +47,11 @@ $expectedRenderer = [ordered]@{
 }
 $renderQueries = $expectedRenderer.Keys -join ','
 $vanguard = "${entry}?game=/Script/Abandoned.VanguardRouteGameMode"
+$radiationPassage = "${vanguard}?Chamber=Passage?RadiationRun=1"
+$radiationSuccess = @('Radiation exposure increased dose during a flare:', 'Radiation shelter held dose at',
+                      'Radiation recovery outside the zone:', 'Radiation dose limit reached. Returning to the passage checkpoint.',
+                      'Radiation checkpoint restored: safe position, zero dose and fresh forecast.',
+                      'Vanguard station cleared remaining radiation dose:', 'Radiation passage verification passed')
 $wristSuccess = @('Wrist terminal verification passed', 'Radiation passage verification passed')
 $entryFinish = @('Entry test: reset restored the weight lock', 'Entry test: Weight accepted 20 kg',
                  'Entry test: crossed Weight exit.', 'First solution opened the door.', 'Alternate arrangement opened the door.',
@@ -101,8 +106,20 @@ $scenarios = @{
         ExpectedError = 'LogEntryChamberTest: Error: Entry test failed: weight lock must reject the partial stack'
         Success = @('Vanguard verification passed')
     }
+    Radiation = @{
+        Map = $radiationPassage
+        Flag = '-VerifyRadiation'
+        CaptureFlag = '-CaptureRadiation'
+        Success = $radiationSuccess
+    }
+    RadiationNegative = @{
+        Map = "${vanguard}?Chamber=Vanguard"
+        Flag = '-VerifyRadiation'
+        ExpectedError = 'LogRadiationVerification: Error: Radiation verification failed: the station should clear the remaining dose after a full passage run'
+        Success = @('Radiation passage verification passed')
+    }
     WristTerminal = @{
-        Map = "${vanguard}?Chamber=Passage?RadiationRun=1"
+        Map = $radiationPassage
         Flag = '-VerifyWristTerminal'
         CaptureFlag = '-CaptureWristTerminal'
         Success = $wristSuccess + @('Wrist status matched the live exposure dose.', 'Wrist archive after checkpoint recovery: one forecast record.')
