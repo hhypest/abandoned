@@ -4,6 +4,7 @@
 #include "Verification/ChamberHintsVerification.h"
 #include "Verification/ParallelCircuitVerification.h"
 #include "Verification/PlateBalanceVerification.h"
+#include "Verification/TrainingVerification.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
@@ -28,7 +29,6 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Infrastructure/Puzzles/CubePlacementComponent.h"
-#include "Infrastructure/Puzzles/PuzzleInteractionSettings.h"
 #include "Puzzles/PuzzleCube.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
@@ -99,7 +99,12 @@ void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedi
         Layout = GetDefault<UWeightBalanceLayout>();
         return;
     }
-    bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
+    if (!bVerifyDoorClamp && UTrainingVerification::IsRequested())
+    {
+        Course = StartCourse({Segment::Sandbox}, nullptr);
+        Layout = GetDefault<UTrainingChamberLayout>();
+        return;
+    }
     bVerifyEntryCheckpoint = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint"));
     bVerifyDev20 = Dev20Stage.has_value() && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
     bVerifyEntryCourse = bVerifyDev20 || bVerifyEntryCheckpoint || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
@@ -107,10 +112,6 @@ void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedi
     {
         Arrival.Chamber = Segment::Weight;
         bReadCheckpoint = false;
-    }
-    else if (bVerifyChamber)
-    {
-        Arrival.Chamber = Segment::Sandbox;
     }
     else if (bVerifyEntryCourse && !bVerifyEntryCheckpoint)
     {
@@ -153,7 +154,7 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || UPlateBalanceVerification::IsStandaloneRequested() ||
+    if (UTrainingVerification::IsRequested() || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || UPlateBalanceVerification::IsStandaloneRequested() ||
         UChamberHintsVerification::IsRequested() ||
         Abandoned::Verification::WantsDoorClampVerification() || UParallelCircuitVerification::IsRequested())
     {
@@ -336,6 +337,10 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     }
     SaveEntryCheckpoint();
 #if WITH_DEV_AUTOMATION_TESTS
+    if (Course.Current == Segment::Sandbox && UTrainingVerification::IsRequested())
+    {
+        UTrainingVerification::Attach(*this, Cubes, Plates);
+    }
     UChamberHintsVerification::Attach(*this);
     if (Course.Current == Segment::Balance && (UPlateBalanceVerification::IsStandaloneRequested() || bVerifyEntryCourse))
     {
@@ -441,11 +446,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     }
 
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber)
-    {
-        VerifyChamber(*Player, DeltaSeconds);
-    }
-    else if (bVerifyEntryCourse && Course.Current != Segment::Balance)
+    if (bVerifyEntryCourse && Course.Current != Segment::Balance)
     {
         VerifyEntryChamber(*Player, DeltaSeconds);
     }
@@ -716,11 +717,11 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
         Fail(TEXT("Missing cubes from the test layout"));
         return;
     }
-    if (CourseTestStep == 0 && CourseTestTime >= 0.3f && !bVerificationScreenshotRequested &&
+    if (CourseTestStep == 0 && CourseTestTime >= 0.3f && !bCapturedCourseScreenshot &&
         FParse::Param(FCommandLine::Get(), TEXT("CaptureEntryCourse")))
     {
         FScreenshotRequest::RequestScreenshot(TEXT("Entry-") + WriteSegment(Course.Current), false, false);
-        bVerificationScreenshotRequested = true;
+        bCapturedCourseScreenshot = true;
         return;
     }
     const auto Step = [this](int32 Next)
@@ -984,340 +985,6 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
     }
 }
 
-void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds)
-{
-    if (Cubes.Num() != 3 || !IsValid(Cubes[0]) || !IsValid(Cubes[1]) || !IsValid(Cubes[2]))
-    {
-        UE_LOG(LogTrainingChamber, Error, TEXT("Verification needs the three default training cubes."));
-        bVerifyChamber = false;
-        FPlatformMisc::RequestExitWithStatus(false, 1);
-        return;
-    }
-    APuzzleCube& Small = *Cubes[0];
-    APuzzleCube& Large = *Cubes[1];
-    APuzzleCube& Step = *Cubes[2];
-    UBoxComponent* Cube = Small.GetBody();
-    VerificationElapsed += DeltaSeconds;
-    const auto Advance = [this](EVerificationPhase Phase, const TCHAR* Message)
-    {
-        UE_LOG(LogTrainingChamber, Display, TEXT("Verification: %s"), Message);
-        VerificationElapsed = 0.0f;
-        VerificationPhase = Phase;
-    };
-    const auto Fail = [this, Cube, &Player](const TCHAR* Reason)
-    {
-        UE_LOG(LogTrainingChamber, Error, TEXT("Verification failed (phase %d): %s. Cube %s, door Z %.1f, plate %s, player %s."),
-            static_cast<int32>(VerificationPhase), Reason, *Cube->GetComponentLocation().ToCompactString(),
-            Door->GetComponentLocation().Z, IsPlatePressed() ? TEXT("pressed") : TEXT("released"),
-            *Player.GetActorLocation().ToCompactString());
-        bVerifyChamber = false;
-        FPlatformMisc::RequestExitWithStatus(false, 1);
-    };
-    const auto AimFrom = [&Player](FVector Here, FVector Target)
-    {
-        const FVector Eye = Here + FVector(0.0, 0.0, Abandoned::MovementProfile::CameraHeight);
-        Player.PlaceAt(FTransform((Target - Eye).Rotation(), Here));
-    };
-    const auto AimToHold = [this, &AimFrom](const FVector& Target, const FVector& Approach)
-    {
-        const double Height = Target.Z - (Layout->Spawn.Z + Abandoned::MovementProfile::CameraHeight);
-        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(APuzzleCharacter::HoldDistanceCm) - FMath::Square(Height)));
-        const FVector Here = Target - Approach * Forward;
-        AimFrom(FVector(Here.X, Here.Y, Layout->Spawn.Z), Target);
-    };
-    const FVector SmallStart = Layout->CubeSpawns[0].Center;
-    APlayerController* Controller = Cast<APlayerController>(Player.GetController());
-    if (!Controller)
-    {
-        Fail(TEXT("Missing player controller"));
-        return;
-    }
-
-    if (VerificationElapsed > 8.0f)
-    {
-        Fail(TEXT("Timed out waiting for a physical transition"));
-        return;
-    }
-
-    switch (VerificationPhase)
-    {
-    case EVerificationPhase::Initial:
-        if (VerificationElapsed >= 0.35f)
-        {
-            if (IsPlatePressed() || Door->GetComponentLocation() != Layout->Door.Center)
-            {
-                Fail(TEXT("Door must start closed"));
-                return;
-            }
-            if (Small.GetHalfSize() != 27.5 || Large.GetHalfSize() != 40.0 ||
-                !FMath::IsNearlyEqual(Cube->GetMass(), 5.0f, 0.01f) ||
-                !FMath::IsNearlyEqual(Large.GetBody()->GetMass(), 10.0f, 0.01f))
-            {
-                Fail(TEXT("Cube collision dimensions or Chaos masses are incorrect"));
-                return;
-            }
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, FVector(Layout->Plate.Center.X, Layout->Plate.Center.Y,
-                Layout->GetPlateTop() + Abandoned::MovementProfile::StandingHalfHeight + 2.0)));
-            Advance(EVerificationPhase::StandOnPlate, TEXT("Closed door confirmed. Standing on the plate."));
-        }
-        break;
-    case EVerificationPhase::StandOnPlate:
-        if (IsPlatePressed())
-        {
-            if (Player.GetMovementBase() != GetPlate() || !FMath::IsNearlyEqual(GetPlateMass(Player, 0), Layout->PlayerMassKg))
-            {
-                Fail(TEXT("The grounded player should be the only load on the plate"));
-                return;
-            }
-            const FVector OnPlate = Player.GetActorLocation();
-            Player.ResetChamber();
-            const FTrainingPressurePlate& Plate = Plates[0];
-            if (IsPlatePressed() || IsExitEnabled() || !Plate.Visual->GetRelativeLocation().IsNearlyZero() ||
-                (Plate.Indicator && !FMath::IsNearlyEqual(Plate.Indicator->Intensity, Layout->PlateLight.Intensity)))
-            {
-                Fail(TEXT("Reset left the pressure plate active"));
-                return;
-            }
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, OnPlate + FVector(0.0, 0.0, 2.0)));
-            Advance(EVerificationPhase::StandAfterReset, TEXT("Reset released the loaded plate and restored its visual and indicator."));
-        }
-        break;
-    case EVerificationPhase::StandAfterReset:
-        if (IsPlatePressed())
-        {
-            Player.Jump();
-            Advance(EVerificationPhase::JumpOffPlate, TEXT("The plate can be pressed again after reset."));
-        }
-        break;
-    case EVerificationPhase::JumpOffPlate:
-        if (Player.GetCharacterMovement()->IsFalling() && !IsPlatePressed())
-        {
-            Player.StopJumping();
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
-            Controller->ConsoleCommand(TEXT("Input.+key Mouse2D X=0 Y=1"), false);
-            Advance(EVerificationPhase::LookUp, TEXT("Jumping unloaded the plate. Testing upward mouse movement."));
-        }
-        break;
-    case EVerificationPhase::LookUp:
-        if (VerificationElapsed >= 0.15f)
-        {
-            if (Controller->GetControlRotation().GetNormalized().Pitch <= 0.0)
-            {
-                Controller->ConsoleCommand(TEXT("Input.-key Mouse2D"), false);
-                Fail(TEXT("Upward mouse movement did not raise the view"));
-                return;
-            }
-            Controller->SetControlRotation(FRotator::ZeroRotator);
-            Controller->ConsoleCommand(TEXT("Input.+key Mouse2D X=0 Y=-1"), false);
-            Advance(EVerificationPhase::LookDown, TEXT("Upward mouse movement raised the view."));
-        }
-        break;
-    case EVerificationPhase::LookDown:
-        if (VerificationElapsed >= 0.15f)
-        {
-            Controller->ConsoleCommand(TEXT("Input.-key Mouse2D"), false);
-            if (Controller->GetControlRotation().GetNormalized().Pitch >= 0.0)
-            {
-                Fail(TEXT("Downward mouse movement did not lower the view"));
-                return;
-            }
-            UE_LOG(LogTrainingChamber, Display, TEXT("Verification: Downward mouse movement lowered the view."));
-            const FVector Current = Cube->GetComponentLocation();
-            AimFrom(FVector(Current.X - 155.0, Current.Y, Layout->Spawn.Z), Current);
-            Player.Interact();
-            if (Player.GetHeldCube() != &Small)
-            {
-                Fail(TEXT("Pickup trace or physics handle missed the cube"));
-                return;
-            }
-            const FVector Target(Layout->Plate.Center.X, Layout->Plate.Center.Y,
-                Layout->GetPlateTop() + Small.GetHalfSize() + 42.0);
-            AimToHold(Target, FVector::ForwardVector);
-            Advance(EVerificationPhase::Carry, TEXT("Cube picked up with the gameplay trace and physics handle."));
-        }
-        break;
-    case EVerificationPhase::Carry:
-        if (Player.GetHeldCube() != &Small || IsPlatePressed())
-        {
-            Fail(TEXT("The held cube must stay in the grip and leave the plate unpowered"));
-            return;
-        }
-        if (FVector::DistSquared2D(Cube->GetComponentLocation(), Layout->Plate.Center) < FMath::Square(16.0) &&
-            Cube->GetComponentLocation().Z > Layout->GetPlateTop() + Small.GetHalfSize() &&
-            Cube->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(30.0))
-        {
-            if (!Player.GetPlacementPreview().IsVisible() || Player.GetPlacementPreview().GetPreviewSupport() != GetPlate() ||
-                Player.GetPlacementPreview().GetCollisionEnabled() != ECollisionEnabled::NoCollision)
-            {
-                Fail(TEXT("Expected a collision-free placement ghost on the plate"));
-                return;
-            }
-            if (!bVerificationScreenshotRequested && FParse::Param(FCommandLine::Get(), TEXT("CapturePlacementGhost")))
-            {
-                FScreenshotRequest::RequestScreenshot(TEXT("PlacementGhost"), false, false);
-                bVerificationScreenshotRequested = true;
-                break;
-            }
-            const FVector Expected = Player.GetPlacementPreview().GetComponentLocation();
-            Player.Interact();
-            if (Small.GetSupport() != GetPlate() || Cube->IsSimulatingPhysics() ||
-                !Small.GetActorLocation().Equals(Expected, 0.1) || Player.GetPlacementPreview().IsVisible())
-            {
-                Fail(TEXT("Released cube did not snap to the plate"));
-                return;
-            }
-            Advance(EVerificationPhase::Open, TEXT("Held cube snapped to the plate at the ghost position."));
-        }
-        break;
-    case EVerificationPhase::Open:
-        if (IsPlatePressed() && IsDoorOpen())
-        {
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator,
-                FVector(Layout->Door.Center.X - 180.0, Layout->Door.Center.Y, Layout->Spawn.Z)));
-            Advance(EVerificationPhase::Cross, TEXT("Settled cube pressed the plate and opened the door."));
-        }
-        break;
-    case EVerificationPhase::Cross:
-        if (bReachedExit)
-        {
-            const FVector Current = Cube->GetComponentLocation();
-            AimFrom(FVector(Current.X - 155.0, Current.Y, Layout->Spawn.Z), Current);
-            Player.Interact();
-            if (Player.GetHeldCube() != &Small || Small.GetSupport())
-            {
-                Fail(TEXT("Could not remove the cube from the plate"));
-                return;
-            }
-            Advance(EVerificationPhase::Close, TEXT("Player walked through the door and picked the cube off the plate."));
-        }
-        else
-        {
-            Player.AddMovementInput(FVector::ForwardVector);
-        }
-        break;
-    case EVerificationPhase::Close:
-        if (!IsPlatePressed() && FMath::IsNearlyEqual(Door->GetComponentLocation().Z, Layout->Door.Center.Z, 0.1))
-        {
-            Controller->SetControlRotation(FRotator::ZeroRotator);
-            Controller->ConsoleCommand(TEXT("Input.+key LeftMouseButton"), false);
-            Advance(EVerificationPhase::Throw, TEXT("Removing the cube closed the door. Testing left mouse throw."));
-        }
-        break;
-    case EVerificationPhase::Throw:
-        if (!Player.GetHeldCube())
-        {
-            Controller->ConsoleCommand(TEXT("Input.-key LeftMouseButton"), false);
-            if (Small.GetSupport() || Player.GetPlacementPreview().IsVisible() ||
-                Cube->GetPhysicsLinearVelocity().X < GetDefault<UPuzzleInteractionSettings>()->GetThrowImpulse() / Small.GetMassKg() * 0.75)
-            {
-                Fail(TEXT("Left mouse did not throw the free cube forward"));
-                return;
-            }
-            Player.ResetChamber();
-            if (bReachedExit || Player.GetHeldCube() || FVector::DistSquared(SmallStart, Cube->GetComponentLocation()) > 1.0)
-            {
-                Fail(TEXT("Reset did not restore the initial chamber state"));
-                return;
-            }
-            Small.SetActorLocation(FVector(SmallStart.X, SmallStart.Y, -420.0), false, nullptr, ETeleportType::TeleportPhysics);
-            Advance(EVerificationPhase::Return, TEXT("Left mouse threw the cube forward. Reset restored player and cube."));
-        }
-        break;
-    case EVerificationPhase::Return:
-        if (FVector::DistSquared(SmallStart, Cube->GetComponentLocation()) < FMath::Square(10.0))
-        {
-            const FVector Current = Cube->GetComponentLocation();
-            AimFrom(FVector(Current.X - 155.0, Current.Y, Layout->Spawn.Z), Current);
-            Player.Interact();
-            if (Player.GetHeldCube() != &Small)
-            {
-                Fail(TEXT("Could not pick up the returned small cube"));
-                return;
-            }
-            const FVector Target = Large.GetActorLocation() + FVector(0.0, 0.0,
-                Large.GetHalfSize() + Small.GetHalfSize() + 40.0);
-            AimToHold(Target, FVector::RightVector);
-            Advance(EVerificationPhase::CarryToStack, TEXT("Lost cube returned. Carrying it to the large cube."));
-        }
-        break;
-    case EVerificationPhase::CarryToStack:
-        if (FVector::DistSquared2D(Small.GetActorLocation(), Large.GetActorLocation()) < FMath::Square(14.0) &&
-            Cube->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(25.0))
-        {
-            if (!Player.GetPlacementPreview().IsVisible() || Player.GetPlacementPreview().GetPreviewSupport() != Large.GetBody())
-            {
-                Fail(TEXT("Expected a placement ghost on the stack"));
-                return;
-            }
-            Player.Interact();
-            if (Small.GetSupport() != Large.GetBody() || Large.GetStackMass() != 15.0f)
-            {
-                Fail(TEXT("Small cube did not snap to the large cube and add its mass"));
-                return;
-            }
-            const FVector Start = Step.GetActorLocation() + FVector(-6.0, 0.0,
-                Step.GetHalfSize() + Abandoned::MovementProfile::StandingHalfHeight + 1.0);
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Start));
-            Advance(EVerificationPhase::StartAscent, TEXT("Small cube snapped to large cube, total mass 15 kg."));
-        }
-        break;
-    case EVerificationPhase::StartAscent:
-        if (Player.GetMovementBase() == Step.GetBody())
-        {
-            Player.AddMovementInput(FVector::ForwardVector);
-            if (Player.GetActorLocation().X >= Step.GetActorLocation().X + 7.0)
-            {
-                Player.Jump();
-                Advance(EVerificationPhase::JumpToStack, TEXT("Player jumped toward the stack after a short run-up."));
-            }
-        }
-        break;
-    case EVerificationPhase::JumpToStack:
-        Player.AddMovementInput(FVector::ForwardVector * 0.35);
-        if (Player.GetMovementBase() == Cube)
-        {
-            Player.StopJumping();
-            Player.Jump();
-            Advance(EVerificationPhase::JumpToLedge, TEXT("Player landed on the stack and jumped toward the ledge."));
-        }
-        break;
-    case EVerificationPhase::JumpToLedge:
-        Player.AddMovementInput(FVector::ForwardVector);
-        if (Player.GetActorLocation().X > Large.GetActorLocation().X + 140.0 &&
-            Player.GetCharacterMovement()->IsMovingOnGround() &&
-            Player.GetActorLocation().Z > Small.GetActorLocation().Z + 145.0)
-        {
-            Advance(EVerificationPhase::RemoveSupport, TEXT("Player climbed from the stack onto the practice ledge."));
-        }
-        break;
-    case EVerificationPhase::RemoveSupport:
-        {
-            const FVector Current = Large.GetActorLocation();
-            AimFrom(FVector(Current.X, Current.Y - 155.0, Layout->Spawn.Z), Current);
-            Player.Interact();
-            if (Player.GetHeldCube() != &Large || Small.GetSupport() || !Cube->IsSimulatingPhysics())
-            {
-                Fail(TEXT("Picking up the lower block did not release its upper block"));
-                return;
-            }
-            ResetChamber(Player);
-            for (int32 Index = 0; Index < Cubes.Num(); ++Index)
-            {
-                if (Cubes[Index]->GetSupport() || !Cubes[Index]->GetBody()->IsSimulatingPhysics() ||
-                    !Cubes[Index]->GetActorLocation().Equals(Layout->CubeSpawns[Index].Center, 1.0))
-                {
-                    Fail(TEXT("Reset did not free and restore all cubes"));
-                    return;
-                }
-            }
-            UE_LOG(LogTrainingChamber, Display,
-                TEXT("Verification passed: player weight, placement ghost, throw, staircase, detach and reset."));
-            bVerifyChamber = false;
-            FPlatformMisc::RequestExitWithStatus(false, 0);
-        }
-        break;
-    }
-}
 #endif
 
 bool ATrainingChamberGameMode::UseDevice(APuzzleCharacter&, UPrimitiveComponent& Target)
