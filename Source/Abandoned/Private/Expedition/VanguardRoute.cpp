@@ -4,7 +4,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Verification/VanguardFallVerification.h"
 #include "Verification/VanguardMantleVerification.h"
-#include "Verification/VanguardWristTerminalVerification.h"
+#include "Verification/VanguardRadiationVerification.h"
 #endif
 
 #include "Application/Expedition/PassageProgress.h"
@@ -269,14 +269,8 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         FallCheck = UVanguardFallVerification::Attach(*this);
     }
-    if ((Radiation || AtStation()) && FParse::Param(FCommandLine::Get(), TEXT("VerifyWristTerminal")))
-    {
-        WristCheck = UVanguardWristTerminalVerification::Attach(*this, Layout->Spawn.Z);
-    }
-    bVerifyRadiation = (Radiation || AtStation()) &&
-        (WristCheck.IsValid() || FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation")));
-    bCaptureRadiation = FParse::Param(FCommandLine::Get(), TEXT("CaptureRadiation"));
-    if (bVerifyRoute && !FallCheck.IsValid() && !bVerifyRadiation && !AtStation() && Passage->bEnableMantle)
+    RadiationCheck = UVanguardRadiationVerification::AttachIfRequested(*this, *Layout);
+    if (bVerifyRoute && !FallCheck.IsValid() && !RadiationCheck.IsValid() && !AtStation() && Passage->bEnableMantle)
     {
         MantleCheck = UVanguardMantleVerification::Attach(*this, Passage->MantleLedges[0], bCaptureRoute);
     }
@@ -472,9 +466,9 @@ void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float Delta
         {
             UE_LOG(LogVanguardRoute, Display, TEXT("Radiation dose limit reached. Returning to the passage checkpoint."));
 #if WITH_DEV_AUTOMATION_TESTS
-            if (bVerifyRadiation && Session)
+            if (auto* Check = RadiationCheck.Get(); Check && Session)
             {
-                Session->bRecoveredFromRadiation = true;
+                Check->ObserveDoseLimit(*Session);
             }
 #endif
         }
@@ -515,12 +509,9 @@ void AVanguardRouteGameMode::Tick(float DeltaSeconds)
     }
     Player->UpdateWristTerminal(*this);
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyRadiation)
+    if (auto* RadiationTest = RadiationCheck.Get())
     {
-        if (auto* Check = WristCheck.Get(); !Check || Check->CheckStep(*this, *Player, DeltaSeconds))
-        {
-            VerifyRadiation(*Player, DeltaSeconds);
-        }
+        RadiationTest->CheckStep(*this, *Player, DeltaSeconds);
     }
     else if (auto* Check = FallCheck.Get())
     {
