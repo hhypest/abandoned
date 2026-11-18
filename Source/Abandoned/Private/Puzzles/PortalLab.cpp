@@ -1,5 +1,9 @@
 #include "Puzzles/PortalLab.h"
 
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Components/SphereComponent.h"
+#include "Verification/PortalShapeVerification.h"
+#endif
 #if WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
 #include "AssetCompilingManager.h"
 #endif
@@ -18,6 +22,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
+#include "Infrastructure/Puzzles/UnrealPortalShape.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Player/AbandonedTestController.h"
@@ -44,20 +49,6 @@ FTransform Link(const FTransform& Source, const FTransform& Destination)
     const FQuat Turn(FVector::UpVector, UE_PI);
     const FQuat Rotation = Destination.GetRotation() * Turn * Source.GetRotation().Inverse();
     return FTransform(Rotation, Destination.GetLocation() - Rotation.RotateVector(Source.GetLocation()));
-}
-
-FVector ExtentInMouth(const UPrimitiveComponent& Body, const FTransform& Mouth)
-{
-    if (const auto* Capsule = Cast<UCapsuleComponent>(&Body))
-    {
-        return FVector(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleRadius(),
-            Capsule->GetScaledCapsuleHalfHeight());
-    }
-    const auto& Box = *CastChecked<UBoxComponent>(&Body);
-    const FQuat Relative = Mouth.GetRotation().Inverse() * Box.GetComponentQuat();
-    const FVector Size = Box.GetScaledBoxExtent();
-    return Relative.GetAxisX().GetAbs() * Size.X + Relative.GetAxisY().GetAbs() * Size.Y +
-        Relative.GetAxisZ().GetAbs() * Size.Z;
 }
 
 bool Fits(const FVector& Local, const FVector& Extent)
@@ -387,7 +378,9 @@ void APortalLabGameMode::ObserveTraveler(AActor& Actor, UPrimitiveComponent& Bod
     const FVector Here = Body.GetComponentLocation();
     const FVector Previous = State.bTracked ? State.Previous : Here;
     const int32 PriorApproach = State.Approach;
-    State = {Here, INDEX_NONE, true};
+    State.Approach = INDEX_NONE;
+    State.Previous = Here;
+    State.bTracked = true;
     UBoxComponent* Held = Player ? Player->GetHeldBody() : nullptr;
     for (int32 Index = 0; Index < Mouths.Num(); ++Index)
     {
@@ -395,7 +388,20 @@ void APortalLabGameMode::ObserveTraveler(AActor& Actor, UPrimitiveComponent& Bod
         const FTransform& Destination = Mouths[1 - Index].Pose;
         const FVector Local = Source.InverseTransformPositionNoScale(Here);
         const FVector Last = Source.InverseTransformPositionNoScale(Previous);
-        const FVector Extent = ExtentInMouth(Body, Source);
+        const auto Measured = Abandoned::Infrastructure::Puzzles::TryPortalExtent(Body, Source);
+        if (!Measured)
+        {
+            if (!State.bUnsupportedShape)
+            {
+                UE_LOG(LogPortalLab, Warning, TEXT("Portal transit rejected unsupported collision component %s (%s)."),
+                    *Body.GetName(), *Body.GetClass()->GetName());
+            }
+            State = {};
+            State.bUnsupportedShape = true;
+            return;
+        }
+        State.bUnsupportedShape = false;
+        const FVector Extent = Measured.GetValue();
         const bool bCrossedPlane = Last.X > 0.0 && Local.X <= 0.0;
         const FVector Threshold = bCrossedPlane ? FMath::Lerp(Last, Local, Last.X / (Last.X - Local.X)) : Local;
         const bool bCrossed = bCrossedPlane && FMath::Abs(Threshold.Y) <= HalfWidth &&
@@ -407,7 +413,7 @@ void APortalLabGameMode::ObserveTraveler(AActor& Actor, UPrimitiveComponent& Bod
         if (Held && (bTouching || bCrossed || (Local.X > 0.0 && Local.X <= 220.0)))
         {
             const FVector HeldLocal = Source.InverseTransformPositionNoScale(Held->GetComponentLocation());
-            HeldExtent = ExtentInMouth(*Held, Source);
+            HeldExtent = Abandoned::Infrastructure::Puzzles::PortalBoxExtent(*Held, Source);
             bFits = bFits && Fits(HeldLocal, HeldExtent);
             bTouching = bTouching || (Local.X > 0.0 && bMovingIn && HeldLocal.X >= -180.0 &&
                 HeldLocal.X <= HeldExtent.X && IntersectsAperture(HeldLocal, HeldExtent));
@@ -892,6 +898,11 @@ void APortalLabGameMode::Verify(APortalLabCharacter& Player, float Delta)
         {
             const FVector Center = Layout->Arrival.Center;
             const FCollisionQueryParams Query(SCENE_QUERY_STAT(ClosedPortal), false, &Player);
+            if (!Abandoned::Verification::VerifyPortalShapeProjection())
+            {
+                Fail(TEXT("Incorrect capsule or rotated box aperture extent"));
+                return;
+            }
             FHitResult Hit;
             GetWorld()->LineTraceSingleByChannel(Hit, Center - FVector(100, 0, 0),
                 Center + FVector(100, 0, 0), ECC_Visibility, Query);
@@ -907,6 +918,21 @@ void APortalLabGameMode::Verify(APortalLabCharacter& Player, float Delta)
                 Fail(TEXT("Portal console did not power the pair"));
                 return;
             }
+            // Present an unsupported body crossing a powered entrance from its approach side.
+            auto* Sphere = NewObject<USphereComponent>(&Player);
+            const FTransform& Entrance = Mouths[0].Pose;
+            Sphere->SetWorldLocation(Entrance.TransformPosition(FVector(-1, 0, 0)));
+            FTraveler Unsupported{Entrance.TransformPosition(FVector(1, 0, 0)), 0, true};
+            const FTransform Before = Player.GetActorTransform();
+            const FVector Speed = Player.GetCharacterMovement()->Velocity;
+            ObserveTraveler(Player, *Sphere, Unsupported, &Player);
+            if (!Unsupported.bUnsupportedShape || Unsupported.bTracked || Unsupported.Approach != INDEX_NONE ||
+                !Player.GetActorTransform().Equals(Before) || !Player.GetCharacterMovement()->Velocity.Equals(Speed))
+            {
+                Fail(TEXT("Unsupported shape changed the traveler or retained a pending crossing"));
+                return;
+            }
+            UE_LOG(LogPortalLab, Display, TEXT("Portal collision shapes verified: capsule, rotated box and rejected sphere."));
             Player.PlaceAt(FTransform(FRotator::ZeroRotator, Center - FVector(320, 0, 53)));
 #if WITH_EDITOR
             FAssetCompilingManager::Get().FinishAllCompilation();
