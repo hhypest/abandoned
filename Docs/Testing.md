@@ -153,6 +153,16 @@ $run = Start-Process $editor -ArgumentList $args -Wait -PassThru
 
 `PlateBalanceNegative` в отдельном процессе меняет суммарную цель на 15 кг. Ожидается `ExpectedFailure`: после измерения 5/5/5 кг компонент обнаруживает ошибочное разрешение выхода, пишет `15 kg distributed evenly must not open the door` и запрашивает выход с кодом 1.
 
+### Пролёт и снабжение на станции
+
+```powershell
+./Scripts/Invoke-UeVerification.ps1 -EngineRoot $ueRoot -Scenario VanguardRoute,EntryCourse,EntryCheckpoint,VanguardOxygenRecovery,VanguardRouteNegative -Capture
+```
+
+В прямом и сквозном проходах игрок трижды переключает фонарь клавишей **F**, видит подъём створки перед собой и проходит через шлюз. На станции фонарь остаётся включённым. У шкафа снабжения игрок пополняет израсходованный кислород до 100%. Прямой вход на станцию с полным баллоном даёт `ExpectedFailure` в сценарии `VanguardRouteNegative`.
+
+`EntryCheckpoint` восстанавливает вход в `Weight`, проходит `Balance` и пролёт, затем проверяет точку `Balance` и единственную запись `oxygen-restored` в слоте v2. В отдельном сценарии `VanguardOxygenRecovery` баллон опустошается в пролёте. Проверка требует возврата по причине нехватки кислорода и успешного решения восстановленной камеры `Balance`.
+
 ### Радиация и восстановление в пролёте
 
 ```powershell

@@ -4,7 +4,7 @@ param(
     [string]$EngineRoot,
 
     [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
-                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
+                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -53,27 +53,50 @@ $radiationSuccess = @('Radiation exposure increased dose during a flare:', 'Radi
                       'Radiation checkpoint restored: safe position, zero dose and fresh forecast.',
                       'Vanguard station cleared remaining radiation dose:', 'Radiation passage verification passed')
 $wristSuccess = @('Wrist terminal verification passed', 'Radiation passage verification passed')
+$routeSuccess = @('Vanguard shoulder flashlight switched on, off and on with F.',
+                  'Verification observed the raised airlock before crossing.', 'Verification crossed the moving passage airlock.',
+                  'Vanguard segment ready: station.', 'Vanguard shoulder flashlight stayed on across world travel.',
+                  'Vanguard oxygen supply restored.', 'Vanguard verification passed: passage transit and station resupply.')
 $entryFinish = @('Entry test: reset restored the weight lock', 'Entry test: Weight accepted 20 kg',
                  'Entry test: crossed Weight exit.', 'First solution opened the door.', 'Alternate arrangement opened the door.',
                  'Entry course verification passed: balance released the passage.',
                  'Passage ledge stopped walking, a short Space jump and a crouch jump.',
                  'Passage climb rejected an obstructed landing.', 'Passage handhold verified',
-                 'Passage climb verified: held Space and landed on top.', 'Vanguard verification passed')
+                 'Passage climb verified: held Space and landed on top.') + $routeSuccess
 $courseSuccess = @('Entry test: crossed Stairs exit.', 'Entry test: crossed Button exit.') + $entryFinish
 $dev20Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"
 $dev20Transit = @('34 kg Chaos mass and carry slowdown confirmed.', 'loss of portal power returned the same item to its cradle.',
                   'same 34 kg body remained in the grip after the portal.', "DEV-20 departed the portal bay in the player's grip.")
-$fallsMap = "${vanguard}?Chamber=Passage?Checkpoint=Balance"
+$balancePassage = "${vanguard}?Chamber=Passage?Checkpoint=Balance"
 $fallsSuccess = @('Vanguard fall verified at 250 cm.', 'Passage fall 300.0 cm: minor injury.',
                   'Vanguard minor injury slowed ground movement, then restored normal speed.', 'Vanguard fall verified at 300 cm.',
                   'Passage fall 325.0 cm: fatal.', 'Passage checkpoint recovery: Balance (fall).', 'Balance chamber verification passed')
 $scenarios = @{
+    VanguardRoute = @{
+        Map = "${vanguard}?Chamber=Passage"
+        Flag = '-VerifyVanguard'
+        CaptureFlag = '-CaptureVanguard'
+        Success = $routeSuccess
+    }
+    VanguardRouteNegative = @{
+        Map = "${vanguard}?Chamber=Vanguard"
+        Flag = '-VerifyVanguard'
+        ExpectedError = 'LogVanguardRouteTest: Error: Vanguard verification failed: prior oxygen 100.00, current 100.00.'
+        Success = @('Vanguard verification passed')
+    }
+    VanguardOxygenRecovery = @{
+        Map = $balancePassage
+        Flag = '-VerifyVanguardOxygen'
+        ExtraFlag = '-VerifyBalanceChamber'
+        Chambers = @('Balance')
+        Success = @('Passage checkpoint recovery: Balance (oxygen depleted).', 'Balance chamber verification passed')
+    }
     VanguardFalls = @{
-        Map = $fallsMap; Flag = '-VerifyVanguardFalls'; ExtraFlag = '-VerifyBalanceChamber'
+        Map = $balancePassage; Flag = '-VerifyVanguardFalls'; ExtraFlag = '-VerifyBalanceChamber'
         Chambers = @('Balance'); Success = $fallsSuccess
     }
     VanguardFallsAudio = @{
-        Map = $fallsMap; Flag = '-VerifyVanguardFalls'; ExtraFlag = @('-VerifyInjuryAudio', '-VerifyBalanceChamber')
+        Map = $balancePassage; Flag = '-VerifyVanguardFalls'; ExtraFlag = @('-VerifyInjuryAudio', '-VerifyBalanceChamber')
         Chambers = @('Balance'); Success = $fallsSuccess + 'Vanguard injury breath decoded in audio mixer.'
         RealTime = $true
     }
