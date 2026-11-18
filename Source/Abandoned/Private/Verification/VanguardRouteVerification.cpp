@@ -4,6 +4,7 @@
 #include "Components/BoxComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "Expedition/VanguardRoute.h"
+#include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Expedition/VanguardRouteLayout.h"
 #include "HAL/PlatformMisc.h"
 #include "Misc/CommandLine.h"
@@ -81,10 +82,10 @@ void UVanguardRouteVerification::CheckStep(const AVanguardRouteGameMode& Route, 
     }
     if (bCapture && !bCapturedArrival && Elapsed >= 0.55f)
     {
-        FScreenshotRequest::RequestScreenshot(Route.AtStation() ? TEXT("Vanguard-Station") : TEXT("Vanguard-Airlock"), false, false);
+        FScreenshotRequest::RequestScreenshot(Route.GetRouteState().AtStation() ? TEXT("Vanguard-Station") : TEXT("Vanguard-Airlock"), false, false);
         bCapturedArrival = true;
     }
-    if (Route.AtStation())
+    if (Route.GetRouteState().AtStation())
     {
         if (Elapsed >= 0.95f)
         {
@@ -175,10 +176,10 @@ void UVanguardRouteVerification::CheckStation(const AVanguardRouteGameMode& Rout
     const FVector From(Cabinet.X - 170.0, Cabinet.Y, SpawnZ);
     const FVector Eye = From + FVector(0, 0, Abandoned::MovementProfile::CameraHeight);
     Player.PlaceAt(FTransform((Cabinet - Eye).Rotation(), From));
-    const float Prior = Route.GetOxygenPercent();
+    const float Prior = Route.GetRouteState().GetOxygenPercent();
     Player.Interact();
-    const float Current = Route.GetOxygenPercent();
-    const bool bPassed = Prior < 100.0f && Route.HasResupplied() && Current == 100.0f && Player.IsFlashlightOn();
+    const float Current = Route.GetRouteState().GetOxygenPercent();
+    const bool bPassed = Prior < 100.0f && Route.GetRouteState().HasResupplied() && Current == 100.0f && Player.IsFlashlightOn();
     if (bPassed)
     {
         UE_LOG(LogVanguardRouteTest, Display, TEXT("Vanguard shoulder flashlight stayed on across world travel."));
