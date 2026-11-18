@@ -1,50 +1,19 @@
 #pragma once
 
-#include "Application/Puzzles/OpticsCourse.h"
-#include "Application/Puzzles/TimedPassage.h"
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
 #include "Infrastructure/Puzzles/PuzzleDeviceCommands.h"
 #include "Player/PuzzleCharacter.h"
-#include "Infrastructure/Puzzles/UnrealSlidingDoor.h"
 #include "PowerLab.generated.h"
 
 class APowerLabCharacter;
-class UMaterialInterface;
+class UOpticalCircuitComponent;
+class UOpticalReflectorComponent;
+class UPowerLabDoorsComponent;
 class UPowerLabLayout;
-class UStaticMesh;
-class UStaticMeshComponent;
-class UTextRenderComponent;
 
 enum class EOpticsAim : uint8 { None, Emitter, Mirror };
-
-USTRUCT()
-struct FOpticalLane
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    TObjectPtr<UBoxComponent> Emitter;
-
-    UPROPERTY()
-    TObjectPtr<UBoxComponent> Receiver;
-
-    UPROPERTY()
-    TObjectPtr<UBoxComponent> Door;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> EmitterLamp;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> ReceiverLamp;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> PowerLine;
-
-    FVector Direction = FVector::RightVector;
-    Abandoned::Infrastructure::Puzzles::SlidingDoorClamp Clamp;
-};
 
 UCLASS()
 class APowerLabGameMode final : public AGameModeBase, public IPuzzleDeviceCommands
@@ -69,23 +38,6 @@ private:
 
     bool Interact(APowerLabCharacter& Player, UPrimitiveComponent& Target);
     void ResetLab(APowerLabCharacter& Player);
-    bool BuildMirror(UStaticMesh& Mesh, UMaterialInterface& Base, UMaterialInterface& Steel);
-    void PlaceMirror(const APowerLabCharacter& Player);
-    void RestoreMirror();
-    bool IsMirrorTarget(const UPrimitiveComponent* Target) const;
-    bool CanAimMirror(const APowerLabCharacter& Player) const;
-    void AimAt(EOpticsAim Target, FVector Point);
-    const AActor* GetAimOwner(EOpticsAim Aim) const;
-    bool TraceLane(FOpticalLane& Lane, bool bPowered, bool bAcceptReflection, int32& BeamIndex);
-    void DrawBeam(FVector Start, FVector End, int32& BeamIndex);
-    bool MoveDoor(UBoxComponent* Door, Abandoned::Infrastructure::Puzzles::SlidingDoorClamp& Clamp,
-        const FVector& Closed, bool bOpen, float DeltaSeconds, APowerLabCharacter& Player,
-        const FVector* LocalRetry = nullptr);
-    bool SpawnPulseBay(UStaticMesh& Mesh, UMaterialInterface& Steel, UMaterialInterface& Panel, UMaterialInterface& Screen);
-    void ObservePulse(float DeltaSeconds, const FVector& Location);
-    void UpdatePulseDisplay();
-    void ResetPulseBay();
-
 #if WITH_DEV_AUTOMATION_TESTS
     friend class UOpticsVerification;
     friend class UPulseDoorVerification;
@@ -98,60 +50,19 @@ private:
     TObjectPtr<const UPowerLabLayout> Layout;
 
     UPROPERTY()
-    FOpticalLane Interruption;
-
-    UPROPERTY()
-    FOpticalLane Reflection;
-
-    UPROPERTY()
     TObjectPtr<UBoxComponent> Button;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> ButtonLamp;
 
     UPROPERTY()
     TObjectPtr<APuzzleCube> Cube;
 
     UPROPERTY()
-    TObjectPtr<UBoxComponent> Mirror;
+    TObjectPtr<UOpticalCircuitComponent> Optics;
 
     UPROPERTY()
-    TObjectPtr<UBoxComponent> MirrorSurface;
+    TObjectPtr<UOpticalReflectorComponent> Reflector;
 
     UPROPERTY()
-    TObjectPtr<UMaterialInterface> Cyan;
-
-    UPROPERTY()
-    TObjectPtr<UMaterialInterface> Amber;
-
-    UPROPERTY()
-    TObjectPtr<UMaterialInterface> Inactive;
-
-    UPROPERTY()
-    TArray<TObjectPtr<UStaticMeshComponent>> Beams;
-
-    UPROPERTY()
-    TObjectPtr<UBoxComponent> PulseDoor;
-
-    UPROPERTY()
-    TObjectPtr<UBoxComponent> PulseButton;
-
-    UPROPERTY()
-    TObjectPtr<UBoxComponent> PulseReturn;
-
-    UPROPERTY()
-    TArray<TObjectPtr<UStaticMeshComponent>> PulseIndicators;
-
-    UPROPERTY()
-    TObjectPtr<UTextRenderComponent> PulseClock;
-
-    Abandoned::Infrastructure::Puzzles::SlidingDoorClamp PulseClamp;
-    Abandoned::Application::Puzzles::OpticsCourse Course;
-    Abandoned::Application::Puzzles::TimedPassage Pulse{0.0f};
-    int32 DisplayedPulseTenths = -1;
-    bool bDirectSignal = false;
-    bool bReflectedSignal = false;
-    bool bMirrorDocked = false;
+    TObjectPtr<UPowerLabDoorsComponent> Doors;
 };
 
 UCLASS()

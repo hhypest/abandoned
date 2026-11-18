@@ -22,6 +22,7 @@ public:
     ADev20Actor* GetHeldDev20() const;
     const TCHAR* GetPlacementPrompt() const;
     const UCubePlacementComponent& GetPlacementPreview() const { return *Placement; }
+    bool GrabBody(UBoxComponent& Body, float MassKg);
     void ReleaseHeldObject();
     bool TransitHeldBody(const FTransform& Through);
 
@@ -33,7 +34,6 @@ protected:
     virtual void Interact();
     void ResetChamber();
     UPrimitiveComponent* TraceInteractable() const;
-    bool GrabBody(UBoxComponent& Body, float MassKg);
 
 private:
     FVector InteractionRayEnd() const;

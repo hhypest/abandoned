@@ -5,6 +5,9 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Player/MovementProfile.h"
+#include "Infrastructure/Puzzles/OpticalCircuitComponent.h"
+#include "Infrastructure/Puzzles/OpticalReflectorComponent.h"
+#include "Infrastructure/Puzzles/PowerLabDoorsComponent.h"
 #include "Puzzles/PowerLab.h"
 #include "Puzzles/PowerLabLayout.h"
 #include "UnrealClient.h"
@@ -38,8 +41,8 @@ void UPulseDoorVerification::TickComponent(float DeltaSeconds, ELevelTick TickTy
     const auto* Lab = Cast<APowerLabGameMode>(GetOwner());
     const auto* Controller = GetWorld()->GetFirstPlayerController();
     auto* Player = Controller ? Cast<APowerLabCharacter>(Controller->GetPawn()) : nullptr;
-    if (!IsValid(Player) || !Lab || !IsValid(Lab->Layout) || !IsValid(Lab->PulseDoor) ||
-        !IsValid(Lab->Mirror) || !IsValid(Lab->MirrorSurface))
+    if (!IsValid(Player) || !Lab || !IsValid(Lab->Layout) || !IsValid(Lab->Doors->TimedDoor.Body.Get()) ||
+        !IsValid(Lab->Reflector->GetBody()) || !IsValid(Lab->Reflector->GetSurface()))
     {
         Fail(TEXT("Lost the player or a device during the timed passage."));
         return;
@@ -77,7 +80,7 @@ void UPulseDoorVerification::Check(const APowerLabGameMode& Lab, APowerLabCharac
     };
     const auto DoorClosed = [&Lab, &Layout]
     {
-        return Lab.PulseDoor->GetComponentLocation().Equals(Layout.PulseDoor.Center, 1.0);
+        return Lab.Doors->TimedDoor.Body.Get()->GetComponentLocation().Equals(Layout.PulseDoor.Center, 1.0);
     };
     if (Elapsed > FMath::Max(6.0f, Layout.PulseSeconds + 2.0f))
     {
@@ -87,13 +90,13 @@ void UPulseDoorVerification::Check(const APowerLabGameMode& Lab, APowerLabCharac
     switch (Phase)
     {
     case EPhase::Ready:
-        if (!DoorClosed() || Lab.Pulse.IsComplete() || Lab.Pulse.IsPowered())
+        if (!DoorClosed() || Lab.Doors->Pulse.IsComplete() || Lab.Doors->Pulse.IsPowered())
         {
             Fail(TEXT("timed bay should start closed and ready"));
             return;
         }
         Use(Layout.PulseButton);
-        if (!Lab.Pulse.IsPowered() || !FMath::IsNearlyEqual(Lab.GetPulseSeconds(), Layout.PulseSeconds))
+        if (!Lab.Doors->Pulse.IsPowered() || !FMath::IsNearlyEqual(Lab.GetPulseSeconds(), Layout.PulseSeconds))
         {
             Fail(TEXT("E did not start a fresh pulse"));
             return;
@@ -119,10 +122,10 @@ void UPulseDoorVerification::Check(const APowerLabGameMode& Lab, APowerLabCharac
         }
         break;
     case EPhase::Expiry:
-        if (!Lab.Pulse.IsPowered() && DoorClosed())
+        if (!Lab.Doors->Pulse.IsPowered() && DoorClosed())
         {
             Use(Layout.PulseButton);
-            if (!Lab.Pulse.IsPowered() || Lab.Pulse.IsComplete())
+            if (!Lab.Doors->Pulse.IsPowered() || Lab.Doors->Pulse.IsComplete())
             {
                 Fail(TEXT("a timed out attempt could not be retried"));
                 return;
@@ -131,9 +134,9 @@ void UPulseDoorVerification::Check(const APowerLabGameMode& Lab, APowerLabCharac
         }
         break;
     case EPhase::CrossExit:
-        if (Lab.Pulse.IsComplete())
+        if (Lab.Doors->Pulse.IsComplete())
         {
-            if (!Lab.Pulse.IsPowered())
+            if (!Lab.Doors->Pulse.IsPowered())
             {
                 Fail(TEXT("player reached the exit after the pulse expired"));
                 return;
@@ -148,10 +151,10 @@ void UPulseDoorVerification::Check(const APowerLabGameMode& Lab, APowerLabCharac
         }
         break;
     case EPhase::ReturnSwitch:
-        if (!Lab.Pulse.IsPowered() && DoorClosed())
+        if (!Lab.Doors->Pulse.IsPowered() && DoorClosed())
         {
             Use(Layout.PulseReturn);
-            if (!Lab.Pulse.IsPowered() || !Lab.Pulse.IsComplete())
+            if (!Lab.Doors->Pulse.IsPowered() || !Lab.Doors->Pulse.IsComplete())
             {
                 Fail(TEXT("return switch did not reopen the completed passage"));
                 return;
@@ -160,7 +163,7 @@ void UPulseDoorVerification::Check(const APowerLabGameMode& Lab, APowerLabCharac
         }
         break;
     case EPhase::OpenReturnDoor:
-        if (Lab.PulseDoor->GetComponentLocation().Z > Layout.PulseDoor.Center.Z + 250.0)
+        if (Lab.Doors->TimedDoor.Body.Get()->GetComponentLocation().Z > Layout.PulseDoor.Center.Z + 250.0)
         {
             const FVector Threshold(Layout.PulseDoor.Center.X, Layout.PulseDoor.Center.Y, Layout.Spawn.Z);
             LookFrom(Threshold, Threshold + FVector::ForwardVector * 180.0);
@@ -168,15 +171,15 @@ void UPulseDoorVerification::Check(const APowerLabGameMode& Lab, APowerLabCharac
         }
         break;
     case EPhase::LocalRecovery:
-        if (!Lab.Pulse.IsPowered() && DoorClosed())
+        if (!Lab.Doors->Pulse.IsPowered() && DoorClosed())
         {
-            if (!Player.GetActorLocation().Equals(Layout.PulseRetry, 3.0) || !Lab.Course.GetPower().ReflectionEmitter)
+            if (!Player.GetActorLocation().Equals(Layout.PulseRetry, 3.0) || !Lab.Optics->Course.GetPower().ReflectionEmitter)
             {
                 Fail(TEXT("the closing door did not return the player locally with optics still powered"));
                 return;
             }
             Use(Layout.PulseButton);
-            if (!Lab.Pulse.IsPowered())
+            if (!Lab.Doors->Pulse.IsPowered())
             {
                 Fail(TEXT("the pulse could not restart after the doorway recovery"));
                 return;
@@ -186,14 +189,34 @@ void UPulseDoorVerification::Check(const APowerLabGameMode& Lab, APowerLabCharac
         break;
     case EPhase::Reset:
         Player.ResetChamber();
-        if (Lab.Pulse.IsPowered() || Lab.Pulse.IsComplete() || !DoorClosed() || Lab.DisplayedPulseTenths != 0 ||
-            !Player.GetActorLocation().Equals(Layout.Spawn, 3.0) || Lab.bMirrorDocked || !Lab.Mirror->IsSimulatingPhysics() ||
-            !Lab.Mirror->GetComponentLocation().Equals(Layout.Mirror, 1.0) ||
-            !Lab.MirrorSurface->GetRelativeRotation().Equals(FRotator(0, -45, 0), 0.1))
+        if (Lab.Doors->Pulse.IsPowered() || Lab.Doors->Pulse.IsComplete() || !DoorClosed() || Lab.Doors->DisplayedPulseTenths != 0 ||
+            !Player.GetActorLocation().Equals(Layout.Spawn, 3.0) || !Lab.Reflector->PortableBody() || !Lab.Reflector->GetBody()->IsSimulatingPhysics() ||
+            !Lab.Reflector->GetBody()->GetComponentLocation().Equals(Layout.Mirror, 1.0) ||
+            !Lab.Reflector->GetSurface()->GetRelativeRotation().Equals(FRotator(0, -45, 0), 0.1))
         {
             Fail(TEXT("reset left a pulse, open door or completion"));
             return;
         }
+        Use(Layout.PulseButton);
+        if (!Lab.Doors->Pulse.IsPowered() || !FMath::IsNearlyEqual(Lab.GetPulseSeconds(), Layout.PulseSeconds))
+        {
+            Fail(TEXT("the reset passage did not start a fresh countdown"));
+            return;
+        }
+        Next(EPhase::CrossAfterReset);
+        break;
+    case EPhase::CrossAfterReset:
+        if (!Lab.Doors->Pulse.IsComplete())
+        {
+            Player.AddMovementInput((Layout.PulseExit.Center - Player.GetActorLocation()).GetSafeNormal2D());
+            break;
+        }
+        if (!Lab.Doors->Pulse.IsPowered() || DoorClosed())
+        {
+            Fail(TEXT("the player did not cross the open timed door after reset"));
+            return;
+        }
+        UE_LOG(LogPulseVerification, Display, TEXT("Timed door crossed again after full reset."));
         UE_LOG(LogPulseVerification, Display,
             TEXT("Timed passage verification passed: countdown, expiry, retry, crossing, return switch, local recovery and reset."));
         SetComponentTickEnabled(false);

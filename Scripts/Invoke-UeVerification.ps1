@@ -215,8 +215,8 @@ $scenarios = @{
         ExpectedError = 'LogParallelCircuit: Error: Parallel circuit verification failed: overloaded plate A still sends a signal'
         Success = @('Parallel circuit verification passed')
     }
-    Optics = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; CaptureFlag = '-CapturePowerLab'; Success = @('Power lab verification passed', 'Timed passage verification passed') }
-    FreeReflector = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; ExtraFlag = '-VerifyFreeReflector'; CaptureFlag = '-CapturePowerLab'; Success = @('Free reflector verification passed', 'Power lab verification passed', 'Timed passage verification passed') }
+    Optics = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; CaptureFlag = '-CapturePowerLab'; Success = @('Power lab verification passed', 'Timed door crossed again after full reset.', 'Timed passage verification passed') }
+    FreeReflector = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; ExtraFlag = '-VerifyFreeReflector'; CaptureFlag = '-CapturePowerLab'; Success = @('Free reflector verification passed', 'Power lab verification passed', 'Timed door crossed again after full reset.', 'Timed passage verification passed') }
     Gravity = @{ Map = "${entry}?game=/Script/Abandoned.GravityLabGameMode"; Flag = '-VerifyGravityLab'; CaptureFlag = '-CaptureGravityLab'; Success = @('Gravity lab verification passed') }
     Dev20 = @{
         Map = $dev20Map
