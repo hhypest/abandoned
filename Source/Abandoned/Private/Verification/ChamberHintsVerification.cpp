@@ -14,7 +14,6 @@ UChamberHintsVerification::UChamberHintsVerification()
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "InputKeyEventArgs.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Player/MovementProfile.h"
@@ -48,26 +47,9 @@ void UChamberHintsVerification::Attach(ATrainingChamberGameMode& Chamber)
     }
 }
 
-void UChamberHintsVerification::Press(APlayerController& Controller, const FKey& Key)
-{
-    InputOwner = &Controller;
-    PressedKey = Key;
-    Controller.InputKey(FInputKeyEventArgs(nullptr, INPUTDEVICEID_NONE, Key, IE_Pressed, FPlatformTime::Cycles64()));
-}
-
-void UChamberHintsVerification::ReleaseKey()
-{
-    if (APlayerController* Controller = InputOwner.Get())
-    {
-        Controller->InputKey(FInputKeyEventArgs(nullptr, INPUTDEVICEID_NONE, PressedKey, IE_Released, FPlatformTime::Cycles64()));
-    }
-    InputOwner.Reset();
-    PressedKey = FKey{};
-}
-
 void UChamberHintsVerification::EndPlay(const EEndPlayReason::Type Reason)
 {
-    ReleaseKey();
+    Input.Release();
     Super::EndPlay(Reason);
 }
 
@@ -75,7 +57,7 @@ void UChamberHintsVerification::Fail(const TCHAR* Reason)
 {
     UE_LOG(LogHintVerification, Error, TEXT("Chamber hints failed at step %d: %s."), static_cast<int32>(Phase), Reason);
     SetComponentTickEnabled(false);
-    ReleaseKey();
+    Input.Release();
     FPlatformMisc::RequestExitWithStatus(false, 1);
 }
 
@@ -88,9 +70,8 @@ void UChamberHintsVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
         Fail(TEXT("timed out waiting for the player or hint progression"));
         return;
     }
-    if (PressedKey.IsValid())
+    if (Input.Release())
     {
-        ReleaseKey();
         return;
     }
 
@@ -136,7 +117,7 @@ void UChamberHintsVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
             return;
         }
         AimAt(*Chamber->GetHintTerminal(), 150.0);
-        Press(*Controller, EKeys::E);
+        Input.Press(*Controller, EKeys::E);
         Phase = EPhase::CheckFirstPage;
         break;
     case EPhase::CheckFirstPage:
@@ -145,7 +126,7 @@ void UChamberHintsVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
             Fail(TEXT("E did not open the physical hint terminal"));
             return;
         }
-        Press(*Controller, EKeys::E);
+        Input.Press(*Controller, EKeys::E);
         Phase = EPhase::CheckLockedPages;
         break;
     case EPhase::CheckLockedPages:
@@ -160,7 +141,7 @@ void UChamberHintsVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
         if (Elapsed >= 1.2)
         {
             AimAt(*Chamber->GetButton(), -120.0);
-            Press(*Controller, EKeys::E);
+            Input.Press(*Controller, EKeys::E);
             SwitchPressedAt = Elapsed;
             Phase = EPhase::WaitForSecondEntry;
         }
@@ -179,7 +160,7 @@ void UChamberHintsVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
                 return;
             }
             AimAt(*Chamber->GetHintTerminal(), 150.0);
-            Press(*Controller, EKeys::E);
+            Input.Press(*Controller, EKeys::E);
             Phase = EPhase::ReadSecondEntry;
         }
         break;
@@ -195,7 +176,7 @@ void UChamberHintsVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
         if (ExpectedPage < Target)
         {
             ++ExpectedPage;
-            Press(*Controller, EKeys::E);
+            Input.Press(*Controller, EKeys::E);
             break;
         }
         if (Hints.HasNewEntry())
@@ -235,13 +216,13 @@ void UChamberHintsVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
                 return;
             }
             AimAt(*Chamber->GetHintTerminal(), 150.0);
-            Press(*Controller, EKeys::E);
+            Input.Press(*Controller, EKeys::E);
             ExpectedPage = 1;
             Phase = EPhase::ReadThirdEntry;
         }
         break;
     case EPhase::Reset:
-        Press(*Controller, EKeys::R);
+        Input.Press(*Controller, EKeys::R);
         Phase = EPhase::CheckReset;
         break;
     case EPhase::CheckReset:

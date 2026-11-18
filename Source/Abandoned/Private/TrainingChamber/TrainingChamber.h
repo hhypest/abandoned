@@ -101,7 +101,6 @@ private:
     void VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyBalanceChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
-    void VerifyParallelCircuit(ATrainingChamberCharacter& Player, float DeltaSeconds);
     EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
     float VerificationElapsed = 0.0f;
     bool bVerifyChamber = false;
@@ -111,9 +110,6 @@ private:
     bool bVerifiedWeightReset = false;
     bool bVerifyDev20 = false;
     bool bVerifyBalance = false;
-    bool bVerifyParallelCircuit = false;
-    int32 RelayTestStep = 0;
-    float RelayTestSeconds = 0.0f;
     int32 Dev20TestPhase = 0;
     int32 CourseTestStep = 0;
     float CourseTestTime = 0.0f;
