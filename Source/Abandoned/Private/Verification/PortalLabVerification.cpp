@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
+#include "Infrastructure/Puzzles/PortalRoomViewComponent.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Player/MovementProfile.h"
@@ -27,14 +28,15 @@ struct FPortalLabFixture
 
     bool IsReady() const
     {
-        return IsValid(Lab.Layout) && IsValid(Lab.ViewTexture) && Lab.Mouths.Num() == 2 &&
-            IsValid(Lab.Mouths[0].Console) && IsValid(Lab.Mouths[0].Shutter) &&
-            IsValid(Lab.Mouths[0].Window) && IsValid(Lab.Mouths[1].Window) &&
+        return IsValid(Lab.Layout) && IsValid(Lab.RoomView) && IsValid(Lab.RoomView->TextureTarget) &&
+            Lab.Mouths.Num() == 2 && IsValid(Lab.Mouths[0].Console) && IsValid(Lab.Mouths[0].Shutter) &&
+            IsValid(Lab.RoomView->Windows[0]) && IsValid(Lab.RoomView->Windows[1]) &&
             Lab.Cubes.Num() == 2 && IsValid(Lab.Cubes[0]) && IsValid(Lab.Cubes[1]);
     }
     const UPortalLabLayout& Layout() const { return *Lab.Layout; }
     APuzzleCube& Cube(int32 Index) const { return *Lab.Cubes[Index]; }
     const FPortalMouth& Mouth(int32 Index) const { return Lab.Mouths[Index]; }
+    const UStaticMeshComponent& Window(int32 Index) const { return *Lab.RoomView->Windows[Index]; }
     int32 BlockedTransfers() const { return Lab.BlockedTransfers; }
 
     void Place(const FTransform& Pose)
@@ -81,9 +83,10 @@ struct FPortalLabFixture
     }
     bool ReadCenter(FLinearColor& Sample) const
     {
-        const int32 X = Lab.ViewTexture->SizeX / 2;
-        const int32 Y = Lab.ViewTexture->SizeY / 2;
-        auto* Resource = Lab.ViewTexture->GameThread_GetRenderTargetResource();
+        UTextureRenderTarget2D& Target = *Lab.RoomView->TextureTarget;
+        const int32 X = Target.SizeX / 2;
+        const int32 Y = Target.SizeY / 2;
+        auto* Resource = Target.GameThread_GetRenderTargetResource();
         TArray<FLinearColor> Pixels;
         if (!Resource || !Resource->ReadLinearColorPixels(Pixels, FReadSurfaceDataFlags(RCM_MinMax),
             FIntRect(X - 1, Y - 1, X + 2, Y + 2)) || Pixels.IsEmpty())
@@ -137,6 +140,10 @@ void UPortalLabVerification::Fail(const TCHAR* Reason)
 void UPortalLabVerification::EndPlay(const EEndPlayReason::Type Reason)
 {
     Input.Release();
+    if (APlayerController* Viewer = ScriptedViewer.Get())
+    {
+        Viewer->SetIgnoreLookInput(false);
+    }
     Super::EndPlay(Reason);
 }
 
@@ -163,7 +170,7 @@ void UPortalLabVerification::TickComponent(float DeltaSeconds, ELevelTick TickTy
         Fail(TEXT("Portal fixture disappeared"));
         return;
     }
-    if (bCapture && !bCapturedFirstFrame && Fixture.Mouth(0).Window->IsVisible())
+    if (bCapture && !bCapturedFirstFrame && Fixture.Window(0).IsVisible())
     {
         FScreenshotRequest::RequestScreenshot(TEXT("PortalLab-FirstVisible"), false, false);
         bCapturedFirstFrame = true;
@@ -205,6 +212,9 @@ void UPortalLabVerification::Check(FPortalLabFixture& Fixture)
                 Fail(TEXT("The unpowered portal was not solid"));
                 return;
             }
+            // The scenario stages its own view. Desktop mouse motion must not rotate the camera between screenshots.
+            ScriptedViewer = &Fixture.Controller;
+            ScriptedViewer->SetIgnoreLookInput(true);
             Fixture.AimFrom(Layout.Arrival.Console + FVector(0, 120, 0), Layout.Arrival.Console);
             Input.Press(Fixture.Controller, EKeys::E);
             Next(EPhase::Power, TEXT("Testing the console from the closed entrance."));
@@ -244,7 +254,7 @@ void UPortalLabVerification::Check(FPortalLabFixture& Fixture)
     case EPhase::View:
         if (Elapsed >= 0.50f)
         {
-            if (!Fixture.Mouth(0).Window->IsVisible() || Fixture.Mouth(1).Window->IsVisible())
+            if (!Fixture.Window(0).IsVisible() || Fixture.Window(1).IsVisible())
             {
                 Fail(TEXT("Portal view failed to select the entrance"));
                 return;
@@ -266,7 +276,7 @@ void UPortalLabVerification::Check(FPortalLabFixture& Fixture)
                 return;
             }
             UE_LOG(LogPortalLabTest, Display, TEXT("Linked scene center %s via %s."),
-                *Sample.ToString(), *GetNameSafe(Fixture.Mouth(0).Window->GetMaterial(0)));
+                *Sample.ToString(), *GetNameSafe(Fixture.Window(0).GetMaterial(0)));
             if (Sample.R <= 0.0f || Sample.R <= Sample.B)
             {
                 Fail(TEXT("The aperture capture did not contain the destination's warm wall panel"));
@@ -395,6 +405,11 @@ void UPortalLabVerification::Check(FPortalLabFixture& Fixture)
     case EPhase::Reset:
         if (Transit.bInterrupted)
         {
+            if (Fixture.Window(0).IsVisible() || Fixture.Window(1).IsVisible())
+            {
+                Fail(TEXT("Power loss left the linked room visible"));
+                return;
+            }
             const auto* Grip = Player.FindComponentByClass<UObjectCarryComponent>();
             if (Transit.bPowered || HeldCube.IsValid() || !Grip || Grip->HeldBody() ||
                 !Player.GetActorLocation().Equals(Layout.Spawn, 4.0))
