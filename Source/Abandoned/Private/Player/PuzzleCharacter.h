@@ -23,6 +23,7 @@ public:
     const TCHAR* GetPlacementPrompt() const;
     const UCubePlacementComponent& GetPlacementPreview() const { return *Placement; }
     void ReleaseHeldObject();
+    bool TransitHeldBody(const FTransform& Through);
 
 protected:
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;
@@ -33,7 +34,6 @@ protected:
     void ResetChamber();
     UPrimitiveComponent* TraceInteractable() const;
     bool GrabBody(UBoxComponent& Body, float MassKg);
-    bool TransitHeldBody(const FTransform& Through);
 
 private:
     FVector InteractionRayEnd() const;
