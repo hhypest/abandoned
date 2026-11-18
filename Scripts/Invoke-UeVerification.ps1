@@ -4,7 +4,7 @@ param(
     [string]$EngineRoot,
 
     [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
-                 'Training', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
+                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -82,7 +82,21 @@ $scenarios = @{
         CheckPortalFrame = $true
         Success = @('Portal collision shapes verified', 'Rejected carry transit restored', 'Portal lab verification passed')
     }
-    Training = @{ Map = $entry; Flag = '-VerifyTrainingChamber'; Success = @('Verification passed: player weight, placement ghost, throw, staircase, detach and reset') }
+    Training = @{
+        Map = $entry
+        Flag = '-VerifyTrainingChamber'
+        CaptureFlag = '-CapturePlacementGhost'
+        Success = @('Held cube snapped to the plate at the ghost position.', 'Left mouse threw the cube forward.',
+                    'Player climbed from the stack onto the practice ledge.',
+                    'Verification passed: player weight, placement ghost, throw, staircase, detach and reset')
+    }
+    TrainingNegative = @{
+        Map = $entry
+        Flag = '-VerifyTrainingChamber'
+        ExtraFlag = '-ini:Game:[/Script/Abandoned.TrainingChamberLayout]:PlateActivationMassKg=10'
+        ExpectedError = 'LogTrainingVerification: Error: Training verification failed: settled 5 kg cube did not activate the plate'
+        Success = @('Verification passed: player weight, placement ghost, throw, staircase, detach and reset')
+    }
     ChamberHints = @{ Map = $entry; Flag = '-VerifyChamberHints'; CaptureFlag = '-CaptureChamberHints'; Success = @('Chamber hints verification passed') }
     ChamberHintsNegative = @{
         Map = $entry

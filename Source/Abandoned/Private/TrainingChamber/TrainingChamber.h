@@ -93,17 +93,8 @@ private:
     void AdvanceCourse(const ATrainingChamberCharacter& Player);
 
 #if WITH_DEV_AUTOMATION_TESTS
-    enum class EVerificationPhase
-    {
-        Initial, StandOnPlate, StandAfterReset, JumpOffPlate, LookUp, LookDown, Carry, Open, Cross, Close, Throw,
-        Return, CarryToStack, StartAscent, JumpToStack, JumpToLedge, RemoveSupport
-    };
-    void VerifyChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
     void VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
-    EVerificationPhase VerificationPhase = EVerificationPhase::Initial;
-    float VerificationElapsed = 0.0f;
-    bool bVerifyChamber = false;
-    bool bVerificationScreenshotRequested = false;
+    bool bCapturedCourseScreenshot = false;
     bool bVerifyEntryCourse = false;
     bool bVerifyEntryCheckpoint = false;
     bool bVerifiedWeightReset = false;
