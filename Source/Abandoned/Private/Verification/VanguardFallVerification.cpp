@@ -5,6 +5,7 @@
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
 #include "Expedition/VanguardRoute.h"
+#include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Expedition/VanguardRouteLayout.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/PlatformMisc.h"
@@ -88,7 +89,7 @@ void UVanguardFallVerification::CheckStep(AVanguardRouteGameMode& Route, AVangua
     }
     if (Phase == EPhase::Recover)
     {
-        if (Route.HasMinorInjuryNotice() || (bVerifyAudio && !bBreathDecoded))
+        if (Route.GetRouteState().HasMinorInjury() || (bVerifyAudio && !bBreathDecoded))
         {
             return;
         }
@@ -132,7 +133,7 @@ void UVanguardFallVerification::CheckStep(AVanguardRouteGameMode& Route, AVangua
             ObservedBreath = Player.InjuryBreath.Get();
             PlaybackHandle = Player.InjuryBreath->OnAudioPlaybackPercentNative.AddUObject(this, &UVanguardFallVerification::ObserveBreath);
         }
-        Route.LastGroundHeight.reset();
+        Route.RouteState->ForgetSupportForReposition();
         Player.PlaceAt(FTransform(FRotator::ZeroRotator,
             FVector(X, 0, Top + StandingHalfHeight + 2.0)));
         Phase = EPhase::WalkOff;
@@ -148,7 +149,7 @@ void UVanguardFallVerification::CheckStep(AVanguardRouteGameMode& Route, AVangua
     }
     else if (Phase == EPhase::Falling)
     {
-        if (Route.HasMinorInjuryNotice() != (DropIndex == 1) || DropIndex >= 2)
+        if (Route.GetRouteState().HasMinorInjury() != (DropIndex == 1) || DropIndex >= 2)
         {
             Fail(TEXT("unexpected injury outcome"));
             return;

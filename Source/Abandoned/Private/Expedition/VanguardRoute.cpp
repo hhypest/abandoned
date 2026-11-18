@@ -7,7 +7,8 @@
 #include "Verification/VanguardRadiationVerification.h"
 #endif
 
-#include "Application/Expedition/PassageProgress.h"
+#include "Expedition/VanguardSession.h"
+#include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/AudioComponent.h"
 #include "Components/BoxComponent.h"
@@ -19,7 +20,6 @@
 #include "EnhancedInputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "InputCoreTypes.h"
 #include "Materials/MaterialInterface.h"
@@ -37,8 +37,6 @@ namespace
 using Abandoned::Application::Expedition::RouteEntry;
 using Abandoned::Application::Expedition::VanguardDestination;
 using Abandoned::Application::Expedition::VanguardStop;
-using Abandoned::Domain::Expedition::FallImpact;
-using Abandoned::Domain::Expedition::RadiationPosition;
 using Abandoned::Infrastructure::Expedition::TravelToWorld;
 constexpr double VanguardAirlockTravelCm = 280.0;
 constexpr double SupplyReach = 240.0;
@@ -64,14 +62,21 @@ bool FitsMesh(UStaticMeshComponent* Visual, UStaticMesh* Mesh, FVector FitSize, 
     return true;
 }
 
-FBox BoundsOf(const FSceneBlock& Data)
+void MovePassageAirlock(UBoxComponent& Door, const UVanguardPassageLayout& Passage, const FVector& Position, float DeltaSeconds)
 {
-    return FBox(Data.Center - Data.Size * 0.5, Data.Center + Data.Size * 0.5);
+    const bool bNearDoor = FMath::Abs(Position.X - Passage.Door.Center.X) < 385.0 &&
+        FMath::Abs(Position.Y - Passage.Door.Center.Y) < 135.0;
+    FVector DoorPosition = Door.GetComponentLocation();
+    const double TargetZ = Passage.Door.Center.Z + (bNearDoor ? VanguardAirlockTravelCm : 0.0);
+    const double DoorStep = 340.0 * DeltaSeconds;
+    DoorPosition.Z += FMath::Clamp(TargetZ - DoorPosition.Z, -DoorStep, DoorStep);
+    Door.SetWorldLocation(DoorPosition, true);
 }
 }
 
 AVanguardRouteGameMode::AVanguardRouteGameMode()
 {
+    RouteState = CreateDefaultSubobject<UVanguardRouteStateComponent>(TEXT("RouteState"));
     DefaultPawnClass = AVanguardCharacter::StaticClass();
     HUDClass = AVanguardHUD::StaticClass();
     PlayerControllerClass = AAbandonedTestController::StaticClass();
@@ -100,31 +105,22 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         return;
     }
-    Destination = std::get<VanguardDestination>(*Route);
-    if (Destination.Stop == VanguardStop::RadiationPassage)
-    {
-        RadiationLayout = GetDefault<UVanguardRadiationLayout>();
-    }
+    auto Destination = std::get<VanguardDestination>(*Route);
     if (GetWorld()->WorldType != EWorldType::Game)
     {
         Destination.Entry = RouteEntry::Direct;
     }
-    if (!AtStation())
-    {
-        const UnrealCheckpointStore Store;
-        RecoveryDestination = Abandoned::Application::Expedition::PassageRecovery(
-            Destination, GetWorld()->WorldType == EWorldType::Game ? &Store : nullptr);
-    }
-    const auto* Passage = RadiationLayout ? static_cast<const UVanguardPassageLayout*>(RadiationLayout.Get())
-                                          : GetDefault<UVanguardPassageLayout>();
+    const bool bAtStation = Destination.Stop == VanguardStop::Station;
+    const bool bRadiation = Destination.Stop == VanguardStop::RadiationPassage;
+    const UVanguardPassageLayout* Passage = bRadiation ? GetDefault<UVanguardRadiationLayout>() : GetDefault<UVanguardPassageLayout>();
     const auto* Station = GetDefault<UVanguardStationLayout>();
-    Layout = AtStation() ? static_cast<const UVanguardRouteLayout*>(Station) : Passage;
+    Layout = bAtStation ? static_cast<const UVanguardRouteLayout*>(Station) : Passage;
     UStaticMesh* Cube = Abandoned::Blockout::LoadCube();
     if (!Cube || Layout->Room.IsEmpty() || Layout->Spawn.ContainsNaN() ||
         Layout->Room.ContainsByPredicate([](const FSceneBlock& Block) { return !Block.IsValid(); }) ||
         Layout->Lights.ContainsByPredicate([](const FSceneLight& Light) { return !Light.IsValid(); }) ||
         Layout->Finishes.ContainsByPredicate([](const FSceneFinish& Finish) { return !Finish.IsValid(); }) ||
-        (AtStation() ? !Station->SupplyCabinet.IsValid() : (!Passage->Door.IsValid() || !Passage->ExitZone.IsValid() ||
+        (bAtStation ? !Station->SupplyCabinet.IsValid() : (!Passage->Door.IsValid() || !Passage->ExitZone.IsValid() ||
             (Passage->bEnableMantle && (Passage->MantleLedges.IsEmpty() ||
                 Passage->MantleLedges.ContainsByPredicate([](const FSceneBlock& Ledge) { return !Ledge.IsValid() || !Ledge.bCollision; }))) ||
             !Passage->FrameFit.IsValid() || Passage->FrameRotation.ContainsNaN() || Passage->LeafRotation.ContainsNaN())))
@@ -133,36 +129,15 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         return;
     }
     const UVanguardInjurySettings& Injury = *GetDefault<UVanguardInjurySettings>();
-    if (!AtStation() && (!Injury.Recovery().IsValid() ||
+    if (!bAtStation && (!Injury.Recovery().IsValid() ||
         !FMath::IsFinite(Injury.BreathVolume) || Injury.BreathVolume < 0.0f || Injury.BreathVolume > 1.0f))
     {
         ErrorMessage = TEXT("Invalid Vanguard injury settings.");
         return;
     }
-    if (RadiationLayout)
+    if (!RouteState->Configure(Destination, bAtStation ? nullptr : Passage, ErrorMessage))
     {
-        const Abandoned::Domain::Expedition::FlarePattern Pattern{RadiationLayout->QuietSeconds,
-            RadiationLayout->FlareSeconds, RadiationLayout->QuietDosePerSecond, RadiationLayout->FlareDosePerSecond,
-            RadiationLayout->RecoveryDosePerSecond};
-        const FSceneBlock& Exposure = RadiationLayout->ExposureBounds;
-        const FBox ExposureBox = BoundsOf(Exposure);
-        const bool bInvalidShelter = RadiationLayout->ShelterBounds.ContainsByPredicate([&ExposureBox](const FSceneBlock& Shelter)
-        {
-            const FBox ShelterBox = BoundsOf(Shelter);
-            return !Shelter.IsValid() || !ExposureBox.IsInsideOrOn(ShelterBox.Min) || !ExposureBox.IsInsideOrOn(ShelterBox.Max);
-        });
-        if (!Pattern.IsValid() || !Exposure.IsValid() || RadiationLayout->ShelterBounds.IsEmpty() || bInvalidShelter ||
-            ExposureBox.IsInsideOrOn(Layout->Spawn) || ExposureBox.Intersect(BoundsOf(Passage->ExitZone)))
-        {
-            ErrorMessage = TEXT("Invalid radiation cycle, exposure bounds or shelters.");
-            return;
-        }
-        Radiation.emplace(Pattern);
-        if (!GetSession())
-        {
-            ErrorMessage = TEXT("Radiation passage requires an expedition session.");
-            return;
-        }
+        return;
     }
     UWorld& World = *GetWorld();
     Abandoned::Blockout::ApplyGravity(World);
@@ -182,7 +157,7 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         Abandoned::Scene::AddLight(World, Light);
     }
-    if (AtStation())
+    if (bAtStation)
     {
         SupplyCabinet = SpawnBlock(Station->SupplyCabinet, EComponentMobility::Static).Collision;
     }
@@ -224,40 +199,21 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
             bFrame ? TEXT("loaded") : TEXT("fallback"), bLeaf ? TEXT("loaded") : TEXT("fallback"),
             bFloor ? TEXT("loaded") : TEXT("fallback"), bWall ? TEXT("loaded") : TEXT("fallback"));
     }
-    if (AtStation() ? !SupplyCabinet : !Door)
+    if (bAtStation ? !SupplyCabinet : !Door)
     {
         ErrorMessage = TEXT("Could not spawn the Vanguard route device.");
         return;
     }
-    if (UVanguardSession* Session = GetSession())
-    {
-        if (Destination.Entry == RouteEntry::Campaign)
-        {
-            const auto Saved = Abandoned::Infrastructure::Expedition::UnrealCheckpointStore{}.Read();
-            Session->Suit.RestoreRecords(Saved.Archive);
-        }
-        if (AtStation())
-        {
-            const double ClearedDose = Session->Suit.EnterStation();
-            bClearedRadiation = ClearedDose > 0.0;
-            if (bClearedRadiation)
-            {
-                UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard station cleared remaining radiation dose: %.2f%%."), ClearedDose);
-            }
-        }
-        else
-        {
-            Session->Suit.EnterPassage(Radiation.has_value());
+    RouteState->EnterSegment();
 #if WITH_DEV_AUTOMATION_TESTS
-            if (!Radiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardOxygen")))
-            {
-                Session->Suit.SpendInPassage(555.0f);
-            }
-#endif
+    if (!bAtStation && !bRadiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardOxygen")))
+    {
+        if (UVanguardSession* Session = UVanguardSession::Find(*this))
+        {
+            Session->Suit.SpendInPassage(555.0f);
         }
     }
-#if WITH_DEV_AUTOMATION_TESTS
-    if (!AtStation() && !Radiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardFalls")))
+    if (!bAtStation && !bRadiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardFalls")))
     {
         FallCheck = UVanguardFallVerification::Attach(*this);
     }
@@ -268,19 +224,17 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     }
 #endif
     UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard segment ready: %s."),
-        AtStation() ? TEXT("station") : (Radiation ? TEXT("radiation passage") : TEXT("passage")));
+        bAtStation ? TEXT("station") : (bRadiation ? TEXT("radiation passage") : TEXT("passage")));
 }
 
 void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerController* Player)
 {
     if (Player && (Door || SupplyCabinet))
     {
-        LastGroundHeight.reset();
-        LandingImpact = FallImpact::None;
-        InjuryRecovery.Reset();
+        RouteState->ResetMovement();
         RestartPlayerAtTransform(Player, FTransform(FRotator::ZeroRotator, Layout->Spawn));
         Player->SetInputMode(FInputModeGameOnly());
-        const UVanguardSession* Session = GetSession();
+        const UVanguardSession* Session = UVanguardSession::Find(*this);
         if (AVanguardCharacter* Pawn = Cast<AVanguardCharacter>(Player->GetPawn()))
         {
             Pawn->ConfigureWristTerminal(BaseMaterial);
@@ -292,7 +246,7 @@ void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerContr
             Light.SetOuterConeAngle(Settings.OuterConeDegrees);
             Light.SetInnerConeAngle(Settings.InnerConeDegrees);
             Light.SetVisibility(Session && Session->Suit.IsFlashlightOn());
-            if (!AtStation())
+            if (!RouteState->AtStation())
             {
                 if (CastChecked<UVanguardPassageLayout>(Layout.Get())->bEnableMantle)
                 {
@@ -313,171 +267,31 @@ void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerContr
     }
 }
 
-UVanguardSession* AVanguardRouteGameMode::GetSession() const
-{
-    UGameInstance* Instance = GetGameInstance();
-    return Instance ? Instance->GetSubsystem<UVanguardSession>() : nullptr;
-}
-
-bool AVanguardRouteGameMode::AtStation() const
-{
-    return Destination.Stop == VanguardStop::Station;
-}
-
-float AVanguardRouteGameMode::GetOxygenPercent() const
-{
-    const UVanguardSession* Session = GetSession();
-    return Session ? Session->Suit.OxygenPercent() : 100.0f;
-}
-
-std::optional<Abandoned::Domain::Expedition::DosimeterReading> AVanguardRouteGameMode::GetDosimeter() const
-{
-    if (const UVanguardSession* Session = GetSession(); Radiation && Session)
-    {
-        return Radiation->Read(RadiationPosition, Session->Suit.RadiationDose());
-    }
-    return std::nullopt;
-}
-
-Abandoned::Application::Expedition::SuitTelemetry AVanguardRouteGameMode::GetSuitTelemetry() const
-{
-    const UVanguardSession* Session = GetSession();
-    return {GetOxygenPercent(), Session ? Session->Suit.RadiationDose().Percent() : 0.0, GetDosimeter(), AtStation()};
-}
-
-bool AVanguardRouteGameMode::TickRadiation(const FVector& Position, float DeltaSeconds,
-    Abandoned::Application::Expedition::SuitSession& Suit)
-{
-    if (!Radiation)
-    {
-        return false;
-    }
-    RadiationPosition = Abandoned::Domain::Expedition::RadiationPosition::Outside;
-    if (BoundsOf(RadiationLayout->ExposureBounds).IsInsideOrOn(Position))
-    {
-        const bool bSheltered = RadiationLayout->ShelterBounds.ContainsByPredicate([&Position](const FSceneBlock& Shelter)
-        {
-            return BoundsOf(Shelter).IsInsideOrOn(Position);
-        });
-        RadiationPosition = bSheltered ? Abandoned::Domain::Expedition::RadiationPosition::Sheltered
-                                      : Abandoned::Domain::Expedition::RadiationPosition::Exposed;
-    }
-    return Suit.AdvanceExposure(*Radiation, RadiationPosition, DeltaSeconds);
-}
-
-void AVanguardRouteGameMode::RestartRadiationPassage()
-{
-    if (Destination.Stop == VanguardStop::RadiationPassage && RecoveryDestination && !bTravelling)
-    {
-        bTravelling = true;
-        TravelToWorld(this, *RecoveryDestination);
-    }
-}
-
 void AVanguardRouteGameMode::Resupply()
 {
-    if (UVanguardSession* Session = GetSession(); AtStation() && Session)
-    {
-        Session->Suit.Resupply();
-        bResupplied = true;
-        UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard oxygen supply restored."));
-        if (Destination.Entry == RouteEntry::Campaign
 #if WITH_DEV_AUTOMATION_TESTS
-            && UVanguardRouteVerification::AllowsResupplySave()
+    RouteState->Resupply(UVanguardRouteVerification::AllowsResupplySave());
+#else
+    RouteState->Resupply(true);
 #endif
-        )
-        {
-            bCheckpointWriteFailed = !Abandoned::Infrastructure::Expedition::UnrealCheckpointStore{}.RecordResupply();
-            if (bCheckpointWriteFailed)
-            {
-                UE_LOG(LogVanguardRoute, Warning, TEXT("Could not save the resupply record. Previous data preserved."));
-            }
-        }
-    }
 }
 
-void AVanguardRouteGameMode::RecordLanding(double SurfaceHeight)
+void AVanguardCharacter::UpdatePassageMovement(UVanguardRouteStateComponent& Route, bool bEnableMantle, float DeltaSeconds)
 {
-    if (AtStation() || !LastGroundHeight)
-    {
-        return;
-    }
-    // Round contact measurements to millimeters so physics noise does not turn a 3 m drop fatal.
-    const double DropCm = FMath::RoundToDouble((*LastGroundHeight - SurfaceHeight) * 10.0) / 10.0;
-    LastGroundHeight.reset();
-    LandingImpact = Abandoned::Domain::Expedition::AssessFall(DropCm);
-    if (LandingImpact != FallImpact::None)
-    {
-        UE_LOG(LogVanguardRoute, Display, TEXT("Passage fall %.1f cm: %s."), DropCm,
-            LandingImpact == FallImpact::Fatal ? TEXT("fatal") : TEXT("minor injury"));
-    }
-}
-
-void AVanguardRouteGameMode::TickPassage(AVanguardCharacter& Player, float DeltaSeconds)
-{
-    const UCharacterMovementComponent* Movement = Player.GetCharacterMovement();
+    const UCharacterMovementComponent* Movement = GetCharacterMovement();
+    std::optional<double> WalkableHeight;
     if (Movement->IsMovingOnGround() && Movement->CurrentFloor.IsWalkableFloor())
     {
-        LastGroundHeight = Movement->CurrentFloor.HitResult.ImpactPoint.Z;
+        WalkableHeight = Movement->CurrentFloor.HitResult.ImpactPoint.Z;
     }
-    InjuryRecovery.Advance(DeltaSeconds);
-    if (LandingImpact == FallImpact::MinorInjury)
+    if (Route.AdvanceMovement(WalkableHeight, DeltaSeconds))
     {
-        InjuryRecovery.Start(GetDefault<UVanguardInjurySettings>()->Recovery());
-        Player.PlayInjuryBreath();
-        LandingImpact = FallImpact::None;
+        PlayInjuryBreath();
     }
-    Player.SetGroundSpeedScale(InjuryRecovery.GroundSpeedScale());
-    const auto& Passage = *CastChecked<UVanguardPassageLayout>(Layout.Get());
-    if (Passage.bEnableMantle)
+    SetGroundSpeedScale(Route.GroundSpeedScale());
+    if (bEnableMantle)
     {
-        Player.UpdateMantle(DeltaSeconds, LastGroundHeight);
-    }
-    const FVector Position = Player.GetActorLocation();
-    const bool bNearDoor = FMath::Abs(Position.X - Passage.Door.Center.X) < 385.0 &&
-        FMath::Abs(Position.Y - Passage.Door.Center.Y) < 135.0;
-    FVector DoorPosition = Door->GetComponentLocation();
-    const double TargetZ = Passage.Door.Center.Z + (bNearDoor ? VanguardAirlockTravelCm : 0.0);
-    const double DoorStep = 340.0 * DeltaSeconds;
-    DoorPosition.Z += FMath::Clamp(TargetZ - DoorPosition.Z, -DoorStep, DoorStep);
-    Door->SetWorldLocation(DoorPosition, true);
-
-    UVanguardSession* Session = GetSession();
-    const bool bRadiationLimit = Session && TickRadiation(Position, DeltaSeconds, Session->Suit);
-    const bool bOxygenDepleted = Session && Session->Suit.SpendInPassage(DeltaSeconds);
-    using namespace Abandoned::Application::Expedition;
-    const auto Outcome = ResolvePassage({
-        .ReachedExit = BoundsOf(Passage.ExitZone).IsInside(Position),
-        .Impact = LandingImpact,
-        .OutOfBounds = Position.Z < -600.0,
-        .OxygenDepleted = bOxygenDepleted,
-        .RadiationLimitReached = bRadiationLimit});
-    if (Outcome == PassageOutcome::ReturnToCheckpoint)
-    {
-        if (bRadiationLimit)
-        {
-            UE_LOG(LogVanguardRoute, Display, TEXT("Radiation dose limit reached. Returning to the passage checkpoint."));
-#if WITH_DEV_AUTOMATION_TESTS
-            if (auto* Check = RadiationCheck.Get(); Check && Session)
-            {
-                Check->ObserveDoseLimit(*Session);
-            }
-#endif
-        }
-        if (const auto* Chamber = std::get_if<ChamberDestination>(&*RecoveryDestination); Chamber && Chamber->Chamber)
-        {
-            UE_LOG(LogVanguardRoute, Display, TEXT("Passage checkpoint recovery: %s (%s)."),
-                *Abandoned::Infrastructure::Expedition::WriteSegment(*Chamber->Chamber),
-                bOxygenDepleted ? TEXT("oxygen depleted") : TEXT("fall"));
-        }
-        bTravelling = true;
-        TravelToWorld(this, *RecoveryDestination);
-        return;
-    }
-    if (Outcome == PassageOutcome::EnterSanctuary)
-    {
-        bTravelling = true;
-        TravelToWorld(this, StationAfterPassage(Destination, *RecoveryDestination));
+        UpdateMantle(DeltaSeconds, Route.SupportHeight());
     }
 }
 
@@ -486,20 +300,33 @@ void AVanguardRouteGameMode::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     const APlayerController* Controller = GetWorld()->GetFirstPlayerController();
     AVanguardCharacter* Player = Controller ? Cast<AVanguardCharacter>(Controller->GetPawn()) : nullptr;
-    if (!Player || bTravelling)
+    if (!Player || RouteState->IsTravelling())
     {
         return;
     }
-    if (!AtStation() && RecoveryDestination && IsValid(Door))
+    if (!RouteState->AtStation() && IsValid(Door))
     {
-        TickPassage(*Player, DeltaSeconds);
+        const auto& Passage = *CastChecked<UVanguardPassageLayout>(Layout.Get());
+        Player->UpdatePassageMovement(*RouteState, Passage.bEnableMantle, DeltaSeconds);
+        const FVector Position = Player->GetActorLocation();
+        MovePassageAirlock(*Door, Passage, Position, DeltaSeconds);
+        if (const auto Transition = RouteState->AdvancePassage(Position, DeltaSeconds))
+        {
+#if WITH_DEV_AUTOMATION_TESTS
+            if (Transition->bDoseLimitReached && RadiationCheck.IsValid())
+            {
+                if (UVanguardSession* Session = UVanguardSession::Find(*this))
+                {
+                    RadiationCheck->ObserveDoseLimit(*Session);
+                }
+            }
+#endif
+            Player->CloseWristTerminal();
+            TravelToWorld(this, Transition->Destination);
+            return;
+        }
     }
-    if (bTravelling)
-    {
-        Player->CloseWristTerminal();
-        return;
-    }
-    Player->UpdateWristTerminal(*this);
+    Player->UpdateWristTerminal(*RouteState);
 #if WITH_DEV_AUTOMATION_TESTS
     if (auto* RadiationTest = RadiationCheck.Get())
     {
@@ -554,7 +381,11 @@ void AVanguardCharacter::ResetRadiation()
 {
     if (AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>())
     {
-        Mode->RestartRadiationPassage();
+        if (const auto Recovery = Mode->RouteState->RestartRadiationPassage())
+        {
+            CloseWristTerminal();
+            TravelToWorld(this, *Recovery);
+        }
     }
 }
 
@@ -567,12 +398,9 @@ void AVanguardCharacter::ToggleFlashlight()
 {
     const bool bOn = !IsFlashlightOn();
     ShoulderLight->SetVisibility(bOn);
-    if (const auto* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>())
+    if (UVanguardSession* Session = UVanguardSession::Find(*this))
     {
-        if (UVanguardSession* Session = Mode->GetSession())
-        {
-            Session->Suit.SetFlashlight(bOn);
-        }
+        Session->Suit.SetFlashlight(bOn);
     }
 }
 
@@ -581,7 +409,7 @@ void AVanguardCharacter::Landed(const FHitResult& Hit)
     Super::Landed(Hit);
     if (AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>())
     {
-        Mode->RecordLanding(Hit.ImpactPoint.Z);
+        Mode->RouteState->RecordLanding(Hit.ImpactPoint.Z);
     }
 }
 
@@ -605,72 +433,4 @@ void AVanguardCharacter::Interact()
     {
         GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>()->Resupply();
     }
-}
-
-void AVanguardHUD::DrawHUD()
-{
-    Super::DrawHUD();
-    const AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>();
-    const AVanguardCharacter* Player = Cast<AVanguardCharacter>(GetOwningPawn());
-    if (!Mode || !Player)
-    {
-        return;
-    }
-    const auto Dosimeter = Mode->GetDosimeter();
-    const TCHAR* Location = Mode->AtStation() ? TEXT("VANGUARD / OUTPOST 01") : TEXT("PASSAGE / VANGUARD OUTPOST 01");
-    DrawText(Dosimeter ? TEXT("ENERGY TIER / EXTERIOR GALLERY") : Location,
-        FLinearColor::White, 24.0f, 24.0f, nullptr, 1.2f);
-    DrawText(FString::Printf(TEXT("Suit oxygen: %.0f%%"), Mode->GetOxygenPercent()), FLinearColor::White, 24.0f, 54.0f);
-    if (Player->CanReachSupply())
-    {
-        DrawText(TEXT("[E] Connect oxygen supply"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 80.0f);
-    }
-    else if (Mode->HasResupplied())
-    {
-        DrawText(TEXT("Supply restored"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 80.0f);
-    }
-    DrawText(Player->IsFlashlightOn() ? TEXT("[F] Shoulder light on") : TEXT("[F] Shoulder light off"),
-        FLinearColor::White, 24.0f, 106.0f);
-    if (Mode->HasMinorInjuryNotice())
-    {
-        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, 129.0f, 330.0f, 23.0f);
-        DrawText(TEXT("Suit: minor impact injury. Recovering gait."), FLinearColor(1.0, 0.68, 0.23), 24.0f, 132.0f);
-    }
-    if (Mode->HasClearedRadiation())
-    {
-        DrawText(TEXT("Station decontamination complete"), FLinearColor::White, 24.0f, 132.0f);
-    }
-    if (Player->CanMantle() && !Player->IsMantling())
-    {
-        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, 152.0f, 194.0f, 26.0f);
-        DrawText(TEXT("[Hold Space] Climb ledge"), FLinearColor::White, 24.0f, 158.0f);
-    }
-    if (Dosimeter)
-    {
-        using Abandoned::Domain::Expedition::RadiationPosition;
-        const TCHAR* Zone = Dosimeter->Position == RadiationPosition::Sheltered ? TEXT("SHELTERED")
-            : Dosimeter->Position == RadiationPosition::Exposed ? TEXT("EXPOSED") : TEXT("SAFE APPROACH");
-        const TCHAR* Phase = Dosimeter->FlareActive ? TEXT("FLARE ENDS IN") : TEXT("NEXT FLARE IN");
-        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, 152.0f, 310.0f, 88.0f);
-        DrawText(FString::Printf(TEXT("DOSIMETER / %s"), Zone), FLinearColor::White, 24.0f, 158.0f);
-        DrawText(FString::Printf(TEXT("%s %d s"), Phase, FMath::CeilToInt(Dosimeter->SecondsToChange)),
-            FLinearColor::White, 24.0f, 178.0f);
-        DrawText(FString::Printf(TEXT("DOSE %.1f%% OF LIMIT  |  %.1f%%/s"), Dosimeter->DosePercent, Dosimeter->DosePerSecond),
-            FLinearColor::White, 24.0f, 198.0f);
-        DrawText(TEXT("[R] Restart passage"), FLinearColor::White, 24.0f, 218.0f);
-    }
-    if (!Player->IsMantling())
-    {
-        const float Y = Dosimeter ? 244.0f : 183.0f;
-        const TCHAR* Tip = Player->IsWristTerminalOpen()
-            ? TEXT("[T] Lower wrist  [Tab] Page  [PgUp/PgDn] Archive")
-            : TEXT("[T] Wrist terminal");
-        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, Y, Player->IsWristTerminalOpen() ? 370.0f : 145.0f, 23.0f);
-        DrawText(Tip, FLinearColor::White, 24.0f, Y + 3.0f);
-    }
-    if (Mode->HasCheckpointWriteFailed())
-    {
-        DrawText(TEXT("Could not save resupply record. Previous data preserved."), FLinearColor::White, 24.0f, 270.0f);
-    }
-    DrawWristReadout(*Player);
 }

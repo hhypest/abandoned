@@ -2,6 +2,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Expedition/VanguardRoute.h"
+#include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
+#include "Expedition/VanguardSession.h"
 #include "Expedition/VanguardRouteLayout.h"
 #include "Verification/VanguardWristTerminalVerification.h"
 
@@ -19,7 +21,7 @@ UVanguardRadiationVerification* UVanguardRadiationVerification::AttachIfRequeste
 {
     const auto* Passage = Cast<UVanguardRadiationLayout>(&Layout);
     const bool bCheckWrist = FParse::Param(FCommandLine::Get(), TEXT("VerifyWristTerminal"));
-    if ((!Passage && !Route.AtStation()) || (!bCheckWrist && !FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation"))))
+    if ((!Passage && !Route.GetRouteState().AtStation()) || (!bCheckWrist && !FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation"))))
     {
         return nullptr;
     }
@@ -71,10 +73,10 @@ void UVanguardRadiationVerification::CheckStep(const AVanguardRouteGameMode& Rou
         return;
     }
     const auto* Session = UGameInstance::GetSubsystem<UVanguardSession>(Route.GetGameInstance());
-    const auto Reading = Route.GetDosimeter();
-    if (Route.AtStation())
+    const auto Reading = Route.GetRouteState().GetDosimeter();
+    if (Route.GetRouteState().AtStation())
     {
-        if (Reading || !Session || !Session->bRecoveredFromRadiation || !Route.HasClearedRadiation() ||
+        if (Reading || !Session || !Session->bRecoveredFromRadiation || !Route.GetRouteState().HasClearedRadiation() ||
             Session->Suit.RadiationDose().Percent() != 0.0)
         {
             Fail(TEXT("the station should clear the remaining dose after a full passage run"));

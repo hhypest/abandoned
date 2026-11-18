@@ -1,6 +1,10 @@
 #include "Expedition/VanguardRoute.h"
 #include "Expedition/VanguardRouteLayout.h"
 
+#include "Expedition/VanguardSession.h"
+#include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
+#include "Engine/Canvas.h"
+#include "Engine/World.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "EnhancedInputComponent.h"
@@ -128,23 +132,22 @@ void AVanguardCharacter::PreviousArchiveRecord()
 
 void AVanguardCharacter::MoveArchive(bool Forward)
 {
-    const AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>();
-    if (const UVanguardSession* Session = Mode ? Mode->GetSession() : nullptr)
+    if (const UVanguardSession* Session = UVanguardSession::Find(*this))
     {
         WristTerminal.MoveArchive(Forward, Session->Suit.Records());
     }
 }
 
-void AVanguardCharacter::UpdateWristTerminal(const AVanguardRouteGameMode& Mode)
+void AVanguardCharacter::UpdateWristTerminal(const UVanguardRouteStateComponent& Route)
 {
     const auto Page = WristTerminal.Page();
-    const UVanguardSession* Session = Mode.GetSession();
+    const UVanguardSession* Session = UVanguardSession::Find(*this);
     if (!Page || !Session)
     {
         return;
     }
 
-    const auto Reading = Mode.GetSuitTelemetry();
+    const auto Reading = Route.GetSuitTelemetry();
     const TCHAR* Heading = TEXT("SUIT / STATUS");
     FString Body;
     switch (*Page)
@@ -209,4 +212,74 @@ void AVanguardHUD::DrawWristReadout(const AVanguardCharacter& Player)
     const float Scale = Height / 110.0f;
     DrawText(Player.WristHeading, FLinearColor(0.49f, 0.95f, 0.88f), Top.X, Top.Y, nullptr, Scale * 1.12f);
     DrawText(Player.WristReadout, FLinearColor(0.9f, 0.95f, 0.98f), Top.X, Top.Y + Height * 0.22f, nullptr, Scale);
+}
+
+void AVanguardHUD::DrawHUD()
+{
+    Super::DrawHUD();
+    const AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>();
+    const AVanguardCharacter* Player = Cast<AVanguardCharacter>(GetOwningPawn());
+    if (!Mode || !Player)
+    {
+        return;
+    }
+    const UVanguardRouteStateComponent& Route = Mode->GetRouteState();
+    const auto Reading = Route.GetSuitTelemetry();
+    const auto& Dosimeter = Reading.Forecast;
+    const TCHAR* Location = Reading.AtStation ? TEXT("VANGUARD / OUTPOST 01") : TEXT("PASSAGE / VANGUARD OUTPOST 01");
+    DrawText(Dosimeter ? TEXT("ENERGY TIER / EXTERIOR GALLERY") : Location,
+        FLinearColor::White, 24.0f, 24.0f, nullptr, 1.2f);
+    DrawText(FString::Printf(TEXT("Suit oxygen: %.0f%%"), Reading.OxygenPercent), FLinearColor::White, 24.0f, 54.0f);
+    if (Player->CanReachSupply())
+    {
+        DrawText(TEXT("[E] Connect oxygen supply"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 80.0f);
+    }
+    else if (Route.HasResupplied())
+    {
+        DrawText(TEXT("Supply restored"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 80.0f);
+    }
+    DrawText(Player->IsFlashlightOn() ? TEXT("[F] Shoulder light on") : TEXT("[F] Shoulder light off"),
+        FLinearColor::White, 24.0f, 106.0f);
+    if (Route.HasMinorInjury())
+    {
+        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, 129.0f, 330.0f, 23.0f);
+        DrawText(TEXT("Suit: minor impact injury. Recovering gait."), FLinearColor(1.0, 0.68, 0.23), 24.0f, 132.0f);
+    }
+    if (Route.HasClearedRadiation())
+    {
+        DrawText(TEXT("Station decontamination complete"), FLinearColor::White, 24.0f, 132.0f);
+    }
+    if (Player->CanMantle() && !Player->IsMantling())
+    {
+        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, 152.0f, 194.0f, 26.0f);
+        DrawText(TEXT("[Hold Space] Climb ledge"), FLinearColor::White, 24.0f, 158.0f);
+    }
+    if (Dosimeter)
+    {
+        using Abandoned::Domain::Expedition::RadiationPosition;
+        const TCHAR* Zone = Dosimeter->Position == RadiationPosition::Sheltered ? TEXT("SHELTERED")
+            : Dosimeter->Position == RadiationPosition::Exposed ? TEXT("EXPOSED") : TEXT("SAFE APPROACH");
+        const TCHAR* Phase = Dosimeter->FlareActive ? TEXT("FLARE ENDS IN") : TEXT("NEXT FLARE IN");
+        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, 152.0f, 310.0f, 88.0f);
+        DrawText(FString::Printf(TEXT("DOSIMETER / %s"), Zone), FLinearColor::White, 24.0f, 158.0f);
+        DrawText(FString::Printf(TEXT("%s %d s"), Phase, FMath::CeilToInt(Dosimeter->SecondsToChange)),
+            FLinearColor::White, 24.0f, 178.0f);
+        DrawText(FString::Printf(TEXT("DOSE %.1f%% OF LIMIT  |  %.1f%%/s"), Dosimeter->DosePercent, Dosimeter->DosePerSecond),
+            FLinearColor::White, 24.0f, 198.0f);
+        DrawText(TEXT("[R] Restart passage"), FLinearColor::White, 24.0f, 218.0f);
+    }
+    if (!Player->IsMantling())
+    {
+        const float Y = Dosimeter ? 244.0f : 183.0f;
+        const TCHAR* Tip = Player->IsWristTerminalOpen()
+            ? TEXT("[T] Lower wrist  [Tab] Page  [PgUp/PgDn] Archive")
+            : TEXT("[T] Wrist terminal");
+        DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.75f), 16.0f, Y, Player->IsWristTerminalOpen() ? 370.0f : 145.0f, 23.0f);
+        DrawText(Tip, FLinearColor::White, 24.0f, Y + 3.0f);
+    }
+    if (Route.HasCheckpointWriteFailed())
+    {
+        DrawText(TEXT("Could not save resupply record. Previous data preserved."), FLinearColor::White, 24.0f, 270.0f);
+    }
+    DrawWristReadout(*Player);
 }

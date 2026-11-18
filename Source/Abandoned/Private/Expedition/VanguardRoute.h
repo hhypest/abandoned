@@ -4,17 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Application/Expedition/MantleRequest.h"
-#include "Application/Expedition/SuitSession.h"
 #include "Application/Expedition/SuitTerminal.h"
-#include "Application/Expedition/WorldRoute.h"
-#include "Domain/Expedition/EntryRoute.h"
-#include "Domain/Expedition/FallImpact.h"
-#include "Domain/Expedition/RadiationExposure.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
 #include "Infrastructure/Expedition/UnrealMantle.h"
 #include "Player/AbandonedCharacter.h"
-#include "Subsystems/GameInstanceSubsystem.h"
 #include "VanguardRoute.generated.h"
 
 class AVanguardCharacter;
@@ -23,20 +17,8 @@ class UBoxComponent;
 class UMaterialInterface;
 class USpotLightComponent;
 class UStaticMeshComponent;
-class UVanguardRadiationLayout;
+class UVanguardRouteStateComponent;
 class UVanguardRouteLayout;
-
-UCLASS()
-class UVanguardSession final : public UGameInstanceSubsystem
-{
-    GENERATED_BODY()
-
-public:
-    Abandoned::Application::Expedition::SuitSession Suit;
-#if WITH_DEV_AUTOMATION_TESTS
-    bool bRecoveredFromRadiation = false;
-#endif
-};
 
 UCLASS()
 class AVanguardRouteGameMode final : public AGameModeBase
@@ -48,24 +30,12 @@ public:
     void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
     void HandleStartingNewPlayer_Implementation(APlayerController* Player) override;
     void Tick(float DeltaSeconds) override;
-    bool AtStation() const;
-    bool HasResupplied() const { return bResupplied; }
-    bool HasClearedRadiation() const { return bClearedRadiation; }
-    bool HasCheckpointWriteFailed() const { return bCheckpointWriteFailed; }
-    float GetOxygenPercent() const;
-    std::optional<Abandoned::Domain::Expedition::DosimeterReading> GetDosimeter() const;
-    bool HasMinorInjuryNotice() const { return InjuryRecovery.IsActive(); }
+    const UVanguardRouteStateComponent& GetRouteState() const { return *RouteState; }
     UBoxComponent* GetSupplyCabinet() const { return SupplyCabinet; }
     void Resupply();
 
 private:
     friend class AVanguardCharacter;
-    UVanguardSession* GetSession() const;
-    Abandoned::Application::Expedition::SuitTelemetry GetSuitTelemetry() const;
-    void RecordLanding(double SurfaceHeight);
-    bool TickRadiation(const FVector& Position, float DeltaSeconds, Abandoned::Application::Expedition::SuitSession& Suit);
-    void RestartRadiationPassage();
-    void TickPassage(AVanguardCharacter& Player, float DeltaSeconds);
 #if WITH_DEV_AUTOMATION_TESTS
     friend class UVanguardFallVerification;
     TWeakObjectPtr<class UVanguardFallVerification> FallCheck;
@@ -80,25 +50,13 @@ private:
     TObjectPtr<const UVanguardRouteLayout> Layout;
 
     UPROPERTY(Transient)
-    TObjectPtr<const UVanguardRadiationLayout> RadiationLayout;
+    TObjectPtr<UVanguardRouteStateComponent> RouteState;
 
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> Door;
 
     UPROPERTY(Transient)
     TObjectPtr<UBoxComponent> SupplyCabinet;
-
-    Abandoned::Application::Expedition::VanguardDestination Destination;
-    std::optional<Abandoned::Application::Expedition::WorldDestination> RecoveryDestination;
-    bool bTravelling = false;
-    bool bResupplied = false;
-    bool bClearedRadiation = false;
-    bool bCheckpointWriteFailed = false;
-    std::optional<double> LastGroundHeight;
-    Abandoned::Domain::Expedition::FallImpact LandingImpact = Abandoned::Domain::Expedition::FallImpact::None;
-    Abandoned::Domain::Expedition::MinorInjuryRecovery InjuryRecovery;
-    std::optional<Abandoned::Domain::Expedition::RadiationExposure> Radiation;
-    Abandoned::Domain::Expedition::RadiationPosition RadiationPosition = Abandoned::Domain::Expedition::RadiationPosition::Outside;
 };
 
 UCLASS()
@@ -139,7 +97,8 @@ private:
     void NextArchiveRecord();
     void PreviousArchiveRecord();
     void MoveArchive(bool Forward);
-    void UpdateWristTerminal(const AVanguardRouteGameMode& Mode);
+    void UpdateWristTerminal(const UVanguardRouteStateComponent& Route);
+    void UpdatePassageMovement(UVanguardRouteStateComponent& Route, bool bEnableMantle, float DeltaSeconds);
     void UpdateMantle(float DeltaSeconds, std::optional<double> SupportHeight);
     void FinishMantle();
     void CreateMantleVisuals();

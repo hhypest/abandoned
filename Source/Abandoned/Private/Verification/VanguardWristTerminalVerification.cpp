@@ -2,6 +2,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Expedition/VanguardRoute.h"
+#include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
+#include "Expedition/VanguardSession.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -105,13 +107,13 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardRouteGameMode&
         Phase = EPhase::Status;
         break;
     case EPhase::Status:
-        if (!Player.WristReadout.Contains(FString::Printf(TEXT("OXYGEN  %.1f%%"), Route.GetOxygenPercent())) ||
-            (Route.AtStation() ? !Shows(SuitPage::Status, TEXT("DOSE    0.0%")) :
-            !Shows(SuitPage::Status, TEXT("NEXT FLARE IN")) || Route.GetOxygenPercent() >= 100.0f))
+        if (!Player.WristReadout.Contains(FString::Printf(TEXT("OXYGEN  %.1f%%"), Route.GetRouteState().GetOxygenPercent())) ||
+            (Route.GetRouteState().AtStation() ? !Shows(SuitPage::Status, TEXT("DOSE    0.0%")) :
+            !Shows(SuitPage::Status, TEXT("NEXT FLARE IN")) || Route.GetRouteState().GetOxygenPercent() >= 100.0f))
         {
             return Fail(TEXT("live status at the safe approach or decontaminated station"));
         }
-        if (!Route.AtStation() && !Session->bRecoveredFromRadiation)
+        if (!Route.GetRouteState().AtStation() && !Session->bRecoveredFromRadiation)
         {
             Capture(TEXT("Wrist-Terminal-Status"));
         }
@@ -119,7 +121,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardRouteGameMode&
         Phase = EPhase::Signal;
         break;
     case EPhase::Signal:
-        if (!Shows(SuitPage::Signal, Route.AtStation() ? TEXT("Exterior forecast offline") : TEXT("Forecast receiving")))
+        if (!Shows(SuitPage::Signal, Route.GetRouteState().AtStation() ? TEXT("Exterior forecast offline") : TEXT("Forecast receiving")))
         {
             return Fail(TEXT("signal should reflect the currently available link"));
         }
@@ -128,15 +130,15 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardRouteGameMode&
         break;
     case EPhase::Archive:
         if (!Shows(SuitPage::Archive, TEXT("Flare forecast acquired.")) ||
-            Session->Suit.Records().Size() != (Route.AtStation() ? 2u : 1u))
+            Session->Suit.Records().Size() != (Route.GetRouteState().AtStation() ? 2u : 1u))
         {
             return Fail(TEXT("acquired record should survive travel and occur once"));
         }
-        if (Session->bRecoveredFromRadiation && !Route.AtStation())
+        if (Session->bRecoveredFromRadiation && !Route.GetRouteState().AtStation())
         {
             UE_LOG(LogWristTerminal, Display, TEXT("Wrist archive after checkpoint recovery: one forecast record."));
         }
-        if (Route.AtStation())
+        if (Route.GetRouteState().AtStation())
         {
             Capture(TEXT("Wrist-Terminal-Archive"));
             Key.Press(*PC, EKeys::PageDown);
@@ -148,7 +150,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardRouteGameMode&
         Phase = EPhase::ReadArchive;
         break;
     case EPhase::ReadArchive:
-        if (!Route.AtStation())
+        if (!Route.GetRouteState().AtStation())
         {
             if (Player.WristTerminal.Page() != SuitPage::Status)
             {
@@ -173,7 +175,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardRouteGameMode&
         Phase = EPhase::CheckResupply;
         break;
     case EPhase::CheckResupply:
-        if (!Route.HasResupplied() || Route.GetOxygenPercent() != 100.0f || Session->Suit.Records().Size() != 3u ||
+        if (!Route.GetRouteState().HasResupplied() || Route.GetRouteState().GetOxygenPercent() != 100.0f || Session->Suit.Records().Size() != 3u ||
             Session->Suit.Records().At(2) != SuitRecord::OxygenRestored)
         {
             return Fail(TEXT("resupply should restore oxygen and append an entry with the wrist raised"));

@@ -1,7 +1,7 @@
 #include "Application/Expedition/EntryCourse.h"
 #include "Application/Expedition/Dev20Transfer.h"
 #include "Application/Expedition/MantleRequest.h"
-#include "Application/Expedition/PassageProgress.h"
+#include "Application/Expedition/PassageHazards.h"
 #include "Application/Expedition/SuitSession.h"
 #include "Application/Expedition/SuitTerminal.h"
 #include "Application/Puzzles/OpticsCourse.h"
@@ -247,6 +247,34 @@ void TestFallImpact()
     CHECK(Recovery.GroundSpeedScale() == Profile.InitialSpeedScale);
     Recovery.Reset();
     CHECK(!Recovery.IsActive() && Recovery.GroundSpeedScale() == 1.0f);
+}
+
+void TestPassageHazards()
+{
+    PassageHazards Passage;
+    SuitSession Suit;
+    constexpr InjuryRecoveryProfile Profile{2.5, 0.65f};
+    CHECK(!Passage.Land(0.0));
+    CHECK(!Passage.AdvanceMovement(300.02, 0.0f, Profile));
+    CHECK(Passage.Land(0.0) == 300.0);
+    CHECK(!Passage.Land(0.0));
+    CHECK(Passage.AdvanceMovement(0.0, 0.1f, Profile));
+    CHECK(!Passage.AdvanceMovement(0.0, 2.5f, Profile));
+    CHECK(!Passage.Recovery().IsActive());
+
+    Passage.AdvanceMovement(300.1, 0.0f, Profile);
+    Passage.Land(0.0);
+    const auto FatalAtExit = Passage.Observe(true, false, RadiationPosition::Outside, 0.1f, &Suit);
+    CHECK(FatalAtExit.Impact == FallImpact::Fatal);
+    CHECK(ResolvePassage(FatalAtExit) == PassageOutcome::ReturnToCheckpoint);
+    Passage.ResetMovement();
+    CHECK(!Passage.SupportHeight());
+    CHECK(ResolvePassage(Passage.Observe(true, false, RadiationPosition::Outside, 0.0f, &Suit)) == PassageOutcome::EnterSanctuary);
+
+    Passage.EnableRadiation({1.0, 1.0, 1.0, 10.0, 1.0});
+    const auto Simultaneous = Passage.Observe(true, false, RadiationPosition::Exposed, 600.0f, &Suit);
+    CHECK(Simultaneous.RadiationLimitReached && Simultaneous.OxygenDepleted);
+    CHECK(ResolvePassage(Simultaneous) == PassageOutcome::ReturnToCheckpoint);
 }
 
 void TestMantleRules()
@@ -654,6 +682,7 @@ int main(int Count, char** Arguments)
         {"TestParallelPlateCircuit", TestParallelPlateCircuit},
         {"TestSupply", TestSupply},
         {"TestFallImpact", TestFallImpact},
+        {"TestPassageHazards", TestPassageHazards},
         {"TestMantleRules", TestMantleRules},
         {"TestRadiationExposure", TestRadiationExposure},
         {"TestChamberHints", TestChamberHints},
