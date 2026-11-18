@@ -13,19 +13,16 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Domain/Puzzles/BallastRules.h"
-#include "Domain/Puzzles/SlidingDoorRules.h"
 #include "Engine/Canvas.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/PointLight.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Expedition/Dev20Actor.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
-#include "Infrastructure/Puzzles/CubePlacementComponent.h"
 #include "Puzzles/PuzzleCube.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
@@ -41,14 +38,14 @@ namespace
 using Abandoned::Domain::Expedition::Segment;
 using Abandoned::Domain::Expedition::Dev20MassKg;
 using Dev20Step = Abandoned::Domain::Expedition::Dev20Stage;
-using Abandoned::Domain::Puzzles::CircuitRules;
 using Abandoned::Infrastructure::Expedition::UnrealCheckpointStore;
 using Abandoned::Infrastructure::Expedition::WriteSegment;
-constexpr double DoorTravel = 280.0;
 }
 
 ATrainingChamberGameMode::ATrainingChamberGameMode()
 {
+    PlateCircuit = CreateDefaultSubobject<UTrainingPlateCircuitComponent>(TEXT("PlateCircuit"));
+    DoorDrive = CreateDefaultSubobject<UTrainingDoorDriveComponent>(TEXT("DoorDrive"));
     DefaultPawnClass = ATrainingChamberCharacter::StaticClass();
     HUDClass = ATrainingChamberHUD::StaticClass();
     PlayerControllerClass = AAbandonedTestController::StaticClass();
@@ -237,10 +234,8 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     }
     const auto DoorParts = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center, Layout->Door.Size,
         EComponentMobility::Movable, TEXT("BlockAllDynamic"));
-    Door = DoorParts.Collision;
     Abandoned::Scene::SetFinish(DoorParts, Layout->Door, Finishes);
-    Plates.Reserve(Layout->GetPlateCount());
-    PlateLoads.SetNumZeroed(Layout->GetPlateCount());
+    PlateCircuit->Configure(*Layout, Course.Current != Segment::Sandbox);
     for (int32 Index = 0; Index < Layout->GetPlateCount(); ++Index)
     {
         const FSceneBlock& Block = Layout->GetPlateAt(Index);
@@ -251,13 +246,9 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
             return;
         }
         Abandoned::Scene::SetFinish(Parts, Block, Finishes);
-        FTrainingPressurePlate& Plate = Plates.AddDefaulted_GetRef();
-        Plate.Body = Parts.Collision;
-        UCubePlacementComponent::MarkPressurePlate(*Plate.Body);
-        Plate.Visual = Parts.Visual;
         FSceneLight Light = Layout->PlateLight;
         Light.Position += Block.Center - Layout->Plate.Center;
-        Plate.Indicator = Abandoned::Scene::AddLight(World, Light);
+        PlateCircuit->AddPlate(*Parts.Collision, *Parts.Visual, Abandoned::Scene::AddLight(World, Light));
         if (Layout->UsesPlateBalance() || Layout->UsesParallelPlates())
         {
             AActor* PlateActor = Parts.Collision->GetOwner();
@@ -289,12 +280,12 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         Abandoned::Scene::SetFinish(ButtonParts, Layout->Button, Finishes);
     }
 
-    if (!Door || (Layout->bRequiresButton && (!Button || !ButtonVisual)))
+    if (!IsValid(DoorParts.Collision) || (Layout->bRequiresButton && (!Button || !ButtonVisual)))
     {
         ErrorMessage = TEXT("Could not create the cube, pressure plate or door.");
         return;
     }
-    DoorClamp.AddSigns(*Door);
+    DoorDrive->Bind(*DoorParts.Collision, Layout->Door.Center);
 
     if (!Layout->HintPages.IsEmpty())
     {
@@ -328,7 +319,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     const bool bVerifyCourse = UEntryChamberVerification::IsRequested(bDev20Run);
     if (Course.Current == Segment::Sandbox && UTrainingVerification::IsRequested())
     {
-        UTrainingVerification::Attach(*this, Cubes, Plates);
+        UTrainingVerification::Attach(*this, Cubes, PlateCircuit->GetPlates());
     }
     else if (UChamberHintsVerification::IsRequested())
     {
@@ -340,7 +331,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     }
     else if (Course.Current == Segment::Balance && (UPlateBalanceVerification::IsStandaloneRequested() || bVerifyCourse))
     {
-        UPlateBalanceVerification::Attach(*this, Cubes, Plates);
+        UPlateBalanceVerification::Attach(*this, Cubes, PlateCircuit->GetPlates());
     }
     else if (bVerifyCourse && (Course.Current == Segment::Stairs || Course.Current == Segment::Button || Course.Current == Segment::Weight))
     {
@@ -354,7 +345,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
 
 void ATrainingChamberGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
 {
-    if (IsValid(NewPlayer) && IsValid(Door) && IsValid(GetPlate()))
+    if (IsValid(NewPlayer) && IsValid(GetDoor()) && IsValid(GetPlate()))
     {
         RestartPlayerAtTransform(NewPlayer, FTransform(FRotator::ZeroRotator, Layout->Spawn));
         NewPlayer->SetInputMode(FInputModeGameOnly());
@@ -393,9 +384,9 @@ void ATrainingChamberGameMode::HandleStartingNewPlayer_Implementation(APlayerCon
 void ATrainingChamberGameMode::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    if (!IsValid(Door))
+    if (!IsValid(GetDoor()))
     {
-        DoorClamp.Release();
+        DoorDrive->ReleaseClamp();
         return;
     }
     const APlayerController* Controller = GetWorld()->GetFirstPlayerController();
@@ -425,10 +416,16 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         }
     }
 
-    ObserveCircuit(*Player, DeltaSeconds);
-    ObserveHints(*Player, DeltaSeconds);
-    if (MoveDoor(*Player, DeltaSeconds))
+    PlateCircuit->Observe(*Player, Cubes, Dev20.Get(), DeltaSeconds);
+    if (Layout->UsesParallelPlates())
     {
+        UpdateRelayTraces();
+    }
+    ObserveHints(*Player, DeltaSeconds);
+    if (DoorDrive->Move(*Player, Dev20.Get(), IsExitEnabled(), Course.Current != Segment::Sandbox, DeltaSeconds) ==
+        ETrainingDoorResult::ResetPlayer)
+    {
+        ResetChamber(*Player);
         return;
     }
 
@@ -439,37 +436,6 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         UE_LOG(LogTrainingChamber, Display, TEXT("Player reached the exit."));
         AdvanceCourse(*Player);
     }
-}
-
-bool ATrainingChamberGameMode::MoveDoor(ATrainingChamberCharacter& Player, float DeltaSeconds)
-{
-    using namespace Abandoned::Domain::Puzzles;
-    const auto Sweep = DoorClamp.Move(*Door, Layout->Door.Center.Z, DoorTravel, 350.0 * DeltaSeconds, IsExitEnabled());
-    if (!Sweep.Closing || !Sweep.Hit.bBlockingHit)
-    {
-        return false;
-    }
-    UBoxComponent* Body = Cast<UBoxComponent>(Sweep.Hit.GetComponent());
-    const APuzzleCube* Cube = Cast<APuzzleCube>(Sweep.Hit.GetActor());
-    const bool bPortable = Body && ((Cube && Cube->GetBody() == Body) || (IsValid(Dev20) && Dev20->GetBody() == Body));
-    const DoorContact Contact = Sweep.Hit.GetActor() == &Player ? DoorContact::Player :
-        bPortable ? DoorContact::Carryable : DoorContact::None;
-    switch (ResolveClosingContact(Sweep.Closing, Contact, Course.Current != Segment::Sandbox))
-    {
-    case ClosingContact::Clamp:
-        if (Player.GetHeldBody() == Body)
-        {
-            Player.ReleaseHeldObject();
-        }
-        DoorClamp.Capture(*Body);
-        break;
-    case ClosingContact::ResetPlayer:
-        ResetChamber(Player);
-        return true;
-    case ClosingContact::Block:
-        break;
-    }
-    return false;
 }
 
 const TCHAR* ATrainingChamberGameMode::GetDev20Status(const ATrainingChamberCharacter& Player) const
@@ -486,149 +452,21 @@ const TCHAR* ATrainingChamberGameMode::GetDev20Status(const ATrainingChamberChar
         : TEXT("Solve the chamber, then bring DEV-20 through the exit.");
 }
 
-bool ATrainingChamberGameMode::HasStackAtExit() const
-{
-    const FBox StackBounds = Layout->GetStackBounds();
-    return Cubes.ContainsByPredicate([&StackBounds](const APuzzleCube* Cube)
-    {
-        return IsValid(Cube) && Cube->GetStackMass() > Cube->GetMassKg() &&
-            StackBounds.IsInside(Cube->GetActorLocation());
-    });
-}
-
 void ATrainingChamberGameMode::PressButton()
 {
     if (!IsButtonLatched() && IsValid(ButtonVisual))
     {
-        Circuit.PressButton();
+        PlateCircuit->PressButton();
         ButtonVisual->SetRelativeLocation(FVector(8.0, 0.0, 0.0));
         UE_LOG(LogTrainingChamber, Display, TEXT("Door circuit armed by wall button."));
     }
-}
-
-bool ATrainingChamberGameMode::IsExitEnabled() const
-{
-    return Layout && Layout->UsesPlateBalance() ? Balance.IsBalanced() : Circuit.GetState().ExitEnabled;
-}
-
-void ATrainingChamberGameMode::ObserveCircuit(const ATrainingChamberCharacter& Player, float DeltaSeconds)
-{
-    for (int32 Index = 0; Index < Plates.Num(); ++Index)
-    {
-        PlateLoads[Index] = GetPlateMass(Player, Index);
-    }
-    if (Layout->UsesPlateBalance())
-    {
-        Balance.Observe({Layout->BalanceTotalKg, 0.01f}, {PlateLoads.GetData(), static_cast<size_t>(PlateLoads.Num())}, DeltaSeconds);
-        for (int32 Index = 0; Index < Plates.Num(); ++Index)
-        {
-            SetPlatePressed(Index, PlateLoads[Index] > 0.01f);
-        }
-        return;
-    }
-    const auto DoorGate = Layout->UsesParallelPlates() ? CircuitRules::Gate::ButtonAndParallelPlates :
-        Layout->bRequiresStack ? CircuitRules::Gate::StackLatch :
-        (Layout->bRequiresButton ? CircuitRules::Gate::ButtonAndPlate : CircuitRules::Gate::Plate);
-    Circuit.Observe({Layout->PlateActivationMassKg, Layout->PlateMaximumMassKg, DoorGate}, GetMeasuredMass(),
-        Layout->bRequiresStack && HasStackAtExit(), DeltaSeconds, GetMeasuredMass(1));
-    SetPlatePressed(0, Circuit.GetState().PlatePressed);
-    if (Layout->UsesParallelPlates())
-    {
-        SetPlatePressed(1, Circuit.GetState().AlternatePlatePressed);
-        UpdateRelayTraces();
-    }
-}
-
-float ATrainingChamberGameMode::GetPlateMass(const ATrainingChamberCharacter& Player, int32 Index) const
-{
-    const UBoxComponent* Plate = Plates[Index].Body;
-    const FSceneBlock& Block = Layout->GetPlateAt(Index);
-    const FVector AllowedOffset = Block.Size * 0.5 - FVector(10.0);
-    const double PlateTop = Block.Center.Z + Block.Size.Z * 0.5;
-    const UBoxComponent* Held = Player.GetHeldBody();
-    const UPrimitiveComponent* PlayerSupport = Player.GetCharacterMovement()->IsMovingOnGround()
-        ? Player.GetMovementBase() : nullptr;
-    while (PlayerSupport)
-    {
-        const APuzzleCube* Cube = Cast<APuzzleCube>(PlayerSupport->GetOwner());
-        if (!Cube || !Cube->GetSupport())
-        {
-            break;
-        }
-        PlayerSupport = Cube->GetSupport();
-    }
-    const float PlayerLoad = Layout->PlayerMassKg + (Held && Course.Current != Segment::Sandbox ? Held->GetMass() : 0.0f);
-    const auto OnPlate = [&](UBoxComponent& Body)
-    {
-        const FBoxSphereBounds& Bounds = Body.Bounds;
-        const FVector Offset = Bounds.Origin - Block.Center;
-        const double BottomZ = Bounds.Origin.Z - Bounds.BoxExtent.Z;
-        return FMath::Abs(Offset.X) < AllowedOffset.X && FMath::Abs(Offset.Y) < AllowedOffset.Y &&
-            FMath::IsNearlyEqual(BottomZ, PlateTop, 4.0) &&
-            FMath::Abs(Body.GetPhysicsLinearVelocity().Z) < 30.0;
-    };
-    float MassKg = PlayerSupport == Plate ? PlayerLoad : 0.0f;
-    for (const APuzzleCube* Cube : Cubes)
-    {
-        if (!IsValid(Cube) || Cube->GetBody() == Held)
-        {
-            continue;
-        }
-        if (Cube->GetSupport() == Plate)
-        {
-            MassKg += Cube->GetStackMass();
-            continue;
-        }
-        UBoxComponent* Body = Cube->GetBody();
-        if (!Cube->GetSupport() && OnPlate(*Body))
-        {
-            MassKg += Cube->GetStackMass();
-            if (PlayerSupport == Body)
-            {
-                MassKg += PlayerLoad;
-            }
-        }
-    }
-    if (IsValid(Dev20) && Dev20->GetBody() != Held && OnPlate(*Dev20->GetBody()))
-    {
-        MassKg += Dev20MassKg + (PlayerSupport == Dev20->GetBody() ? PlayerLoad : 0.0f);
-    }
-    return MassKg;
-}
-
-bool ATrainingChamberGameMode::IsDoorOpen() const
-{
-    return IsValid(Door) && !DoorClamp.HasObject() &&
-        Door->GetComponentLocation().Z >= Layout->Door.Center.Z + DoorTravel - 2.0;
-}
-
-void ATrainingChamberGameMode::SetPlatePressed(int32 Index, bool bPressed)
-{
-    FTrainingPressurePlate& Plate = Plates[Index];
-    if (Plate.bPressed == bPressed)
-    {
-        return;
-    }
-    Plate.bPressed = bPressed;
-    if (IsValid(Plate.Visual))
-    {
-        Plate.Visual->SetRelativeLocation(FVector(0.0, 0.0, bPressed ? -4.0 : 0.0));
-    }
-    if (IsValid(Plate.Indicator))
-    {
-        Plate.Indicator->SetIntensity(bPressed ? Layout->PressedLightIntensity : Layout->PlateLight.Intensity);
-    }
-    UE_LOG(LogTrainingChamber, Display, TEXT("Pressure plate %d %s."), Index + 1, bPressed ? TEXT("pressed") : TEXT("released"));
 }
 
 void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int32 Index, bool bUseDispenser)
 {
     if (APuzzleCube* Cube = Cubes[Index]; IsValid(Cube))
     {
-        if (DoorClamp.Holds(Cube->GetBody()))
-        {
-            DoorClamp.Release();
-        }
+        DoorDrive->ReleaseIfHolding(Cube->GetBody());
         if (Player.GetHeldCube() == Cube)
         {
             Player.ReleaseHeldObject();
@@ -641,7 +479,7 @@ void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int
 
 void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
 {
-    DoorClamp.Release();
+    DoorDrive->ReleaseClamp();
     if (bDev20Run)
     {
         if (!bDev20Recovering)
@@ -658,19 +496,10 @@ void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
     {
         ReturnCube(Player, Index);
     }
-    Circuit.Reset();
-    Balance.Reset();
+    PlateCircuit->Reset();
     HintReader = {};
-    for (int32 Index = 0; Index < Plates.Num(); ++Index)
-    {
-        PlateLoads[Index] = 0.0f;
-        SetPlatePressed(Index, false);
-    }
     UpdateRelayTraces();
-    if (IsValid(Door))
-    {
-        Door->SetWorldLocation(Layout->Door.Center, false, nullptr, ETeleportType::TeleportPhysics);
-    }
+    DoorDrive->ReturnToClosedPosition();
     if (ButtonVisual)
     {
         ButtonVisual->SetRelativeLocation(FVector::ZeroVector);

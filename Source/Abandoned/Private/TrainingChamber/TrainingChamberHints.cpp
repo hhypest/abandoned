@@ -15,6 +15,7 @@ void ATrainingChamberGameMode::ObserveHints(const ATrainingChamberCharacter& Pla
     HintNodes CorrectNodes = 0;
     if (Layout->UsesPlateBalance())
     {
+        const TArray<float>& PlateLoads = GetPlateLoads();
         const float Target = Layout->BalanceTotalKg / Layout->GetPlateCount();
         for (int32 Index = 0; Index < PlateLoads.Num(); ++Index)
         {
@@ -35,7 +36,7 @@ void ATrainingChamberGameMode::ObserveHints(const ATrainingChamberCharacter& Pla
     else
     {
         CorrectNodes = IsButtonLatched() ? ArmedButtonHintNode : 0;
-        for (int32 Index = 0; Index < Plates.Num(); ++Index)
+        for (int32 Index = 0; Index < GetPlateLoads().Num(); ++Index)
         {
             if (IsPlatePressed(Index))
             {
