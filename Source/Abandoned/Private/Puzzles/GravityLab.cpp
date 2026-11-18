@@ -524,24 +524,23 @@ void AGravityLabCharacter::SelectDirection(Direction Value)
     }
 }
 
-void AGravityLabCharacter::ResetChamber()
+void AGravityLabGameMode::ResetPuzzle(APuzzleCharacter& Player)
 {
-    if (AGravityLabGameMode* Lab = GetWorld()->GetAuthGameMode<AGravityLabGameMode>())
+    if (auto* LabPlayer = Cast<AGravityLabCharacter>(&Player))
     {
-        Lab->ResetLab(*this);
+        ResetLab(*LabPlayer);
     }
 }
 
-bool AGravityLabCharacter::InteractWithDevice(UPrimitiveComponent& Target)
+bool AGravityLabGameMode::UseDevice(APuzzleCharacter&, UPrimitiveComponent& Target)
 {
-    AGravityLabGameMode* Lab = GetWorld()->GetAuthGameMode<AGravityLabGameMode>();
-    if (!Lab || &Target != Lab->PowerSwitch)
+    if (&Target != PowerSwitch)
     {
         return false;
     }
-    Lab->Power.Observe(true, 0.0f);
-    Lab->Power.Observe(false, 0.0f);
-    Lab->UpdateFieldMarkers();
+    Power.Observe(true, 0.0f);
+    Power.Observe(false, 0.0f);
+    UpdateFieldMarkers();
     return true;
 }
 

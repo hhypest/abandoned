@@ -4,7 +4,7 @@ param(
     [string]$EngineRoot,
 
     [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
-                 'Training', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
+                 'Training', 'ChamberHints', 'PlateBalance', 'ParallelCircuit', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -82,6 +82,9 @@ $scenarios = @{
         Success = @('Portal collision shapes verified', 'Rejected carry transit restored', 'Portal lab verification passed')
     }
     Training = @{ Map = $entry; Flag = '-VerifyTrainingChamber'; Success = @('Verification passed: player weight, placement ghost, throw, staircase, detach and reset') }
+    ChamberHints = @{ Map = $entry; Flag = '-VerifyChamberHints'; Success = @('Chamber hints verification passed') }
+    PlateBalance = @{ Map = $entry; Flag = '-VerifyBalanceChamber'; Success = @('Balance chamber verification passed') }
+    ParallelCircuit = @{ Map = $entry; Flag = '-VerifyParallelCircuit'; Success = @('Parallel circuit verification passed') }
     Optics = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; Success = @('Power lab verification passed', 'Timed passage verification passed') }
     FreeReflector = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; ExtraFlag = '-VerifyFreeReflector'; Success = @('Free reflector verification passed', 'Timed passage verification passed') }
     Gravity = @{ Map = "${entry}?game=/Script/Abandoned.GravityLabGameMode"; Flag = '-VerifyGravityLab'; Success = @('Gravity lab verification passed') }
@@ -105,6 +108,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         RendererMismatches = @()
         RhiWarnings = @()
         DisplayedPortal = $null
+        FirstVisiblePortal = $null
         SuccessMarkers = @()
         FailureMarkers = @()
         Outcome = 'Failed'
@@ -158,6 +162,10 @@ function Invoke-Scenario($name, $definition, $profile) {
     })
     $result.RhiWarnings = @($lines -match 'Log(?:VulkanRHI|RHI): Warning:')
     if ($definition.CheckPortalFrame) {
+        $firstFrame = Join-Path $profile 'Saved/Screenshots/WindowsEditor/PortalLab-FirstVisible.png'
+        if (Test-Path -LiteralPath $firstFrame -PathType Leaf) {
+            $result.FirstVisiblePortal = & (Join-Path $PSScriptRoot 'Read-PortalFrame.ps1') -Path $firstFrame
+        }
         $frame = Join-Path $profile 'Saved/Screenshots/WindowsEditor/PortalLab-Active.png'
         if (Test-Path -LiteralPath $frame -PathType Leaf) {
             $result.DisplayedPortal = & (Join-Path $PSScriptRoot 'Read-PortalFrame.ps1') -Path $frame
@@ -178,6 +186,9 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = $result.FailureMarkers[0]
     } elseif ($result.ExitCode -ne 0) {
         $result.Reason = "Unreal exited with code $($result.ExitCode)."
+    } elseif ($definition.CheckPortalFrame -and (!$result.FirstVisiblePortal -or !$result.FirstVisiblePortal.WarmWall -or
+        $result.FirstVisiblePortal.Width -ne [int]$dimensions[0] -or $result.FirstVisiblePortal.Height -ne [int]$dimensions[1])) {
+        $result.Reason = 'The first visible portal frame was not confirmed.'
     } elseif ($definition.CheckPortalFrame -and (!$result.DisplayedPortal -or !$result.DisplayedPortal.WarmWall -or
         $result.DisplayedPortal.Width -ne [int]$dimensions[0] -or $result.DisplayedPortal.Height -ne [int]$dimensions[1])) {
         $result.Reason = 'The displayed portal aperture frame was not confirmed.'

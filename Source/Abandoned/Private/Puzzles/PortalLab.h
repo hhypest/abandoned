@@ -5,7 +5,8 @@
 #include "Domain/Puzzles/PowerSignals.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
-#include "TrainingChamber/TrainingChamber.h"
+#include "Infrastructure/Puzzles/PuzzleDeviceCommands.h"
+#include "Player/PuzzleCharacter.h"
 #include "PortalLab.generated.h"
 
 class APortalLabCharacter;
@@ -36,12 +37,14 @@ struct FPortalMouth
 };
 
 UCLASS()
-class APortalLabGameMode final : public AGameModeBase
+class APortalLabGameMode final : public AGameModeBase, public IPuzzleDeviceCommands
 {
     GENERATED_BODY()
 
 public:
     APortalLabGameMode();
+    bool UseDevice(APuzzleCharacter& Player, UPrimitiveComponent& Target) override;
+    void ResetPuzzle(APuzzleCharacter& Player) override;
     void InitGame(const FString& Map, const FString& Options, FString& Error) override;
     void HandleStartingNewPlayer_Implementation(APlayerController* Controller) override;
     void Tick(float DeltaSeconds) override;
@@ -79,6 +82,7 @@ private:
     bool bVerifyDev20 = false;
     bool bVerifyDev20RecoveryArrival = false;
     bool bCapture = false;
+    bool bRequestedFirstPortalFrame = false;
     int32 VerificationStep = 0;
     float VerificationTime = 0.0f;
     int32 Transfers = 0;
@@ -139,13 +143,9 @@ private:
 };
 
 UCLASS()
-class APortalLabCharacter final : public ATrainingChamberCharacter
+class APortalLabCharacter final : public APuzzleCharacter
 {
     GENERATED_BODY()
-
-protected:
-    void ResetChamber() override;
-    bool InteractWithDevice(UPrimitiveComponent& Target) override;
 
 private:
     friend class APortalLabGameMode;

@@ -5,19 +5,22 @@
 #include "Domain/Puzzles/PowerSignals.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
-#include "TrainingChamber/TrainingChamber.h"
+#include "Infrastructure/Puzzles/PuzzleDeviceCommands.h"
+#include "Player/PuzzleCharacter.h"
 #include "GravityLab.generated.h"
 
 class AGravityLabCharacter;
 class UGravityLabLayout;
 
 UCLASS()
-class AGravityLabGameMode final : public AGameModeBase
+class AGravityLabGameMode final : public AGameModeBase, public IPuzzleDeviceCommands
 {
     GENERATED_BODY()
 
 public:
     AGravityLabGameMode();
+    bool UseDevice(APuzzleCharacter& Player, UPrimitiveComponent& Target) override;
+    void ResetPuzzle(APuzzleCharacter& Player) override;
     void InitGame(const FString& MapName, const FString& Options, FString& Error) override;
     void HandleStartingNewPlayer_Implementation(APlayerController* Controller) override;
     void Tick(float DeltaSeconds) override;
@@ -73,7 +76,7 @@ private:
 };
 
 UCLASS()
-class AGravityLabCharacter final : public ATrainingChamberCharacter
+class AGravityLabCharacter final : public APuzzleCharacter
 {
     GENERATED_BODY()
 
@@ -88,8 +91,6 @@ protected:
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;
     void Move(FVector LocalDirection) override;
     void Tick(float DeltaSeconds) override;
-    void ResetChamber() override;
-    bool InteractWithDevice(UPrimitiveComponent& Target) override;
 
 private:
     friend class AGravityLabGameMode;

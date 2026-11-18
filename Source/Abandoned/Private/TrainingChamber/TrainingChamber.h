@@ -9,7 +9,8 @@
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
 #include "Infrastructure/Puzzles/UnrealSlidingDoor.h"
-#include "Player/AbandonedCharacter.h"
+#include "Infrastructure/Puzzles/PuzzleDeviceCommands.h"
+#include "Player/PuzzleCharacter.h"
 #include "TrainingChamber.generated.h"
 
 class ATrainingChamberCharacter;
@@ -17,7 +18,6 @@ class ADev20Actor;
 class APuzzleCube;
 class UBoxComponent;
 class UMaterialInterface;
-class UObjectCarryComponent;
 class UPointLightComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
@@ -41,7 +41,7 @@ struct FTrainingPressurePlate
 };
 
 UCLASS()
-class ATrainingChamberGameMode final : public AGameModeBase
+class ATrainingChamberGameMode final : public AGameModeBase, public IPuzzleDeviceCommands
 {
     GENERATED_BODY()
 
@@ -52,7 +52,9 @@ public:
     void Tick(float DeltaSeconds) override;
 
     UBoxComponent* GetPlate(int32 Index = 0) const { return Plates.IsValidIndex(Index) ? Plates[Index].Body.Get() : nullptr; }
-    bool IsPressurePlate(const UBoxComponent* Body) const;
+    bool UseDevice(APuzzleCharacter& Player, UPrimitiveComponent& Target) override;
+    void ResetPuzzle(APuzzleCharacter& Player) override;
+    const TCHAR* DevicePrompt(const UPrimitiveComponent& Target) const override;
     UBoxComponent* GetButton() const { return Button; }
     UBoxComponent* GetDoor() const { return Door; }
     UBoxComponent* GetHintTerminal() const { return HintTerminal; }
@@ -170,57 +172,15 @@ private:
 };
 
 UCLASS()
-class ATrainingChamberCharacter : public AAbandonedCharacter
+class ATrainingChamberCharacter final : public APuzzleCharacter
 {
     GENERATED_BODY()
 
 public:
-    ATrainingChamberCharacter();
-    APuzzleCube* GetHeldCube() const;
-    ADev20Actor* GetHeldDev20() const;
-    APuzzleCube* FindReachableCube() const;
-    const TCHAR* GetPlacementPrompt() const;
     bool CanReadHintTerminal() const;
-    void ReleaseHeldObject();
-
-protected:
-    void BeginPlay() override;
-    void BindAdditionalInput(UEnhancedInputComponent& Input) override;
-    void Tick(float DeltaSeconds) override;
-    void UnPossessed() override;
-    void EndPlay(const EEndPlayReason::Type Reason) override;
-    virtual void Interact();
-    virtual void ResetChamber();
-    virtual bool InteractWithDevice(UPrimitiveComponent&) { return false; }
-    virtual void PlaceHeldDevice(UBoxComponent&) {}
-    UPrimitiveComponent* TraceInteractable() const;
-    UBoxComponent* GetHeldBody() const;
-    bool GrabBody(UBoxComponent& Body, float MassKg);
-    bool TransitHeldBody(const FTransform& Through);
 
 private:
     friend class ATrainingChamberGameMode;
-    struct FPlacement
-    {
-        UBoxComponent* Support = nullptr;
-        FVector Center;
-        FRotator Rotation;
-        const TCHAR* BlockReason = nullptr;
-    };
-    bool FindPlacement(const APuzzleCube& Cube, FPlacement& Placement) const;
-    void UpdatePlacementGhost(const APuzzleCube* Held);
-    void ThrowHeldObject();
-    ATrainingChamberGameMode* GetChamber() const;
-
-    UPROPERTY()
-    TObjectPtr<UObjectCarryComponent> Grip;
-
-    UPROPERTY(VisibleAnywhere)
-    TObjectPtr<UStaticMeshComponent> PlacementGhost;
-
-    TWeakObjectPtr<UBoxComponent> PreviewSupport;
-    bool bPreviewBlocked = false;
-    const TCHAR* PreviewBlockReason = nullptr;
 };
 
 UCLASS()

@@ -15,6 +15,7 @@ public class Abandoned : ModuleRules
             "EnhancedInput",
             "InputCore",
             "Json",
+            "RenderCore",
             "Slate",
             "SlateCore",
         });

@@ -14,20 +14,18 @@
 #include "Engine/PointLight.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
-#include "EnhancedInputComponent.h"
 #include "Expedition/Dev20Actor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformMisc.h"
-#include "InputCoreTypes.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Kismet/GameplayStatics.h"
-#include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
-#include "Infrastructure/Puzzles/ObjectCarryComponent.h"
+#include "Infrastructure/Puzzles/CubePlacementComponent.h"
+#include "Infrastructure/Puzzles/PuzzleInteractionSettings.h"
 #include "Puzzles/PuzzleCube.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
@@ -46,14 +44,7 @@ using Dev20Step = Abandoned::Domain::Expedition::Dev20Stage;
 using Abandoned::Domain::Puzzles::CircuitRules;
 using Abandoned::Infrastructure::Expedition::UnrealCheckpointStore;
 using Abandoned::Infrastructure::Expedition::WriteSegment;
-using Abandoned::Infrastructure::Puzzles::IsDoorClamped;
 constexpr double DoorTravel = 280.0;
-constexpr double Reach = 280.0;
-constexpr double HoldDistance = 165.0;
-constexpr double SnapRange = 75.0;
-constexpr double SnapGap = 0.5;
-
-
 }
 
 ATrainingChamberGameMode::ATrainingChamberGameMode()
@@ -276,6 +267,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         Abandoned::Scene::SetFinish(Parts, Block, Finishes);
         FTrainingPressurePlate& Plate = Plates.AddDefaulted_GetRef();
         Plate.Body = Parts.Collision;
+        UCubePlacementComponent::MarkPressurePlate(*Plate.Body);
         Plate.Visual = Parts.Visual;
         FSceneLight Light = Layout->PlateLight;
         Light.Position += Block.Center - Layout->Plate.Center;
@@ -527,11 +519,6 @@ void ATrainingChamberGameMode::PressButton()
         ButtonVisual->SetRelativeLocation(FVector(8.0, 0.0, 0.0));
         UE_LOG(LogTrainingChamber, Display, TEXT("Door circuit armed by wall button."));
     }
-}
-
-bool ATrainingChamberGameMode::IsPressurePlate(const UBoxComponent* Body) const
-{
-    return Body && Plates.ContainsByPredicate([Body](const FTrainingPressurePlate& Plate) { return Plate.Body == Body; });
 }
 
 bool ATrainingChamberGameMode::IsExitEnabled() const
@@ -804,14 +791,14 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
     const auto AimHold = [&AimFrom, this](const FVector& Target, FVector Approach)
     {
         const double Height = Target.Z - Layout->Spawn.Z - Abandoned::MovementProfile::CameraHeight;
-        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(HoldDistance) - FMath::Square(Height)));
+        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(APuzzleCharacter::HoldDistanceCm) - FMath::Square(Height)));
         const FVector Start = Target - Approach * Forward;
         AimFrom(FVector(Start.X, Start.Y, Layout->Spawn.Z), Target);
     };
     const auto Aligned = [&Player](const UBoxComponent* Support)
     {
         const APuzzleCube* Held = Player.GetHeldCube();
-        return Held && Player.PreviewSupport.Get() == Support && !Player.bPreviewBlocked &&
+        return Held && Player.GetPlacementPreview().GetPreviewSupport() == Support && !Player.GetPlacementPreview().IsPreviewBlocked() &&
             Held->GetBody()->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(28.0);
     };
 
@@ -1038,7 +1025,7 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
     const auto AimToHold = [this, &AimFrom](const FVector& Target, const FVector& Approach)
     {
         const double Height = Target.Z - (Layout->Spawn.Z + Abandoned::MovementProfile::CameraHeight);
-        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(HoldDistance) - FMath::Square(Height)));
+        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(APuzzleCharacter::HoldDistanceCm) - FMath::Square(Height)));
         const FVector Here = Target - Approach * Forward;
         AimFrom(FVector(Here.X, Here.Y, Layout->Spawn.Z), Target);
     };
@@ -1163,8 +1150,8 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
             Cube->GetComponentLocation().Z > Layout->GetPlateTop() + Small.GetHalfSize() &&
             Cube->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(30.0))
         {
-            if (!Player.PlacementGhost->IsVisible() || Player.PreviewSupport.Get() != GetPlate() ||
-                Player.PlacementGhost->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+            if (!Player.GetPlacementPreview().IsVisible() || Player.GetPlacementPreview().GetPreviewSupport() != GetPlate() ||
+                Player.GetPlacementPreview().GetCollisionEnabled() != ECollisionEnabled::NoCollision)
             {
                 Fail(TEXT("Expected a collision-free placement ghost on the plate"));
                 return;
@@ -1175,10 +1162,10 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
                 bVerificationScreenshotRequested = true;
                 break;
             }
-            const FVector Expected = Player.PlacementGhost->GetComponentLocation();
+            const FVector Expected = Player.GetPlacementPreview().GetComponentLocation();
             Player.Interact();
             if (Small.GetSupport() != GetPlate() || Cube->IsSimulatingPhysics() ||
-                !Small.GetActorLocation().Equals(Expected, 0.1) || Player.PlacementGhost->IsVisible())
+                !Small.GetActorLocation().Equals(Expected, 0.1) || Player.GetPlacementPreview().IsVisible())
             {
                 Fail(TEXT("Released cube did not snap to the plate"));
                 return;
@@ -1224,8 +1211,8 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
         if (!Player.GetHeldCube())
         {
             Controller->ConsoleCommand(TEXT("Input.-key LeftMouseButton"), false);
-            if (Small.GetSupport() || Player.PlacementGhost->IsVisible() ||
-                Cube->GetPhysicsLinearVelocity().X < Layout->ThrowImpulse / Small.GetMassKg() * 0.75)
+            if (Small.GetSupport() || Player.GetPlacementPreview().IsVisible() ||
+                Cube->GetPhysicsLinearVelocity().X < GetDefault<UPuzzleInteractionSettings>()->GetThrowImpulse() / Small.GetMassKg() * 0.75)
             {
                 Fail(TEXT("Left mouse did not throw the free cube forward"));
                 return;
@@ -1261,7 +1248,7 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
         if (FVector::DistSquared2D(Small.GetActorLocation(), Large.GetActorLocation()) < FMath::Square(14.0) &&
             Cube->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(25.0))
         {
-            if (!Player.PlacementGhost->IsVisible() || Player.PreviewSupport.Get() != Large.GetBody())
+            if (!Player.GetPlacementPreview().IsVisible() || Player.GetPlacementPreview().GetPreviewSupport() != Large.GetBody())
             {
                 Fail(TEXT("Expected a placement ghost on the stack"));
                 return;
@@ -1337,352 +1324,47 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
 }
 #endif
 
-ATrainingChamberCharacter::ATrainingChamberCharacter()
+bool ATrainingChamberGameMode::UseDevice(APuzzleCharacter&, UPrimitiveComponent& Target)
 {
-    Grip = CreateDefaultSubobject<UObjectCarryComponent>(TEXT("CubeGrip"));
-    Grip->LoadChanged.BindUObject(this, &ATrainingChamberCharacter::SetMovementLoad);
-
-    PlacementGhost = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PlacementGhost"));
-    PlacementGhost->SetupAttachment(GetRootComponent());
-    PlacementGhost->SetAbsolute(true, true, true);
-    PlacementGhost->SetCollisionProfileName(TEXT("NoCollision"));
-    PlacementGhost->SetGenerateOverlapEvents(false);
-    PlacementGhost->SetCanEverAffectNavigation(false);
-    PlacementGhost->SetCastShadow(false);
-    PlacementGhost->SetReceivesDecals(false);
-    PlacementGhost->SetVisibility(false);
-
-    static const ConstructorHelpers::FObjectFinder<UStaticMesh> PreviewMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
-    static const ConstructorHelpers::FObjectFinder<UMaterialInterface> PreviewMaterial(
-        TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Translucent_OneSided.Widget3DPassThrough_Translucent_OneSided"));
-    if (PreviewMesh.Succeeded() && PreviewMaterial.Succeeded())
+    if (&Target == HintTerminal)
     {
-        PlacementGhost->SetStaticMesh(PreviewMesh.Object);
-        PlacementGhost->SetMaterial(0, PreviewMaterial.Object);
+        ReadNextHint();
+        return true;
     }
-}
-
-void ATrainingChamberCharacter::BeginPlay()
-{
-    Super::BeginPlay();
-    if (PlacementGhost->GetStaticMesh())
+    if (&Target == Button)
     {
-        UMaterialInstanceDynamic* PreviewMaterial = PlacementGhost->CreateDynamicMaterialInstance(0);
-        if (PreviewMaterial)
-        {
-            PreviewMaterial->SetVectorParameterValue(TEXT("TintColorAndOpacity"),
-                GetDefault<UTrainingChamberLayout>()->PlacementGhostTint);
-        }
+        PressButton();
+        return true;
     }
+    return false;
 }
 
-void ATrainingChamberCharacter::BindAdditionalInput(UEnhancedInputComponent& Input)
+const TCHAR* ATrainingChamberGameMode::DevicePrompt(const UPrimitiveComponent& Target) const
 {
-    Input.BindAction(MapAction(EKeys::E), ETriggerEvent::Started, this, &ATrainingChamberCharacter::Interact);
-    Input.BindAction(MapAction(EKeys::LeftMouseButton), ETriggerEvent::Started, this, &ATrainingChamberCharacter::ThrowHeldObject);
-    Input.BindAction(MapAction(EKeys::R), ETriggerEvent::Started, this, &ATrainingChamberCharacter::ResetChamber);
+    if (&Target == HintTerminal)
+    {
+        return TEXT("[E] Read hint terminal");
+    }
+    if (&Target == Button)
+    {
+        return IsButtonLatched() ? TEXT("Circuit armed") : TEXT("[E] Arm the door circuit");
+    }
+    return nullptr;
 }
 
-ATrainingChamberGameMode* ATrainingChamberCharacter::GetChamber() const
+void ATrainingChamberGameMode::ResetPuzzle(APuzzleCharacter& Player)
 {
-    return GetWorld()->GetAuthGameMode<ATrainingChamberGameMode>();
-}
-
-UPrimitiveComponent* ATrainingChamberCharacter::TraceInteractable() const
-{
-    const FVector Origin = Camera->GetComponentLocation();
-    const FCollisionQueryParams Query(SCENE_QUERY_STAT(TrainingReach), false, this);
-    FHitResult Hit;
-    GetWorld()->LineTraceSingleByChannel(Hit, Origin, Origin + GetViewRotation().Vector() * Reach, ECC_Visibility, Query);
-    return Hit.GetComponent();
+    if (auto* Trainee = Cast<ATrainingChamberCharacter>(&Player))
+    {
+        ResetChamber(*Trainee);
+    }
 }
 
 bool ATrainingChamberCharacter::CanReadHintTerminal() const
 {
-    const ATrainingChamberGameMode* Chamber = GetChamber();
+    const ATrainingChamberGameMode* Chamber = GetWorld()->GetAuthGameMode<ATrainingChamberGameMode>();
     return Chamber && IsValid(Chamber->GetHintTerminal()) && !GetHeldBody() &&
         TraceInteractable() == Chamber->GetHintTerminal();
-}
-
-APuzzleCube* ATrainingChamberCharacter::FindReachableCube() const
-{
-    const UPrimitiveComponent* Target = TraceInteractable();
-    return Target ? Cast<APuzzleCube>(Target->GetOwner()) : nullptr;
-}
-
-bool ATrainingChamberCharacter::FindPlacement(const APuzzleCube& Cube, FPlacement& Placement) const
-{
-    const ATrainingChamberGameMode* Chamber = GetChamber();
-    const FVector Origin = Camera->GetComponentLocation();
-    const FVector Current = Cube.GetActorLocation();
-    const double Half = Cube.GetHalfSize();
-    FCollisionQueryParams TraceQuery(SCENE_QUERY_STAT(CubePlacementSurface), false, this);
-    TraceQuery.AddIgnoredActor(&Cube);
-    const auto TrySurface = [&](const FHitResult& Hit)
-    {
-        UBoxComponent* Surface = Cast<UBoxComponent>(Hit.GetComponent());
-        if (!Surface || Hit.ImpactNormal.Z < 0.9)
-        {
-            return false;
-        }
-        const APuzzleCube* LowerCube = Cast<APuzzleCube>(Surface->GetOwner());
-        if ((!Chamber || !Chamber->IsPressurePlate(Surface)) && !LowerCube)
-        {
-            return false;
-        }
-        const FVector SurfaceCenter = Surface->GetComponentLocation();
-        const FVector Target = SurfaceCenter + FVector(0.0, 0.0, Surface->GetScaledBoxExtent().Z + Half + SnapGap);
-        if (Current.Z < Target.Z - 8.0 || FVector::DistSquared(Current, Target) > FMath::Square(SnapRange))
-        {
-            return false;
-        }
-        const FRotator Rotation(0.0, Surface->GetComponentRotation().Yaw, 0.0);
-        Placement = {Surface, Target, Rotation};
-        if (LowerCube)
-        {
-            switch (LowerCube->GetStackBlock(Cube))
-            {
-            case ECubeStackBlock::Size:
-                Placement.BlockReason = TEXT("Large cubes need a large support");
-                break;
-            case ECubeStackBlock::Occupied:
-                Placement.BlockReason = TEXT("This cube already supports a stack");
-                break;
-            case ECubeStackBlock::Height:
-                Placement.BlockReason = TEXT("Maximum stack height: three cubes");
-                break;
-            case ECubeStackBlock::Unstable:
-                Placement.BlockReason = TEXT("Wait for the support to settle");
-                break;
-            case ECubeStackBlock::None:
-                break;
-            }
-            if (Placement.BlockReason)
-            {
-                return false;
-            }
-        }
-        const FCollisionShape Shape = FCollisionShape::MakeBox(FVector(Half));
-        FCollisionQueryParams PlacementQuery(SCENE_QUERY_STAT(CubePlacementClearance), false, &Cube);
-        PlacementQuery.AddIgnoredComponent(Surface);
-        if (GetWorld()->OverlapBlockingTestByProfile(Target, Rotation.Quaternion(), TEXT("PhysicsActor"), Shape, PlacementQuery))
-        {
-            Placement.BlockReason = TEXT("Not enough room for the cube");
-            return false;
-        }
-        // Sweep a small inset so a cube already touching the floor can slide clear of it.
-        FHitResult Obstruction;
-        if (GetWorld()->SweepSingleByProfile(Obstruction, Current, Target, Rotation.Quaternion(),
-            TEXT("PhysicsActor"), FCollisionShape::MakeBox(FVector(Half - 1.0)), PlacementQuery))
-        {
-            Placement.BlockReason = TEXT("Something blocks the placement path");
-            return false;
-        }
-        return true;
-    };
-    FHitResult Hit;
-    if (GetWorld()->LineTraceSingleByChannel(Hit, Origin, Origin + GetViewRotation().Vector() * Reach,
-        ECC_Visibility, TraceQuery) && TrySurface(Hit))
-    {
-        return true;
-    }
-    return GetWorld()->LineTraceSingleByChannel(Hit, Current, Current - FVector(0.0, 0.0, Half + SnapRange),
-        ECC_Visibility, TraceQuery) && TrySurface(Hit);
-}
-
-const TCHAR* ATrainingChamberCharacter::GetPlacementPrompt() const
-{
-    if (GetHeldDev20())
-    {
-        return TEXT("[E] Set down DEV-20");
-    }
-    if (GetHeldCube())
-    {
-        if (bPreviewBlocked)
-        {
-            return PreviewBlockReason ? PreviewBlockReason : TEXT("Placement blocked");
-        }
-        if (const UBoxComponent* Support = PreviewSupport.Get())
-        {
-            return Cast<APuzzleCube>(Support->GetOwner()) ? TEXT("[E] Snap to cube") : TEXT("[E] Snap to plate");
-        }
-        return TEXT("[E] Drop cube");
-    }
-    const UPrimitiveComponent* Target = TraceInteractable();
-    if (IsDoorClamped(Target))
-    {
-        return TEXT("Object clamped");
-    }
-    const APuzzleCube* Cube = Target ? Cast<APuzzleCube>(Target->GetOwner()) : nullptr;
-    if (!Cube)
-    {
-        if (Target && Cast<ADev20Actor>(Target->GetOwner()))
-        {
-            return TEXT("[E] Pick up DEV-20 (34 kg)");
-        }
-        const ATrainingChamberGameMode* Chamber = GetChamber();
-        if (Chamber && Target && Target == Chamber->GetHintTerminal())
-        {
-            return TEXT("[E] Read hint terminal");
-        }
-        if (Chamber && Target && Target == Chamber->GetButton())
-        {
-            return Chamber->IsButtonLatched() ? TEXT("Circuit armed") : TEXT("[E] Arm the door circuit");
-        }
-        return nullptr;
-    }
-    return Cube->GetMassKg() == 5.0f ? TEXT("[E] Pick up small cube (5 kg)") : TEXT("[E] Pick up large cube (10 kg)");
-}
-
-void ATrainingChamberCharacter::UpdatePlacementGhost(const APuzzleCube* Held)
-{
-    FPlacement Placement;
-    const bool bCanPlace = IsValid(Held) && FindPlacement(*Held, Placement);
-    if (Placement.Support)
-    {
-        PreviewSupport = Placement.Support;
-        PreviewBlockReason = Placement.BlockReason;
-        if (bPreviewBlocked == bCanPlace)
-        {
-            const UTrainingChamberLayout* Art = GetDefault<UTrainingChamberLayout>();
-            if (UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(PlacementGhost->GetMaterial(0)))
-            {
-                Material->SetVectorParameterValue(TEXT("TintColorAndOpacity"),
-                    bCanPlace ? Art->PlacementGhostTint : Art->BlockedGhostTint);
-            }
-        }
-        bPreviewBlocked = !bCanPlace;
-        PlacementGhost->SetWorldTransform(FTransform(Placement.Rotation, Placement.Center,
-            FVector(Held->GetHalfSize() / 50.0)));
-        PlacementGhost->SetVisibility(PlacementGhost->GetStaticMesh() != nullptr);
-        return;
-    }
-    if (bPreviewBlocked)
-    {
-        if (UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(PlacementGhost->GetMaterial(0)))
-        {
-            Material->SetVectorParameterValue(TEXT("TintColorAndOpacity"), GetDefault<UTrainingChamberLayout>()->PlacementGhostTint);
-        }
-        bPreviewBlocked = false;
-    }
-    PreviewSupport.Reset();
-    PreviewBlockReason = nullptr;
-    PlacementGhost->SetVisibility(false);
-}
-
-void ATrainingChamberCharacter::Interact()
-{
-    if (APuzzleCube* Cube = GetHeldCube())
-    {
-        FPlacement Placement;
-        const bool bCanSnap = FindPlacement(*Cube, Placement);
-        ReleaseHeldObject();
-        if (bCanSnap)
-        {
-            Cube->SnapTo(*Placement.Support, Placement.Center, Placement.Rotation);
-        }
-        return;
-    }
-    if (UBoxComponent* Held = GetHeldBody())
-    {
-        ReleaseHeldObject();
-        PlaceHeldDevice(*Held);
-        return;
-    }
-
-    UPrimitiveComponent* Target = TraceInteractable();
-    ATrainingChamberGameMode* Chamber = GetChamber();
-    if (Target && Chamber && Target == Chamber->GetHintTerminal())
-    {
-        Chamber->ReadNextHint();
-        return;
-    }
-    if (Target && Chamber && Target == Chamber->GetButton())
-    {
-        Chamber->PressButton();
-        return;
-    }
-    if (Target && InteractWithDevice(*Target))
-    {
-        return;
-    }
-    if (ADev20Actor* Unit = Target ? Cast<ADev20Actor>(Target->GetOwner()) : nullptr)
-    {
-        GrabBody(*Unit->GetBody(), Dev20MassKg);
-        return;
-    }
-    if (APuzzleCube* Candidate = Target ? Cast<APuzzleCube>(Target->GetOwner()) : nullptr;
-        Candidate && Candidate->GetMassKg() <= Abandoned::Domain::Puzzles::MaximumCarryKg)
-    {
-        Candidate->ReleaseSnapConstraints();
-        GrabBody(*Candidate->GetBody(), Candidate->GetMassKg());
-    }
-}
-
-bool ATrainingChamberCharacter::GrabBody(UBoxComponent& Body, float MassKg)
-{
-    return Grip->TryGrab(Body, MassKg);
-}
-
-UBoxComponent* ATrainingChamberCharacter::GetHeldBody() const
-{
-    return Grip->HeldBody();
-}
-
-bool ATrainingChamberCharacter::TransitHeldBody(const FTransform& Through)
-{
-    return Grip->Transit(Through);
-}
-
-APuzzleCube* ATrainingChamberCharacter::GetHeldCube() const
-{
-    const UBoxComponent* Held = GetHeldBody();
-    return IsValid(Held) ? Cast<APuzzleCube>(Held->GetOwner()) : nullptr;
-}
-
-ADev20Actor* ATrainingChamberCharacter::GetHeldDev20() const
-{
-    const UBoxComponent* Held = GetHeldBody();
-    return IsValid(Held) ? Cast<ADev20Actor>(Held->GetOwner()) : nullptr;
-}
-
-void ATrainingChamberCharacter::ReleaseHeldObject()
-{
-    UpdatePlacementGhost(nullptr);
-    Grip->ReleaseComponent();
-}
-
-void ATrainingChamberCharacter::ThrowHeldObject()
-{
-    Grip->Throw(GetVelocity(), GetViewRotation().Vector() * GetDefault<UTrainingChamberLayout>()->ThrowImpulse);
-    UpdatePlacementGhost(GetHeldCube());
-}
-
-void ATrainingChamberCharacter::Tick(float DeltaSeconds)
-{
-    Super::Tick(DeltaSeconds);
-    Grip->UpdateHold(Camera->GetComponentLocation(), GetViewRotation(), HoldDistance, Reach);
-    UpdatePlacementGhost(GetHeldCube());
-}
-
-void ATrainingChamberCharacter::ResetChamber()
-{
-    if (ATrainingChamberGameMode* Chamber = GetChamber())
-    {
-        Chamber->ResetChamber(*this);
-    }
-}
-
-void ATrainingChamberCharacter::UnPossessed()
-{
-    ReleaseHeldObject();
-    Super::UnPossessed();
-}
-
-void ATrainingChamberCharacter::EndPlay(const EEndPlayReason::Type Reason)
-{
-    ReleaseHeldObject();
-    Super::EndPlay(Reason);
 }
 
 void ATrainingChamberHUD::DrawHUD()

@@ -5,9 +5,6 @@
 #include "Verification/PortalShapeVerification.h"
 #include "Verification/CarryVerification.h"
 #endif
-#if WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
-#include "AssetCompilingManager.h"
-#endif
 #include "Camera/PlayerCameraManager.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -30,6 +27,7 @@
 #include "Player/MovementProfile.h"
 #include "Puzzles/PortalLabLayout.h"
 #include "Puzzles/PuzzleCube.h"
+#include "RenderCommandFence.h"
 #include "SceneView.h"
 #include "UnrealClient.h"
 #include "UObject/ConstructorHelpers.h"
@@ -154,8 +152,13 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
     ViewTexture->AddressX = TA_Clamp;
     ViewTexture->AddressY = TA_Clamp;
     ViewTexture->InitAutoFormat(960, 540);
-    // Publish the render resource before a material caches its Vulkan texture reference.
+    // UpdateResourceImmediate queues render work. Complete the texture reference update
+    // before the MID caches its bindless descriptor. This wait runs once during map load.
     ViewTexture->UpdateResourceImmediate();
+    WindowMaterial->EnsureIsComplete();
+    FRenderCommandFence TextureReady;
+    TextureReady.BeginFence(FRenderCommandFence::ESyncDepth::RHIThread);
+    TextureReady.Wait();
     UMaterialInstanceDynamic* View = UMaterialInstanceDynamic::Create(WindowMaterial, this);
     View->SetTextureParameterValue(TEXT("PortalView"), ViewTexture);
 
@@ -562,7 +565,10 @@ void APortalLabGameMode::CaptureView(const APortalLabCharacter& Player)
     }
     for (int32 Index = 0; Index < Mouths.Num(); ++Index)
     {
-        Mouths[Index].Window->SetVisibility(Index == Visible);
+        if (Index != Visible)
+        {
+            Mouths[Index].Window->SetVisibility(false);
+        }
     }
     if (Visible == INDEX_NONE)
     {
@@ -595,7 +601,16 @@ void APortalLabGameMode::CaptureView(const APortalLabCharacter& Player)
     Capture->ClipPlaneBase = Exit.GetLocation();
     Capture->ClipPlaneNormal = Exit.GetUnitAxis(EAxis::X);
     Capture->SetWorldLocationAndRotation(Through.TransformPosition(Eye), Through.GetRotation() * Rotation);
-    Capture->CaptureSceneDeferred();
+    if (!Mouths[Visible].Window->IsVisible())
+    {
+        // Submit the linked view before exposing its surface in the main viewport.
+        Capture->CaptureScene();
+        Mouths[Visible].Window->SetVisibility(true);
+    }
+    else
+    {
+        Capture->CaptureSceneDeferred();
+    }
 }
 
 void APortalLabGameMode::Tick(float Delta)
@@ -953,13 +968,15 @@ void APortalLabGameMode::Verify(APortalLabCharacter& Player, float Delta)
                 return;
             }
             Player.PlaceAt(FTransform(FRotator::ZeroRotator, Center - FVector(320, 0, 53)));
-#if WITH_EDITOR
-            FAssetCompilingManager::Get().FinishAllCompilation();
-#endif
             Next(TEXT("Unpowered shutter blocked the aperture. Console supplied the pair."));
         }
         break;
     case 1:
+        if (bCapture && !bRequestedFirstPortalFrame && Mouths[0].Window->IsVisible())
+        {
+            FScreenshotRequest::RequestScreenshot(TEXT("PortalLab-FirstVisible"), false, false);
+            bRequestedFirstPortalFrame = true;
+        }
         if (VerificationTime >= 0.50f)
         {
             if (!Mouths[0].Window->IsVisible() || Mouths[1].Window->IsVisible())
@@ -1133,18 +1150,17 @@ void APortalLabGameMode::Verify(APortalLabCharacter& Player, float Delta)
 }
 #endif
 
-void APortalLabCharacter::ResetChamber()
+void APortalLabGameMode::ResetPuzzle(APuzzleCharacter& Player)
 {
-    if (APortalLabGameMode* Lab = GetWorld()->GetAuthGameMode<APortalLabGameMode>())
+    if (auto* LabPlayer = Cast<APortalLabCharacter>(&Player))
     {
-        Lab->ResetLab(*this);
+        ResetLab(*LabPlayer);
     }
 }
 
-bool APortalLabCharacter::InteractWithDevice(UPrimitiveComponent& Target)
+bool APortalLabGameMode::UseDevice(APuzzleCharacter&, UPrimitiveComponent& Target)
 {
-    APortalLabGameMode* Lab = GetWorld()->GetAuthGameMode<APortalLabGameMode>();
-    return Lab && Lab->UseConsole(Target);
+    return UseConsole(Target);
 }
 
 void APortalLabHUD::DrawHUD()
