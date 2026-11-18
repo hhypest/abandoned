@@ -21,7 +21,6 @@ class AVanguardCharacter;
 class UAudioComponent;
 class UBoxComponent;
 class UMaterialInterface;
-class USoundWave;
 class USpotLightComponent;
 class UStaticMeshComponent;
 class UVanguardRadiationLayout;
@@ -69,7 +68,8 @@ private:
     void TickPassage(AVanguardCharacter& Player, float DeltaSeconds);
 #if WITH_DEV_AUTOMATION_TESTS
     void Verify(AVanguardCharacter& Player, float DeltaSeconds);
-    void VerifyFalls(AVanguardCharacter& Player, float DeltaSeconds);
+    friend class UVanguardFallVerification;
+    TWeakObjectPtr<class UVanguardFallVerification> FallCheck;
     void VerifyRadiation(AVanguardCharacter& Player, float DeltaSeconds);
     bool VerifyWristTerminal(AVanguardCharacter& Player, float DeltaSeconds);
     TWeakObjectPtr<class UVanguardMantleVerification> MantleCheck;
@@ -78,8 +78,6 @@ private:
         Gate, WaitForFlare, LeaveShelter, ReturnToShelter, HoldInShelter, RecoverOutside, LethalExposure, RunToStation
     };
     bool bVerifyRoute = false;
-    bool bVerifyFalls = false;
-    bool bVerifyInjuryAudio = false;
     bool bVerifyRadiation = false;
     bool bCaptureRadiation = false;
     bool bVerifyWristTerminal = false;
@@ -93,10 +91,6 @@ private:
     bool bDoorPassed = false;
     bool bMovedToSupply = false;
     int FlashlightInputStep = 0;
-    int FallTestStep = 0;
-    bool bPlacedAtTestPlatform = false;
-    bool bWalkedOffTestPlatform = false;
-    bool bWaitingForInjuryRecovery = false;
     ERadiationVerification RadiationVerification = ERadiationVerification::Gate;
     double ProtectedDose = 0.0;
     float ShelterSeconds = 0.0f;
@@ -153,8 +147,7 @@ private:
     void PlayInjuryBreath();
 #if WITH_DEV_AUTOMATION_TESTS
     friend class UVanguardMantleVerification;
-    void ObserveInjuryBreath(const UAudioComponent*, const USoundWave*, float PlayedFraction);
-    bool bInjuryBreathDecoded = false;
+    friend class UVanguardFallVerification;
 #endif
     void ResetRadiation();
     void CreateWristTerminal();

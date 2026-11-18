@@ -4,7 +4,7 @@ param(
     [string]$EngineRoot,
 
     [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
-                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
+                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -58,7 +58,20 @@ $courseSuccess = @('Entry test: crossed Stairs exit.', 'Entry test: crossed Butt
 $dev20Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"
 $dev20Transit = @('34 kg Chaos mass and carry slowdown confirmed.', 'loss of portal power returned the same item to its cradle.',
                   'same 34 kg body remained in the grip after the portal.', "DEV-20 departed the portal bay in the player's grip.")
+$fallsMap = "${vanguard}?Chamber=Passage?Checkpoint=Balance"
+$fallsSuccess = @('Vanguard fall verified at 250 cm.', 'Passage fall 300.0 cm: minor injury.',
+                  'Vanguard minor injury slowed ground movement, then restored normal speed.', 'Vanguard fall verified at 300 cm.',
+                  'Passage fall 325.0 cm: fatal.', 'Passage checkpoint recovery: Balance (fall).', 'Balance chamber verification passed')
 $scenarios = @{
+    VanguardFalls = @{
+        Map = $fallsMap; Flag = '-VerifyVanguardFalls'; ExtraFlag = '-VerifyBalanceChamber'
+        Chambers = @('Balance'); Success = $fallsSuccess
+    }
+    VanguardFallsAudio = @{
+        Map = $fallsMap; Flag = '-VerifyVanguardFalls'; ExtraFlag = @('-VerifyInjuryAudio', '-VerifyBalanceChamber')
+        Chambers = @('Balance'); Success = $fallsSuccess + 'Vanguard injury breath decoded in audio mixer.'
+        RealTime = $true
+    }
     EntryCourse = @{
         Map = $entry
         Flag = '-VerifyEntryCourse'
@@ -198,6 +211,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     $result = [ordered]@{
         Name = $name
         Map = $definition.Map
+        FixedStepFps = if (!$definition.RealTime) { $FramesPerSecond } else { $null }
         Flag = $definition.Flag
         Log = $log
         ExitCode = $null
@@ -219,9 +233,13 @@ function Invoke-Scenario($name, $definition, $profile) {
     $start.UseShellExecute = $false
     $start.WorkingDirectory = $repo
     foreach ($arg in @($project, $definition.Map, $definition.Flag, '-game', '-vulkan', '-unattended',
-                       '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])", '-benchmark', "-fps=$FramesPerSecond",
+                       '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])",
                        "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$renderQueries")) {
         $start.ArgumentList.Add($arg)
+    }
+    if (!$definition.RealTime) {
+        $start.ArgumentList.Add('-benchmark')
+        $start.ArgumentList.Add("-fps=$FramesPerSecond")
     }
     if (($Capture -or $definition.CheckPortalFrame) -and $definition.CaptureFlag) {
         $start.ArgumentList.Add($definition.CaptureFlag)
