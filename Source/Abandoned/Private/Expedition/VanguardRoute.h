@@ -67,19 +67,10 @@ private:
     void RestartRadiationPassage();
     void TickPassage(AVanguardCharacter& Player, float DeltaSeconds);
 #if WITH_DEV_AUTOMATION_TESTS
-    void Verify(AVanguardCharacter& Player, float DeltaSeconds);
     friend class UVanguardFallVerification;
     TWeakObjectPtr<class UVanguardFallVerification> FallCheck;
     TWeakObjectPtr<class UVanguardRadiationVerification> RadiationCheck;
-    TWeakObjectPtr<class UVanguardMantleVerification> MantleCheck;
-    bool bVerifyRoute = false;
-    bool bCaptureRoute = false;
-    float VerificationSeconds = 0.0f;
-    bool bCaptured = false;
-    bool bCapturedOpenDoor = false;
-    bool bDoorPassed = false;
-    bool bMovedToSupply = false;
-    int FlashlightInputStep = 0;
+    TWeakObjectPtr<class UVanguardRouteVerification> RouteCheck;
 #endif
 
     UPROPERTY()
@@ -133,6 +124,7 @@ private:
     void PlayInjuryBreath();
 #if WITH_DEV_AUTOMATION_TESTS
     friend class UVanguardRadiationVerification;
+    friend class UVanguardRouteVerification;
     friend class UVanguardWristTerminalVerification;
     friend class UVanguardMantleVerification;
     friend class UVanguardFallVerification;

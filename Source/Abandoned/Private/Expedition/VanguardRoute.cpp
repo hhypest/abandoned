@@ -3,7 +3,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Verification/VanguardFallVerification.h"
-#include "Verification/VanguardMantleVerification.h"
+#include "Verification/VanguardRouteVerification.h"
 #include "Verification/VanguardRadiationVerification.h"
 #endif
 
@@ -14,22 +14,18 @@
 #include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
-#include "Engine/GameViewportClient.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "HAL/PlatformMisc.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "InputCoreTypes.h"
-#include "InputKeyEventArgs.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Player/AbandonedTestController.h"
-#include "Player/MovementProfile.h"
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 #include "World/SceneAssembly.h"
@@ -261,18 +257,14 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         }
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    bVerifyRoute = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse")) ||
-        FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint")) ||
-        FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguard"));
-    bCaptureRoute = FParse::Param(FCommandLine::Get(), TEXT("CaptureVanguard"));
     if (!AtStation() && !Radiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardFalls")))
     {
         FallCheck = UVanguardFallVerification::Attach(*this);
     }
     RadiationCheck = UVanguardRadiationVerification::AttachIfRequested(*this, *Layout);
-    if (bVerifyRoute && !FallCheck.IsValid() && !RadiationCheck.IsValid() && !AtStation() && Passage->bEnableMantle)
+    if (!FallCheck.IsValid() && !RadiationCheck.IsValid())
     {
-        MantleCheck = UVanguardMantleVerification::Attach(*this, Passage->MantleLedges[0], bCaptureRoute);
+        RouteCheck = UVanguardRouteVerification::AttachIfRequested(*this, *Layout, Door.Get());
     }
 #endif
     UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard segment ready: %s."),
@@ -391,7 +383,7 @@ void AVanguardRouteGameMode::Resupply()
         UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard oxygen supply restored."));
         if (Destination.Entry == RouteEntry::Campaign
 #if WITH_DEV_AUTOMATION_TESTS
-            && (!bVerifyRoute || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint")))
+            && UVanguardRouteVerification::AllowsResupplySave()
 #endif
         )
         {
@@ -517,103 +509,12 @@ void AVanguardRouteGameMode::Tick(float DeltaSeconds)
     {
         Check->CheckStep(*this, *Player, DeltaSeconds);
     }
-    else if (bVerifyRoute)
+    else if (auto* RouteTest = RouteCheck.Get())
     {
-        Verify(*Player, DeltaSeconds);
+        RouteTest->CheckStep(*this, *Player, DeltaSeconds);
     }
 #endif
 }
-
-#if WITH_DEV_AUTOMATION_TESTS
-void AVanguardRouteGameMode::Verify(AVanguardCharacter& Player, float DeltaSeconds)
-{
-    VerificationSeconds += DeltaSeconds;
-    if (VerificationSeconds > 35.0f)
-    {
-        UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard verification timed out at %s."),
-            *Player.GetActorLocation().ToCompactString());
-        bVerifyRoute = false;
-        FPlatformMisc::RequestExitWithStatus(false, 1);
-        return;
-    }
-    if (bCaptureRoute && !bCaptured && VerificationSeconds >= 0.55f)
-    {
-        FScreenshotRequest::RequestScreenshot(AtStation() ? TEXT("Vanguard-Station") : TEXT("Vanguard-Airlock"), false, false);
-        bCaptured = true;
-    }
-    if (!AtStation())
-    {
-        if (VerificationSeconds < 0.9f)
-        {
-            return;
-        }
-        if (FlashlightInputStep < 7)
-        {
-            constexpr bool ExpectedOn[] = {false, true, true, false, false, true, true};
-            auto* PC = Cast<APlayerController>(Player.GetController());
-            if (!PC || Player.IsFlashlightOn() != ExpectedOn[FlashlightInputStep])
-            {
-                UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard shoulder flashlight failed to toggle."));
-                FPlatformMisc::RequestExitWithStatus(false, 1);
-                bVerifyRoute = false;
-                return;
-            }
-            if (FlashlightInputStep == 6)
-            {
-                UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard shoulder flashlight switched on, off and on with F."));
-            }
-            else
-            {
-                const EInputEvent Event = FlashlightInputStep % 2 == 0 ? IE_Pressed : IE_Released;
-                PC->InputKey(FInputKeyEventArgs(nullptr, INPUTDEVICEID_NONE, EKeys::F, Event, FPlatformTime::Cycles64()));
-            }
-            ++FlashlightInputStep;
-        }
-        if (auto* Check = MantleCheck.Get(); Check && !Check->CheckStep(Player, DeltaSeconds))
-        {
-            bVerifyRoute = false;
-            return;
-        }
-        Player.AddMovementInput(FVector::ForwardVector);
-        const FVector Closed = GetDefault<UVanguardPassageLayout>()->Door.Center;
-        if (bCaptureRoute && !bCapturedOpenDoor && Player.GetActorLocation().X < Closed.X - 70.0 &&
-            Door->GetComponentLocation().Z > Closed.Z + 185.0)
-        {
-            FScreenshotRequest::RequestScreenshot(TEXT("Vanguard-Airlock-Open"), false, false);
-            bCapturedOpenDoor = true;
-        }
-        if (!bDoorPassed && Player.GetActorLocation().X > Closed.X + 70.0)
-        {
-            bDoorPassed = true;
-            UE_LOG(LogVanguardRoute, Display, TEXT("Verification crossed the moving passage airlock."));
-        }
-        return;
-    }
-    if (VerificationSeconds >= 0.95f && !bMovedToSupply)
-    {
-        const FVector Cabinet = SupplyCabinet->GetComponentLocation();
-        const FVector From(Cabinet.X - 170.0, Cabinet.Y, Layout->Spawn.Z);
-        const FVector Eye = From + FVector(0, 0, Abandoned::MovementProfile::CameraHeight);
-        Player.PlaceAt(FTransform((Cabinet - Eye).Rotation(), From));
-        const float Prior = GetOxygenPercent();
-        Player.Interact();
-        bMovedToSupply = true;
-        if (Prior < 100.0f && HasResupplied() && GetOxygenPercent() == 100.0f && Player.IsFlashlightOn())
-        {
-            UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard shoulder flashlight stayed on across world travel."));
-            UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard verification passed: passage transit and station resupply."));
-            FPlatformMisc::RequestExitWithStatus(false, 0);
-        }
-        else
-        {
-            UE_LOG(LogVanguardRoute, Error, TEXT("Vanguard verification failed: prior oxygen %.2f, current %.2f."),
-                Prior, GetOxygenPercent());
-            FPlatformMisc::RequestExitWithStatus(false, 1);
-        }
-        bVerifyRoute = false;
-    }
-}
-#endif
 
 AVanguardCharacter::AVanguardCharacter()
 {
