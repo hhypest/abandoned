@@ -2,11 +2,15 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Player/MovementProfile.h"
+#include "Infrastructure/Puzzles/OpticalCircuitComponent.h"
+#include "Infrastructure/Puzzles/OpticalReflectorComponent.h"
+#include "Infrastructure/Puzzles/PowerLabDoorsComponent.h"
 #include "Puzzles/PowerLab.h"
 #include "Puzzles/PowerLabLayout.h"
 #include "Puzzles/PuzzleCube.h"
@@ -55,8 +59,8 @@ void UOpticsVerification::TickComponent(float DeltaSeconds, ELevelTick TickType,
         }
         return;
     }
-    if (!Lab || !IsValid(Lab->Layout) || !IsValid(Lab->Cube) || !IsValid(Lab->Mirror) ||
-        !IsValid(Lab->MirrorSurface) || !IsValid(Lab->Reflection.Door) || !IsValid(Lab->Interruption.Door))
+    if (!Lab || !IsValid(Lab->Layout) || !IsValid(Lab->Cube) || !IsValid(Lab->Reflector->GetBody()) ||
+        !IsValid(Lab->Reflector->GetSurface()) || !IsValid(Lab->Doors->Reflection.Body.Get()) || !IsValid(Lab->Doors->Interruption.Body.Get()))
     {
         Fail(TEXT("Optical lab fixture disappeared."));
         return;
@@ -83,9 +87,18 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
     constexpr float ExpectedMirrorMassKg = 8.0f;
     constexpr double DockRadiusCm = 100.0;
     const UPowerLabLayout& Layout = *Lab.Layout;
-    UBoxComponent& Mirror = *Lab.Mirror;
-    const FOpticalLane& Interruption = Lab.Interruption;
-    FOpticalLane& Reflection = Lab.Reflection;
+    UBoxComponent& Mirror = *Lab.Reflector->GetBody();
+    const auto& Interruption = Lab.Doors->Interruption;
+    auto& Reflection = Lab.Doors->Reflection;
+    const auto VisibleBeamCount = [&Lab]()
+    {
+        int32 Count = 0;
+        for (const UStaticMeshComponent* Beam : Lab.Optics->Beams)
+        {
+            Count += Beam->IsVisible() ? 1 : 0;
+        }
+        return Count;
+    };
     const auto LookFrom = [&Player, &Layout](FVector Feet, FVector At)
     {
         const FVector Center(Feet.X, Feet.Y, Layout.Spawn.Z);
@@ -101,7 +114,7 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
             UE_LOG(LogOpticsVerification, Error, TEXT("Free mirror pose %s, up %.3f, speed %.2f, spin %.2f, aimable %d."),
                 *Mirror.GetComponentLocation().ToCompactString(), Mirror.GetUpVector().Z,
                 Mirror.GetPhysicsLinearVelocity().Size(), Mirror.GetPhysicsAngularVelocityInDegrees().Size(),
-                Lab.CanAimMirror(Player));
+                Lab.Reflector->CanAimMirror(Player));
         }
         Fail(TEXT("Timed out waiting for a physical transition."));
         return;
@@ -113,7 +126,7 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
         {
             return;
         }
-        if (Lab.Course.GetPower().DirectEmitter || Lab.Course.GetPower().ReflectionEmitter)
+        if (Lab.Optics->Course.GetPower().DirectEmitter || Lab.Optics->Course.GetPower().ReflectionEmitter)
         {
             Fail(TEXT("The unpowered lab emitted a signal."));
             return;
@@ -123,17 +136,22 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
         Next(EPhase::DirectSignal, TEXT("Used the supply button."));
         break;
     case EPhase::DirectSignal:
-        if (Lab.bDirectSignal)
+        if (Lab.Optics->bDirectSignal)
         {
+            if (VisibleBeamCount() != 1)
+            {
+                Fail(TEXT("Direct signal did not display one beam segment."));
+                return;
+            }
             LookFrom(Layout.Interruption.Emitter + FVector(0, 320, 0), Layout.Interruption.Receiver);
             Next(EPhase::SuitBlocksBeam, TEXT("Receiver acquired the direct beam."));
         }
         break;
     case EPhase::SuitBlocksBeam:
-        if (!Lab.bDirectSignal && Elapsed >= 0.12f)
+        if (!Lab.Optics->bDirectSignal && Elapsed >= 0.12f)
         {
             Player.ResetChamber();
-            if (Lab.Course.GetPower().DirectEmitter || !Interruption.Door->GetComponentLocation().Equals(Layout.Interruption.Door))
+            if (VisibleBeamCount() != 0 || Lab.Optics->Course.GetPower().DirectEmitter || !Interruption.Body->GetComponentLocation().Equals(Layout.Interruption.Door))
             {
                 Fail(TEXT("Reset left the circuit or first door active."));
                 return;
@@ -144,14 +162,14 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
         }
         break;
     case EPhase::RestoredSignal:
-        if (Lab.bDirectSignal)
+        if (Lab.Optics->bDirectSignal)
         {
             Lab.Cube->ResetPosition(FVector(Layout.Interruption.Emitter.X, 20.0, 42.0));
             Next(EPhase::CubeBlocksBeam, TEXT("Put a physical ballast cube across the beam."));
         }
         break;
     case EPhase::CubeBlocksBeam:
-        if (!Lab.bDirectSignal && Interruption.Door->GetComponentLocation().Z > Layout.Interruption.Door.Z + 250)
+        if (!Lab.Optics->bDirectSignal && Interruption.Body->GetComponentLocation().Z > Layout.Interruption.Door.Z + 250)
         {
             Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout.Interruption.Door - FVector(135, 0, 38)));
             Next(EPhase::CrossFirstDoor, TEXT("Loss of light enabled the second bay and opened the first door."));
@@ -182,7 +200,7 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
         if (FVector::DistSquared(Mirror.GetComponentLocation(), MirrorPlacement) < FMath::Square(45.0))
         {
             Player.Interact();
-            if (Lab.bMirrorDocked == bFreeReflector || Player.GetHeldBody())
+            if (Lab.Reflector->bMirrorDocked == bFreeReflector || Player.GetHeldBody())
             {
                 Fail(TEXT("Mirror placement did not enter the expected support state."));
                 return;
@@ -194,16 +212,16 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
                 Fail(TEXT("Emitter interaction did not enter aiming."));
                 return;
             }
-            LookFrom(Player.GetActorLocation(), Lab.MirrorSurface->GetComponentLocation());
+            LookFrom(Player.GetActorLocation(), Lab.Reflector->GetSurface()->GetComponentLocation());
             Next(EPhase::AimMirror, bFreeReflector ? TEXT("Placed the carried mirror off the dock and aimed the emitter.")
                 : TEXT("Docked the carried mirror and entered live emitter aiming."));
         }
         break;
     case EPhase::AimMirror:
-        if (Elapsed >= 0.12f && Lab.CanAimMirror(Player))
+        if (Elapsed >= 0.12f && Lab.Reflector->CanAimMirror(Player))
         {
             Player.Interact();
-            LookFrom(Mirror.GetComponentLocation() + FVector(-119, 72, 0), Lab.MirrorSurface->GetComponentLocation());
+            LookFrom(Mirror.GetComponentLocation() + FVector(-119, 72, 0), Lab.Reflector->GetSurface()->GetComponentLocation());
             Player.AimMirror();
             if (Player.Aim != EOpticsAim::Mirror)
             {
@@ -215,13 +233,18 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
         }
         break;
     case EPhase::ReflectedSignal:
-        if (Lab.bReflectedSignal && Reflection.Door->GetComponentLocation().Z > Layout.Reflection.Door.Z + 250)
+        if (Lab.Optics->bReflectedSignal && Reflection.Body->GetComponentLocation().Z > Layout.Reflection.Door.Z + 250)
         {
+            if (VisibleBeamCount() != 3)
+            {
+                Fail(TEXT("Reflection did not display the incident and outgoing segments."));
+                return;
+            }
             Player.Interact();
             if (bCapture)
             {
                 LookFrom(MirrorPlacement + FVector(-380, -120, 0),
-                    (Lab.MirrorSurface->GetComponentLocation() + Layout.Reflection.Receiver) * 0.5);
+                    (Lab.Reflector->GetSurface()->GetComponentLocation() + Layout.Reflection.Receiver) * 0.5);
             }
             const EPhase AfterReflection = bFreeReflector ? EPhase::AdjustFreeMirror : EPhase::ApproachExit;
             Next(bCapture ? EPhase::CaptureReflection : AfterReflection, TEXT("Real reflected ray reached its receiver and opened the exit."));
@@ -238,14 +261,14 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
         Player.AddMovementInput(FVector::ForwardVector);
         if (Player.GetActorLocation().X > Layout.Reflection.Door.X + 95)
         {
-            Lab.bMirrorDocked = false;
+            Lab.Reflector->bMirrorDocked = false;
             FVector UnderDoor = Layout.Reflection.Door;
-            UnderDoor.Z += Mirror.GetUnscaledBoxExtent().Z - Reflection.Door->GetUnscaledBoxExtent().Z + 1.0;
+            UnderDoor.Z += Mirror.GetUnscaledBoxExtent().Z - Reflection.Body->GetUnscaledBoxExtent().Z + 1.0;
             Mirror.SetWorldLocationAndRotation(UnderDoor, FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
             Mirror.SetSimulatePhysics(true);
             Mirror.SetPhysicsLinearVelocity(FVector::ZeroVector);
             Mirror.SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
-            Reflection.Direction = FVector::UpVector;
+            Lab.Optics->Reflection.Direction = FVector::UpVector;
             Next(EPhase::MirrorClamped, TEXT("Optical exit passed. Closing the unpowered door over the mirror."));
         }
         break;
@@ -261,7 +284,7 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
         }
         break;
     case EPhase::ReleaseMirror:
-        Lab.MoveDoor(Reflection.Door, Reflection.Clamp, Layout.Reflection.Door, true, Delta, Player);
+        Lab.Doors->MoveDoor(Reflection, true, Delta, Player, Lab.Cube->GetBody(), Lab.Reflector->PortableBody());
         if (!Reflection.Clamp.HasObject())
         {
             if (!Mirror.IsSimulatingPhysics() || !FMath::IsNearlyEqual(Mirror.GetMass(), ExpectedMirrorMassKg, 0.05f))
@@ -277,13 +300,13 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
     case EPhase::AdjustFreeMirror:
         if (Elapsed >= 0.15f)
         {
-            if (Lab.bMirrorDocked || !Mirror.IsSimulatingPhysics() ||
+            if (Lab.Reflector->bMirrorDocked || !Mirror.IsSimulatingPhysics() ||
                 FVector::Dist2D(Mirror.GetComponentLocation(), Layout.MirrorDock) <= DockRadiusCm)
             {
                 Fail(TEXT("the free reflector route used the dock"));
                 return;
             }
-            LookFrom(Mirror.GetComponentLocation() + FVector(-119, 72, 0), Lab.MirrorSurface->GetComponentLocation());
+            LookFrom(Mirror.GetComponentLocation() + FVector(-119, 72, 0), Lab.Reflector->GetSurface()->GetComponentLocation());
             Player.AimMirror();
             if (Player.Aim != EOpticsAim::Mirror)
             {
@@ -295,14 +318,14 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
         }
         break;
     case EPhase::LostReflection:
-        if (!Lab.bReflectedSignal && Reflection.Door->GetComponentLocation().Equals(Layout.Reflection.Door, 1.0))
+        if (!Lab.Optics->bReflectedSignal && Reflection.Body->GetComponentLocation().Equals(Layout.Reflection.Door, 1.0))
         {
             LookFrom(Player.GetActorLocation(), Layout.Reflection.Receiver);
             Next(EPhase::RestoredReflection, TEXT("Turning off target closed the real door. Aimed at the receiver again."));
         }
         break;
     case EPhase::RestoredReflection:
-        if (Lab.bReflectedSignal && Reflection.Door->GetComponentLocation().Z > Layout.Reflection.Door.Z + 250)
+        if (Lab.Optics->bReflectedSignal && Reflection.Body->GetComponentLocation().Z > Layout.Reflection.Door.Z + 250)
         {
             Player.Interact();
             UE_LOG(LogOpticsVerification, Display, TEXT("Free reflector verification passed: placed off-dock, lost signal and reopened."));

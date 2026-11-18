@@ -18,7 +18,7 @@ public:
     void TickComponent(float DeltaSeconds, ELevelTick TickType, FActorComponentTickFunction* TickFunction) override;
 
 private:
-    enum class EPhase { Ready, RepeatPress, Expiry, CrossExit, ReturnSwitch, OpenReturnDoor, LocalRecovery, Reset };
+    enum class EPhase { Ready, RepeatPress, Expiry, CrossExit, ReturnSwitch, OpenReturnDoor, LocalRecovery, Reset, CrossAfterReset };
     void Check(const APowerLabGameMode& Lab, APowerLabCharacter& Player);
     void Next(EPhase NextPhase);
     void Fail(const TCHAR* Reason);
