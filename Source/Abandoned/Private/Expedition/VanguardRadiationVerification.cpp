@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Expedition/VanguardRouteLayout.h"
+#include "Verification/VanguardWristTerminalVerification.h"
 
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -90,10 +91,8 @@ void AVanguardRouteGameMode::VerifyRadiation(AVanguardCharacter& Player, float D
     case ERadiationVerification::LeaveShelter:
         if (Reading->Position == RadiationPosition::Exposed && Reading->FlareActive && Reading->DosePercent >= 5.0)
         {
-            if (bVerifyWristTerminal && (!Player.IsWristTerminalOpen() ||
-                !Player.WristReadout.Contains(FString::Printf(TEXT("DOSE    %.1f%%"), Reading->DosePercent))))
+            if (auto* Check = WristCheck.Get(); Check && !Check->CheckExposure(Player, Reading->DosePercent))
             {
-                Fail(TEXT("the raised wrist should display the accumulating exposure dose"));
                 return;
             }
             Capture(TEXT("Radiation-Exposed"));
