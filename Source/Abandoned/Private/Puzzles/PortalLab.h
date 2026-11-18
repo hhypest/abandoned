@@ -10,9 +10,8 @@
 #include "PortalLab.generated.h"
 
 class APortalLabCharacter;
-class USceneCaptureComponent2D;
+class UPortalRoomViewComponent;
 class UStaticMesh;
-class UTextureRenderTarget2D;
 class UPortalLabLayout;
 enum class EPuzzleCubeType : uint8;
 
@@ -39,9 +38,6 @@ struct FPortalMouth
 
     UPROPERTY()
     TObjectPtr<UBoxComponent> Console;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> Window;
 
     UPROPERTY()
     TObjectPtr<UStaticMeshComponent> PowerBar;
@@ -83,8 +79,7 @@ private:
     void ToggleSupply();
     void RecoverDev20();
     bool UseConsole(const UPrimitiveComponent& Target);
-    void UpdateMouths();
-    void CaptureView(const APortalLabCharacter& Player);
+    void UpdateMouths(const APlayerController* Viewer);
     void ObserveTraveler(AActor& Actor, UPrimitiveComponent& Body, FTraveler& State,
         APortalLabCharacter* Player, int32 CubeIndex = INDEX_NONE);
     bool ExitClear(const UPrimitiveComponent& Body, const FTransform& Destination,
@@ -109,9 +104,6 @@ private:
     TObjectPtr<UMaterialInterface> BaseMaterial;
 
     UPROPERTY()
-    TObjectPtr<UMaterialInterface> WindowMaterial;
-
-    UPROPERTY()
     TObjectPtr<UMaterialInterface> Lit;
 
     UPROPERTY()
@@ -130,10 +122,7 @@ private:
     TObjectPtr<ADev20Actor> Dev20;
 
     UPROPERTY()
-    TObjectPtr<USceneCaptureComponent2D> Capture;
-
-    UPROPERTY()
-    TObjectPtr<UTextureRenderTarget2D> ViewTexture;
+    TObjectPtr<UPortalRoomViewComponent> RoomView;
 
     FTraveler PlayerState;
     FTraveler CubeStates[2];

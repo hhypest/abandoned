@@ -4,29 +4,23 @@
 #include "Verification/PortalLabVerification.h"
 #include "Verification/PortalDev20Verification.h"
 #endif
-#include "Camera/PlayerCameraManager.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "Components/SceneCaptureComponent2D.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Canvas.h"
-#include "Engine/GameViewportClient.h"
-#include "Engine/LocalPlayer.h"
-#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "Expedition/Dev20Actor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
+#include "Infrastructure/Puzzles/PortalRoomViewComponent.h"
 #include "Infrastructure/Puzzles/UnrealPortalShape.h"
+#include "Infrastructure/Puzzles/UnrealPortalTransform.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Player/AbandonedTestController.h"
 #include "Puzzles/PortalLabLayout.h"
 #include "Puzzles/PuzzleCube.h"
-#include "RenderCommandFence.h"
-#include "SceneView.h"
-#include "UnrealClient.h"
 #include "UObject/ConstructorHelpers.h"
 #include "World/Blockout.h"
 #include "World/SceneAssembly.h"
@@ -39,13 +33,6 @@ using Abandoned::Domain::Puzzles::PortalEvent;
 constexpr double HalfWidth = 118.0;
 constexpr double HalfHeight = 145.0;
 constexpr double Clearance = 6.0;
-
-FTransform Link(const FTransform& Source, const FTransform& Destination)
-{
-    const FQuat Turn(FVector::UpVector, UE_PI);
-    const FQuat Rotation = Destination.GetRotation() * Turn * Source.GetRotation().Inverse();
-    return FTransform(Rotation, Destination.GetLocation() - Rotation.RotateVector(Source.GetLocation()));
-}
 
 bool Fits(const FVector& Local, const FVector& Extent)
 {
@@ -68,10 +55,7 @@ APortalLabGameMode::APortalLabGameMode()
 
     static const ConstructorHelpers::FObjectFinder<UMaterialInterface> Surface(
         TEXT("/Game/Abandoned/Materials/M_AbandonedSurface.M_AbandonedSurface"));
-    static const ConstructorHelpers::FObjectFinder<UMaterialInterface> View(
-        TEXT("/Game/Abandoned/Materials/M_PortalView.M_PortalView"));
     BaseMaterial = Surface.Object;
-    WindowMaterial = View.Object;
 }
 
 void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FString& Error)
@@ -93,12 +77,11 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
     bDev20Run = Dev20Route != nullptr;
     bDev20Recovered = Dev20Route && Dev20Route->Entry == Dev20Entry::Recovery;
     CubeMesh = Abandoned::Blockout::LoadCube();
-    UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
     const auto MouthValid = [](const FPortalMouthLayout& Mouth)
     {
         return !Mouth.Center.ContainsNaN() && !Mouth.Console.ContainsNaN() && FMath::IsFinite(Mouth.Yaw);
     };
-    if (!CubeMesh || !Plane || !BaseMaterial || !WindowMaterial || Layout->Room.IsEmpty() ||
+    if (!CubeMesh || !BaseMaterial || Layout->Room.IsEmpty() ||
         !MouthValid(Layout->Arrival) || !MouthValid(Layout->Departure) || Layout->Spawn.ContainsNaN() ||
         Layout->SmallCube.ContainsNaN() || Layout->LargeCube.ContainsNaN() ||
         (bDev20Run && (Layout->Dev20Station.ContainsNaN() || !Layout->Dev20Exit.IsValid())) ||
@@ -144,21 +127,6 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
         }
     }
 
-    ViewTexture = NewObject<UTextureRenderTarget2D>(this);
-    ViewTexture->RenderTargetFormat = RTF_RGBA16f;
-    ViewTexture->AddressX = TA_Clamp;
-    ViewTexture->AddressY = TA_Clamp;
-    ViewTexture->InitAutoFormat(960, 540);
-    // UpdateResourceImmediate queues render work. Complete the texture reference update
-    // before the MID caches its bindless descriptor. This wait runs once during map load.
-    ViewTexture->UpdateResourceImmediate();
-    WindowMaterial->EnsureIsComplete();
-    FRenderCommandFence TextureReady;
-    TextureReady.BeginFence(FRenderCommandFence::ESyncDepth::RHIThread);
-    TextureReady.Wait();
-    UMaterialInstanceDynamic* View = UMaterialInstanceDynamic::Create(WindowMaterial, this);
-    View->SetTextureParameterValue(TEXT("PortalView"), ViewTexture);
-
     for (const auto* Data : {&Layout->Arrival, &Layout->Departure})
     {
         FPortalMouth& Mouth = Mouths.AddDefaulted_GetRef();
@@ -181,43 +149,19 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
         Mouth.Console = Spawn({Data->Console, FVector(35, 58, 62), true, TEXT("Frame")}).Collision;
         Mouth.Shutter = Part(FVector::ZeroVector, FVector(10, 2 * HalfWidth, 2 * HalfHeight),
             TEXT("Unpowered"), true).Collision;
-        const auto Screen = Part(FVector(3, 0, 0), FVector(1), TEXT("Unpowered"), false);
-        Mouth.Window = Screen.Visual;
-        if (!Mouth.PowerBar || !Mouth.Console || !Mouth.Shutter || !Mouth.Window)
+        if (!Mouth.PowerBar || !Mouth.Console || !Mouth.Shutter)
         {
             Error = TEXT("Could not assemble portal frame.");
             return;
         }
-        Mouth.Window->SetStaticMesh(Plane);
-        Mouth.Window->SetWorldRotation(FRotationMatrix::MakeFromZX(Mouth.Pose.GetUnitAxis(EAxis::X),
-            Mouth.Pose.GetUnitAxis(EAxis::Y)).Rotator());
-        Mouth.Window->SetWorldScale3D(FVector(HalfWidth / 50.0, HalfHeight / 50.0, 1));
-        Mouth.Window->SetMaterial(0, View);
-        Mouth.Window->SetCastShadow(false);
-        Mouth.Window->SetVisibility(false);
     }
 
-    AActor* CaptureOwner = World.SpawnActor<AActor>();
-    if (!CaptureOwner)
+    RoomView = UPortalRoomViewComponent::Create(World, Mouths[0].Pose, Mouths[1].Pose, FVector2D(HalfWidth, HalfHeight));
+    if (!RoomView)
     {
-        Error = TEXT("Could not reserve the portal scene capture.");
+        Error = TEXT("Could not initialize the portal room view.");
         return;
     }
-    Capture = NewObject<USceneCaptureComponent2D>(CaptureOwner);
-    CaptureOwner->SetRootComponent(Capture);
-    CaptureOwner->AddInstanceComponent(Capture);
-    Capture->bCaptureEveryFrame = false;
-    Capture->bCaptureOnMovement = false;
-    Capture->bEnableClipPlane = true;
-    Capture->CaptureSource = SCS_SceneColorHDRNoAlpha;
-    Capture->TextureTarget = ViewTexture;
-    Capture->ShowFlags.SetMotionBlur(false);
-    Capture->ShowFlags.SetTemporalAA(false);
-    for (FPortalMouth& Mouth : Mouths)
-    {
-        Capture->HideComponent(Mouth.Window);
-    }
-    Capture->RegisterComponent();
 
     Cubes.SetNum(2);
     for (int32 Index = 0; Index < Cubes.Num(); ++Index)
@@ -310,7 +254,7 @@ void APortalLabGameMode::ResetLab(APortalLabCharacter& Player, bool bPowerFailur
         RecoverDev20();
         bDev20Recovered = bPowerFailure;
     }
-    UpdateMouths();
+    UpdateMouths(nullptr);
 }
 
 void APortalLabGameMode::RecoverDev20()
@@ -348,7 +292,7 @@ bool APortalLabGameMode::UseConsole(const UPrimitiveComponent& Target)
     return false;
 }
 
-void APortalLabGameMode::UpdateMouths()
+void APortalLabGameMode::UpdateMouths(const APlayerController* Viewer)
 {
     const bool bPowered = Supply.IsPowered();
     for (FPortalMouth& Mouth : Mouths)
@@ -356,11 +300,8 @@ void APortalLabGameMode::UpdateMouths()
         Mouth.Shutter->SetCollisionEnabled(bPowered ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics);
         Mouth.Shutter->SetVisibility(!bPowered, true);
         Mouth.PowerBar->SetMaterial(0, bPowered ? Lit : Unlit);
-        if (!bPowered)
-        {
-            Mouth.Window->SetVisibility(false);
-        }
     }
+    RoomView->UpdateView(bPowered ? Viewer : nullptr);
 }
 
 bool APortalLabGameMode::ExitClear(const UPrimitiveComponent& Body, const FTransform& Destination,
@@ -428,7 +369,7 @@ void APortalLabGameMode::ObserveTraveler(AActor& Actor, UPrimitiveComponent& Bod
         bool bClear = false;
         if (Supply.IsPowered() && bCrossed && bFits)
         {
-            Through = Link(Source, Destination);
+            Through = Abandoned::Infrastructure::Puzzles::PortalLinkTransform(Source, Destination);
             const double Out = Destination.InverseTransformPositionNoScale(Through.TransformPosition(Here)).X;
             double ForwardOffset = Extent.X + Clearance - Out;
             if (Held)
@@ -536,83 +477,6 @@ void APortalLabGameMode::ObserveTraveler(AActor& Actor, UPrimitiveComponent& Bod
     }
 }
 
-void APortalLabGameMode::CaptureView(const APortalLabCharacter& Player)
-{
-    if (!Supply.IsPowered())
-    {
-        return;
-    }
-    const APlayerController* Controller = Cast<APlayerController>(Player.GetController());
-    const APlayerCameraManager* Camera = Controller ? Controller->PlayerCameraManager : nullptr;
-    if (!Camera)
-    {
-        return;
-    }
-    const FVector Eye = Camera->GetCameraLocation();
-    const FQuat Rotation = Camera->GetCameraRotation().Quaternion();
-    int32 Visible = INDEX_NONE;
-    double Nearest = FMath::Square(2200.0);
-    for (int32 Index = 0; Index < Mouths.Num(); ++Index)
-    {
-        FPortalMouth& Mouth = Mouths[Index];
-        const FVector Local = Mouth.Pose.InverseTransformPositionNoScale(Eye);
-        if (Local.X > 0.0 && Local.SizeSquared() < Nearest &&
-            FVector::DotProduct((Mouth.Pose.GetLocation() - Eye).GetSafeNormal(), Rotation.GetForwardVector()) > -0.1)
-        {
-            Visible = Index;
-            Nearest = Local.SizeSquared();
-        }
-    }
-    for (int32 Index = 0; Index < Mouths.Num(); ++Index)
-    {
-        if (Index != Visible)
-        {
-            Mouths[Index].Window->SetVisibility(false);
-        }
-    }
-    if (Visible == INDEX_NONE)
-    {
-        return;
-    }
-    const ULocalPlayer* Local = Controller->GetLocalPlayer();
-    const UGameViewportClient* Viewport = GetWorld()->GetGameViewport();
-    FSceneViewProjectionData Projection;
-    if (!Local || !Viewport || !Viewport->Viewport || !Local->GetProjectionData(Viewport->Viewport, Projection))
-    {
-        return;
-    }
-    const FIntPoint ViewSize = Projection.GetConstrainedViewRect().Size();
-    if (ViewSize.X <= 0 || ViewSize.Y <= 0)
-    {
-        return;
-    }
-    const double Scale = 960.0 / FMath::Max(ViewSize.X, ViewSize.Y);
-    const int32 Width = FMath::Max(1, FMath::RoundToInt(ViewSize.X * Scale));
-    const int32 Height = FMath::Max(1, FMath::RoundToInt(ViewSize.Y * Scale));
-    if (ViewTexture->SizeX != Width || ViewTexture->SizeY != Height)
-    {
-        ViewTexture->ResizeTarget(Width, Height);
-    }
-    const FTransform& Exit = Mouths[1 - Visible].Pose;
-    const FTransform Through = Link(Mouths[Visible].Pose, Exit);
-    Capture->bUseCustomProjectionMatrix = true;
-    Capture->CustomProjectionMatrix = Projection.ProjectionMatrix;
-    Capture->FOVAngle = FMath::RadiansToDegrees(2.0 * FMath::Atan(1.0 / Projection.ProjectionMatrix.M[0][0]));
-    Capture->ClipPlaneBase = Exit.GetLocation();
-    Capture->ClipPlaneNormal = Exit.GetUnitAxis(EAxis::X);
-    Capture->SetWorldLocationAndRotation(Through.TransformPosition(Eye), Through.GetRotation() * Rotation);
-    if (!Mouths[Visible].Window->IsVisible())
-    {
-        // Submit the linked view before exposing its surface in the main viewport.
-        Capture->CaptureScene();
-        Mouths[Visible].Window->SetVisibility(true);
-    }
-    else
-    {
-        Capture->CaptureSceneDeferred();
-    }
-}
-
 void APortalLabGameMode::Tick(float Delta)
 {
     Super::Tick(Delta);
@@ -667,8 +531,7 @@ void APortalLabGameMode::Tick(float Delta)
             }
         }
     }
-    UpdateMouths();
-    CaptureView(*Player);
+    UpdateMouths(Controller);
 }
 
 const TCHAR* APortalLabGameMode::GetMessage() const
