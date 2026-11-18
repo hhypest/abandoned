@@ -16,6 +16,19 @@ class UTextureRenderTarget2D;
 class UPortalLabLayout;
 enum class EPuzzleCubeType : uint8;
 
+#if WITH_DEV_AUTOMATION_TESTS
+struct FPortalTransitObservation
+{
+    bool bPowered;
+    bool bApproachingArrival;
+    bool bInterrupted;
+    bool bDev20Crossed;
+    int32 Transfers;
+    FVector Before;
+    FVector After;
+};
+#endif
+
 USTRUCT()
 struct FPortalMouth
 {
@@ -49,6 +62,9 @@ public:
     void HandleStartingNewPlayer_Implementation(APlayerController* Controller) override;
     void Tick(float DeltaSeconds) override;
     const TCHAR* GetMessage() const;
+#if WITH_DEV_AUTOMATION_TESTS
+    FPortalTransitObservation GetTransitObservation() const;
+#endif
 
 private:
     friend class APortalLabCharacter;
@@ -76,11 +92,8 @@ private:
 
 #if WITH_DEV_AUTOMATION_TESTS
     void Verify(APortalLabCharacter& Player, float DeltaSeconds);
-    void VerifyDev20(APortalLabCharacter& Player, float DeltaSeconds);
     void InspectTransfer(const FVector& Before, const FVector& After);
     bool bVerify = false;
-    bool bVerifyDev20 = false;
-    bool bVerifyDev20RecoveryArrival = false;
     bool bCapture = false;
     bool bRequestedFirstPortalFrame = false;
     int32 VerificationStep = 0;
@@ -90,7 +103,6 @@ private:
     FVector LastBefore = FVector::ZeroVector;
     FVector LastAfter = FVector::ZeroVector;
     TWeakObjectPtr<APuzzleCube> VerifyItem;
-    TWeakObjectPtr<ADev20Actor> VerifyDev20Item;
 #endif
 
     UPROPERTY()
