@@ -11,6 +11,7 @@
 #include "Puzzles/PowerLabLayout.h"
 #include "Puzzles/PuzzleCube.h"
 #include "UnrealClient.h"
+#include "Verification/PulseDoorVerification.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogOpticsVerification, Log, All);
 #endif
@@ -270,7 +271,7 @@ void UOpticsVerification::Check(APowerLabGameMode& Lab, APowerLabCharacter& Play
             }
             UE_LOG(LogOpticsVerification, Display, TEXT("Power lab verification passed: switch, blockers, reflection, exit and mirror clamp."));
             SetComponentTickEnabled(false);
-            Lab.StartPulseVerification(bCapture);
+            UPulseDoorVerification::Start(Lab, bCapture);
         }
         break;
     case EPhase::AdjustFreeMirror:
