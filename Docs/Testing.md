@@ -107,7 +107,7 @@ $run = Start-Process $editor -ArgumentList $args -Wait -PassThru
 | Четыре камеры и станция | | `-VerifyEntryCourse -CaptureVanguard -CaptureBalanceChamber` | `reset restored the weight lock`, `Training chamber ready. Balance`, `Entry course verification passed`, `Passage handhold verified`, затем `Vanguard verification passed` |
 | Цепь ИЛИ в камере 02 | `?Chamber=Button` | `-VerifyParallelCircuit -CaptureParallelCircuit` | `Parallel circuit verification passed`. Кадр `Entry-Parallel-Circuit-B.png` показывает ветвь B и открытую дверь. |
 | Альтернативное решение 02 | | `-VerifyEntryCourse -VerifyEntryAlternatePlate` | `Entry alternate solution: cube snapped to plate B`, затем `Vanguard verification passed` |
-| Прежнее сохранение версии 1 | | `-VerifyEntryCheckpoint` | С изолированным профилем, где сохранён `Weight`, журнал начинает маршрут с `Training chamber ready. Weight`, после неё показывает `Training chamber ready. Balance` и завершает станцией. Следующий обычный запуск начинает камеру `Balance`. |
+| Восстановление из Weight | | `-VerifyEntryCheckpoint` | Сценарий `EntryCheckpoint` создаёт слот v2. Игрок проходит Weight, Balance и уступ и пополняет кислород на станции. Запускатель проверяет итоговый слот v2 с точкой `Balance` и записью `oxygen-restored`. |
 | Альтернативное решение 03 | | `-VerifyEntryCourse -VerifyEntryAlternateWeight` | `alternate solution assembled, 10 + 5 + 5 kg`, затем `Vanguard verification passed` |
 | Камера баланса | `?Chamber=Balance` | `-VerifyBalanceChamber -CaptureBalanceChamber` | `Balance chamber verification passed` |
 | Зажим створкой | | `-VerifyDoorClamp -CaptureDoorClamp` | `Door retained the object`, `Door released the object`, `Door clamp verification passed` |

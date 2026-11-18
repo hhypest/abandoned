@@ -72,7 +72,7 @@ private:
     void VerifyFalls(AVanguardCharacter& Player, float DeltaSeconds);
     void VerifyRadiation(AVanguardCharacter& Player, float DeltaSeconds);
     bool VerifyWristTerminal(AVanguardCharacter& Player, float DeltaSeconds);
-    void VerifyMantle(AVanguardCharacter& Player, float DeltaSeconds);
+    TWeakObjectPtr<class UVanguardMantleVerification> MantleCheck;
     enum class ERadiationVerification
     {
         Gate, WaitForFlare, LeaveShelter, ReturnToShelter, HoldInShelter, RecoverOutside, LethalExposure, RunToStation
@@ -100,18 +100,6 @@ private:
     ERadiationVerification RadiationVerification = ERadiationVerification::Gate;
     double ProtectedDose = 0.0;
     float ShelterSeconds = 0.0f;
-    enum class EMantleVerification
-    {
-        Approach, ReleaseTap, WaitForLanding, DuckRunUp, DuckJump, DuckLanding, PlaceBlocker, BlockedHold, Hold, PullUp, WaitForTop, Done
-    };
-    EMantleVerification MantleVerification = EMantleVerification::Approach;
-    float MantleVerificationSeconds = 0.0f;
-    bool bTapLeftGround = false;
-    bool bDuckedInAir = false;
-    bool bCapturedMantleApproach = false;
-    bool bSawMantleHandhold = false;
-    bool bVerifiedMantleHandhold = false;
-    TWeakObjectPtr<AActor> MantleTestBlocker;
 #endif
 
     UPROPERTY()
@@ -164,6 +152,7 @@ private:
     void ToggleFlashlight();
     void PlayInjuryBreath();
 #if WITH_DEV_AUTOMATION_TESTS
+    friend class UVanguardMantleVerification;
     void ObserveInjuryBreath(const UAudioComponent*, const USoundWave*, float PlayedFraction);
     bool bInjuryBreathDecoded = false;
 #endif

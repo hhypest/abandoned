@@ -1,6 +1,10 @@
 #include "Expedition/VanguardRoute.h"
 #include "Expedition/VanguardRouteLayout.h"
 
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Verification/VanguardMantleVerification.h"
+#endif
+
 #include "Application/Expedition/PassageProgress.h"
 #include "Camera/CameraComponent.h"
 #include "Components/AudioComponent.h"
@@ -266,6 +270,10 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     bVerifyRadiation = (Radiation || AtStation()) &&
         (bVerifyWristTerminal || FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation")));
     bCaptureRadiation = FParse::Param(FCommandLine::Get(), TEXT("CaptureRadiation"));
+    if (bVerifyRoute && !bVerifyFalls && !bVerifyRadiation && !AtStation() && Passage->bEnableMantle)
+    {
+        MantleCheck = UVanguardMantleVerification::Attach(*this, Passage->MantleLedges[0], bCaptureRoute);
+    }
 #endif
     UE_LOG(LogVanguardRoute, Display, TEXT("Vanguard segment ready: %s."),
         AtStation() ? TEXT("station") : (Radiation ? TEXT("radiation passage") : TEXT("passage")));
@@ -686,7 +694,11 @@ void AVanguardRouteGameMode::Verify(AVanguardCharacter& Player, float DeltaSecon
             }
             ++FlashlightInputStep;
         }
-        VerifyMantle(Player, DeltaSeconds);
+        if (auto* Check = MantleCheck.Get(); Check && !Check->CheckStep(Player, DeltaSeconds))
+        {
+            bVerifyRoute = false;
+            return;
+        }
         Player.AddMovementInput(FVector::ForwardVector);
         const FVector Closed = GetDefault<UVanguardPassageLayout>()->Door.Center;
         if (bCaptureRoute && !bCapturedOpenDoor && Player.GetActorLocation().X < Closed.X - 70.0 &&
