@@ -126,6 +126,12 @@ void APowerLabGameMode::ResetPulseBay()
 
 DEFINE_LOG_CATEGORY_STATIC(LogPulseVerification, Log, All);
 
+void APowerLabGameMode::StartPulseVerification(bool bCapture)
+{
+    bCapturePulse = bCapture;
+    bVerifyPulse = true;
+}
+
 void APowerLabGameMode::VerifyPulse(APowerLabCharacter& Player, float DeltaSeconds)
 {
     PulseTestTime += DeltaSeconds;
@@ -186,7 +192,7 @@ void APowerLabGameMode::VerifyPulse(APowerLabCharacter& Player, float DeltaSecon
                 Fail(TEXT("a repeat press extended the live pulse"));
                 return;
             }
-            if (bCapture)
+            if (bCapturePulse)
             {
                 LookFrom(Layout->PulseButton + FVector(-180, 145, 0), Layout->PulseDoor.Center + FVector(0, -28, 52));
                 FScreenshotRequest::RequestScreenshot(TEXT("PowerLab-Pulse"), false, false);
