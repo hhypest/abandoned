@@ -1,5 +1,9 @@
 #include "Puzzles/PowerLab.h"
 
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Verification/OpticsVerification.h"
+#endif
+
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -11,15 +15,11 @@
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Player/AbandonedTestController.h"
-#include "Player/MovementProfile.h"
 #include "Puzzles/PowerLabLayout.h"
 #include "Puzzles/PuzzleCube.h"
-#include "UnrealClient.h"
 #include "UObject/ConstructorHelpers.h"
 #include "World/Blockout.h"
 #include "World/SceneAssembly.h"
-
-DEFINE_LOG_CATEGORY_STATIC(LogPowerLab, Log, All);
 
 namespace
 {
@@ -176,9 +176,7 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
     Interruption.Direction = (Layout->Interruption.Receiver - Layout->Interruption.Emitter).GetSafeNormal();
     Reflection.Direction = FVector::ForwardVector;
 #if WITH_DEV_AUTOMATION_TESTS
-    bVerify = FParse::Param(FCommandLine::Get(), TEXT("VerifyPowerLab"));
-    bCapture = FParse::Param(FCommandLine::Get(), TEXT("CapturePowerLab"));
-    bVerifyFreeReflector = FParse::Param(FCommandLine::Get(), TEXT("VerifyFreeReflector"));
+    UOpticsVerification::AttachIfRequested(*this);
 #endif
     SetActorTickEnabled(true);
 }
@@ -591,11 +589,7 @@ void APowerLabGameMode::Tick(float Delta)
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerify)
-    {
-        Verify(*Player, Delta);
-    }
-    else if (bVerifyPulse)
+    if (bVerifyPulse)
     {
         VerifyPulse(*Player, Delta);
     }
@@ -633,266 +627,6 @@ const TCHAR* APowerLabGameMode::GetObjective(const FVector& Player) const
     return Course.GetPower().DirectEmitter ? TEXT("Interrupt the beam with the cube or your suit.")
         : TEXT("Turn on the signal at the wall switch [E].");
 }
-
-#if WITH_DEV_AUTOMATION_TESTS
-void APowerLabGameMode::Verify(APowerLabCharacter& Player, float Delta)
-{
-    VerificationTime += Delta;
-    const auto Fail = [this](const TCHAR* Reason)
-    {
-        UE_LOG(LogPowerLab, Error, TEXT("Power lab verification failed at step %d: %s"), VerificationStep, Reason);
-        bVerify = false;
-        FPlatformMisc::RequestExitWithStatus(false, 1);
-    };
-    const auto Next = [this](const TCHAR* Message)
-    {
-        UE_LOG(LogPowerLab, Display, TEXT("Power lab: %s"), Message);
-        ++VerificationStep;
-        VerificationTime = 0.0f;
-    };
-    const auto LookFrom = [&Player](FVector Feet, FVector At)
-    {
-        FVector Center(Feet.X, Feet.Y, 92.0);
-        const FVector Eye = Center + FVector(0, 0, Abandoned::MovementProfile::CameraHeight);
-        Player.PlaceAt(FTransform((At - Eye).Rotation(), Center));
-    };
-    const FVector MirrorPlacement = Layout->MirrorDock +
-        (bVerifyFreeReflector ? FVector(-140, 125, 0) : FVector::ZeroVector);
-    if (VerificationTime > 6.0f)
-    {
-        if (bVerifyFreeReflector && VerificationStep >= 6 && VerificationStep <= 8)
-        {
-            UE_LOG(LogPowerLab, Error, TEXT("Free mirror pose %s, up %.3f, speed %.2f, spin %.2f, aimable %d."),
-                *Mirror->GetComponentLocation().ToCompactString(), Mirror->GetUpVector().Z,
-                Mirror->GetPhysicsLinearVelocity().Size(), Mirror->GetPhysicsAngularVelocityInDegrees().Size(),
-                CanAimMirror(Player));
-        }
-        Fail(TEXT("Timed out waiting for a physical transition."));
-        return;
-    }
-    switch (VerificationStep)
-    {
-    case 0:
-        if (VerificationTime < 0.2f)
-        {
-            return;
-        }
-        if (Course.GetPower().DirectEmitter || Course.GetPower().ReflectionEmitter)
-        {
-            Fail(TEXT("The unpowered lab emitted a signal."));
-            return;
-        }
-        LookFrom(Layout->Button + FVector(0, 135, 0), Layout->Button);
-        Player.Interact();
-        Next(TEXT("Used the supply button."));
-        break;
-    case 1:
-        if (bDirectSignal)
-        {
-            LookFrom(Layout->Interruption.Emitter + FVector(0, 320, 0), Layout->Interruption.Receiver);
-            Next(TEXT("Receiver acquired the direct beam."));
-        }
-        break;
-    case 2:
-        if (!bDirectSignal && VerificationTime >= 0.12f)
-        {
-            Player.ResetChamber();
-            if (Course.GetPower().DirectEmitter || !Interruption.Door->GetComponentLocation().Equals(Layout->Interruption.Door))
-            {
-                Fail(TEXT("Reset left the circuit or first door active."));
-                return;
-            }
-            LookFrom(Layout->Button + FVector(0, 135, 0), Layout->Button);
-            Player.Interact();
-            Next(TEXT("Suit blocked the beam and reset cleared the circuit."));
-        }
-        break;
-    case 3:
-        if (bDirectSignal)
-        {
-            Cube->ResetPosition(FVector(Layout->Interruption.Emitter.X, 20.0, 42.0));
-            Next(TEXT("Put a physical ballast cube across the beam."));
-        }
-        break;
-    case 4:
-        if (!bDirectSignal && Interruption.Door->GetComponentLocation().Z > Layout->Interruption.Door.Z + 250)
-        {
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Interruption.Door - FVector(135, 0, 38)));
-            Next(TEXT("Loss of light enabled the second bay and opened the first door."));
-        }
-        break;
-    case 5:
-        Player.AddMovementInput(FVector::ForwardVector);
-        if (Player.GetActorLocation().X > Layout->Interruption.Door.X + 115)
-        {
-            LookFrom(Layout->Mirror + FVector(-125, 0, 0), Layout->Mirror);
-            Player.Interact();
-            if (Player.GetHeldBody() != Mirror)
-            {
-                Fail(TEXT("Could not pick up the portable mirror."));
-                return;
-            }
-            Player.AimMirror();
-            if (Player.IsAiming())
-            {
-                Fail(TEXT("held reflector entered adjustment mode"));
-                return;
-            }
-            LookFrom(MirrorPlacement + FVector(0, 127, 0), MirrorPlacement);
-            Next(TEXT("Crossed the door and picked up the mirror."));
-        }
-        break;
-    case 6:
-        if (FVector::DistSquared(Mirror->GetComponentLocation(), MirrorPlacement) < FMath::Square(45.0))
-        {
-            Player.Interact();
-            if (bMirrorDocked == bVerifyFreeReflector || Player.GetHeldBody())
-            {
-                Fail(TEXT("Mirror placement did not enter the expected support state."));
-                return;
-            }
-            LookFrom(Layout->Reflection.Emitter + FVector(-105, 100, 0), Layout->Reflection.Emitter);
-            Player.Interact();
-            if (Player.Aim != EOpticsAim::Emitter)
-            {
-                Fail(TEXT("Emitter interaction did not enter aiming."));
-                return;
-            }
-            LookFrom(Player.GetActorLocation(), MirrorSurface->GetComponentLocation());
-            Next(bVerifyFreeReflector ? TEXT("Placed the carried mirror off the dock and aimed the emitter.")
-                : TEXT("Docked the carried mirror and entered live emitter aiming."));
-        }
-        break;
-    case 7:
-        if (VerificationTime >= 0.12f && CanAimMirror(Player))
-        {
-            Player.Interact();
-            LookFrom(Mirror->GetComponentLocation() + FVector(-119, 72, 0), MirrorSurface->GetComponentLocation());
-            Player.AimMirror();
-            if (Player.Aim != EOpticsAim::Mirror)
-            {
-                Fail(TEXT("Mirror interaction did not enter aiming."));
-                return;
-            }
-            LookFrom(Player.GetActorLocation(), Layout->Reflection.Receiver);
-            Next(TEXT("Aimed the reflector with the same trace as mouse input."));
-        }
-        break;
-    case 8:
-        if (bReflectedSignal && Reflection.Door->GetComponentLocation().Z > Layout->Reflection.Door.Z + 250)
-        {
-            Player.Interact();
-            if (bCapture)
-            {
-                LookFrom(MirrorPlacement + FVector(-380, -120, 0),
-                    (MirrorSurface->GetComponentLocation() + Layout->Reflection.Receiver) * 0.5);
-            }
-            Next(TEXT("Real reflected ray reached its receiver and opened the exit."));
-            if (bCapture)
-            {
-                VerificationStep = 16;
-            }
-            else if (bVerifyFreeReflector)
-            {
-                VerificationStep = 13;
-            }
-        }
-        break;
-    case 9:
-        if (VerificationTime >= 0.15f)
-        {
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Reflection.Door - FVector(130, 0, 38)));
-            Next(TEXT("Approaching the powered exit."));
-        }
-        break;
-    case 10:
-        Player.AddMovementInput(FVector::ForwardVector);
-        if (Player.GetActorLocation().X > Layout->Reflection.Door.X + 95)
-        {
-            bMirrorDocked = false;
-            FVector UnderDoor = Layout->Reflection.Door;
-            UnderDoor.Z += (MirrorSize.Z - DoorSize.Z) * 0.5 + 1.0;
-            Mirror->SetWorldLocationAndRotation(UnderDoor, FRotator::ZeroRotator, false, nullptr, ETeleportType::TeleportPhysics);
-            Mirror->SetSimulatePhysics(true);
-            Mirror->SetPhysicsLinearVelocity(FVector::ZeroVector);
-            Mirror->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
-            Reflection.Direction = FVector::UpVector;
-            Next(TEXT("Optical exit passed. Closing the unpowered door over the mirror."));
-        }
-        break;
-    case 11:
-        if (Reflection.Clamp.Holds(Mirror))
-        {
-            if (Mirror->IsSimulatingPhysics())
-            {
-                Fail(TEXT("the door did not retain the mirror"));
-                return;
-            }
-            Next(TEXT("Optical door clamped the portable mirror."));
-        }
-        break;
-    case 12:
-        MoveDoor(Reflection.Door, Reflection.Clamp, Layout->Reflection.Door, true, Delta, Player);
-        if (!Reflection.Clamp.HasObject())
-        {
-            if (!Mirror->IsSimulatingPhysics() || !FMath::IsNearlyEqual(Mirror->GetMass(), MirrorMassKg, 0.05f))
-            {
-                Fail(TEXT("opening did not restore mirror physics and mass"));
-                return;
-            }
-            UE_LOG(LogPowerLab, Display, TEXT("Power lab verification passed: switch, blockers, reflection, exit and mirror clamp."));
-            bVerify = false;
-            bVerifyPulse = true;
-        }
-        break;
-    case 13:
-        if (VerificationTime >= 0.15f)
-        {
-            if (bMirrorDocked || !Mirror->IsSimulatingPhysics() ||
-                FVector::Dist2D(Mirror->GetComponentLocation(), Layout->MirrorDock) <= DockRangeCm)
-            {
-                Fail(TEXT("the free reflector route used the dock"));
-                return;
-            }
-            LookFrom(Mirror->GetComponentLocation() + FVector(-119, 72, 0), MirrorSurface->GetComponentLocation());
-            Player.AimMirror();
-            if (Player.Aim != EOpticsAim::Mirror)
-            {
-                Fail(TEXT("a settled reflector outside the dock could not be aimed again"));
-                return;
-            }
-            LookFrom(Player.GetActorLocation(), Layout->Reflection.Receiver + FVector(0, 240, 75));
-            Next(TEXT("Turned the free reflector away from its receiver."));
-        }
-        break;
-    case 14:
-        if (!bReflectedSignal && Reflection.Door->GetComponentLocation().Equals(Layout->Reflection.Door, 1.0))
-        {
-            LookFrom(Player.GetActorLocation(), Layout->Reflection.Receiver);
-            Next(TEXT("Turning off target closed the real door. Aimed at the receiver again."));
-        }
-        break;
-    case 15:
-        if (bReflectedSignal && Reflection.Door->GetComponentLocation().Z > Layout->Reflection.Door.Z + 250)
-        {
-            Player.Interact();
-            UE_LOG(LogPowerLab, Display, TEXT("Free reflector verification passed: placed off-dock, lost signal and reopened."));
-            Next(TEXT("Free reflector solution restored the reflected signal."));
-            VerificationStep = 9;
-        }
-        break;
-    case 16:
-        if (VerificationTime >= 0.18f)
-        {
-            FScreenshotRequest::RequestScreenshot(bVerifyFreeReflector ? TEXT("PowerLab-Free-Reflector")
-                : TEXT("PowerLab-Reflection"), false, false);
-            VerificationStep = bVerifyFreeReflector ? 13 : 9;
-            VerificationTime = 0.0f;
-        }
-        break;
-    }
-}
-#endif
 
 void APowerLabCharacter::BindAdditionalInput(UEnhancedInputComponent& Input)
 {

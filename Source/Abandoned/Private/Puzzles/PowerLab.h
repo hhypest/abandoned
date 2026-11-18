@@ -87,14 +87,11 @@ private:
     void ResetPulseBay();
 
 #if WITH_DEV_AUTOMATION_TESTS
-    void Verify(APowerLabCharacter& Player, float DeltaSeconds);
+    friend class UOpticsVerification;
+    void StartPulseVerification(bool bCapture);
     void VerifyPulse(APowerLabCharacter& Player, float DeltaSeconds);
-    bool bVerify = false;
     bool bVerifyPulse = false;
-    bool bCapture = false;
-    bool bVerifyFreeReflector = false;
-    int32 VerificationStep = 0;
-    float VerificationTime = 0.0f;
+    bool bCapturePulse = false;
     int32 PulseTestStep = 0;
     float PulseTestTime = 0.0f;
 #endif
@@ -177,6 +174,9 @@ protected:
 
 private:
     friend class APowerLabGameMode;
+#if WITH_DEV_AUTOMATION_TESTS
+    friend class UOpticsVerification;
+#endif
 
     void AimMirror();
     EOpticsAim Aim = EOpticsAim::None;
