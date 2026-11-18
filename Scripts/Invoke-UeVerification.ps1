@@ -4,7 +4,7 @@ param(
     [string]$EngineRoot,
 
     [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
-                 'Training', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
+                 'Training', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -53,7 +53,8 @@ $scenarios = @{
         Map = $entry
         Flag = '-VerifyEntryCourse'
         CaptureFlag = '-CaptureVanguard'
-        Success = @('Training chamber ready. Balance', 'Entry course verification passed',
+        Success = @('Training chamber ready. Balance', 'First solution opened the door.', 'Alternate arrangement opened the door.',
+                    'Entry course verification passed: balance released the passage.',
                     'Passage handhold verified', 'Vanguard verification passed')
     }
     WristTerminal = @{
@@ -90,7 +91,19 @@ $scenarios = @{
         ExpectedError = 'LogHintVerification: Error: Chamber hints failed at step 0: missing wall switch.'
         Success = @('Chamber hints verification passed')
     }
-    PlateBalance = @{ Map = $entry; Flag = '-VerifyBalanceChamber'; Success = @('Balance chamber verification passed') }
+    PlateBalance = @{
+        Map = $entry
+        Flag = '-VerifyBalanceChamber'
+        CaptureFlag = '-CaptureBalanceChamber'
+        Success = @('First solution opened the door.', 'Alternate arrangement opened the door.', 'Balance chamber verification passed')
+    }
+    PlateBalanceNegative = @{
+        Map = $entry
+        Flag = '-VerifyBalanceChamber'
+        ExtraFlag = '-ini:Game:[/Script/Abandoned.WeightBalanceLayout]:BalanceTotalKg=15'
+        ExpectedError = 'LogWeightBalanceTest: Error: Balance test failed: 15 kg distributed evenly must not open the door'
+        Success = @('Balance chamber verification passed')
+    }
     ParallelCircuit = @{ Map = $entry; Flag = '-VerifyParallelCircuit'; CaptureFlag = '-CaptureParallelCircuit'; Success = @('Parallel circuit verification passed') }
     ParallelCircuitNegative = @{
         Map = $entry
