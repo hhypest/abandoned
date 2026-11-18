@@ -91,18 +91,12 @@ private:
         const UPrimitiveComponent* Other) const;
 
 #if WITH_DEV_AUTOMATION_TESTS
-    void Verify(APortalLabCharacter& Player, float DeltaSeconds);
+    friend struct FPortalLabFixture;
     void InspectTransfer(const FVector& Before, const FVector& After);
-    bool bVerify = false;
-    bool bCapture = false;
-    bool bRequestedFirstPortalFrame = false;
-    int32 VerificationStep = 0;
-    float VerificationTime = 0.0f;
     int32 Transfers = 0;
     int32 BlockedTransfers = 0;
     FVector LastBefore = FVector::ZeroVector;
     FVector LastAfter = FVector::ZeroVector;
-    TWeakObjectPtr<APuzzleCube> VerifyItem;
 #endif
 
     UPROPERTY()

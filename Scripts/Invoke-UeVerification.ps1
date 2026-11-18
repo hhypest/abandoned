@@ -108,7 +108,9 @@ $scenarios = @{
         Flag = '-VerifyPortalLab'
         CaptureFlag = '-CapturePortalLab'
         CheckPortalFrame = $true
-        Success = @('Portal collision shapes verified', 'Rejected carry transit restored', 'Portal lab verification passed')
+        Success = @('Portal collision shapes verified', 'Rejected carry transit restored', 'Powered entrance captured the linked room.',
+                    'Occupied exit stopped transit.', 'Player arrived airborne with the same cube, rotated view and unchanged speed.',
+                    'The inverse passage retained the cube and speed.', 'Portal lab verification passed')
     }
     Training = @{
         Map = $entry
