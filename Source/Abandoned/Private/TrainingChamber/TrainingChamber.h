@@ -17,7 +17,7 @@ class ADev20Actor;
 class APuzzleCube;
 class UBoxComponent;
 class UMaterialInterface;
-class UPhysicsHandleComponent;
+class UObjectCarryComponent;
 class UPointLightComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
@@ -213,7 +213,7 @@ private:
     ATrainingChamberGameMode* GetChamber() const;
 
     UPROPERTY()
-    TObjectPtr<UPhysicsHandleComponent> Grip;
+    TObjectPtr<UObjectCarryComponent> Grip;
 
     UPROPERTY(VisibleAnywhere)
     TObjectPtr<UStaticMeshComponent> PlacementGhost;

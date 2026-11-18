@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory)]
     [string]$EngineRoot,
 
-    [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals')]
+    [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
+                 'Training', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -78,8 +79,14 @@ $scenarios = @{
         Flag = '-VerifyPortalLab'
         CaptureFlag = '-CapturePortalLab'
         CheckPortalFrame = $true
-        Success = @('Portal collision shapes verified', 'Portal lab verification passed')
+        Success = @('Portal collision shapes verified', 'Rejected carry transit restored', 'Portal lab verification passed')
     }
+    Training = @{ Map = $entry; Flag = '-VerifyTrainingChamber'; Success = @('Verification passed: player weight, placement ghost, throw, staircase, detach and reset') }
+    Optics = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; Success = @('Power lab verification passed', 'Timed passage verification passed') }
+    FreeReflector = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; ExtraFlag = '-VerifyFreeReflector'; Success = @('Free reflector verification passed', 'Timed passage verification passed') }
+    Gravity = @{ Map = "${entry}?game=/Script/Abandoned.GravityLabGameMode"; Flag = '-VerifyGravityLab'; Success = @('Gravity lab verification passed') }
+    Dev20 = @{ Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"; Flag = '-VerifyDev20'; Success = @('DEV-20 verification passed: portal, Button, Weight and final exit') }
+    Dev20Recovery = @{ Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"; Flag = '-VerifyDev20'; ExtraFlag = '-VerifyDev20Recovery'; Success = @('DEV-20 recovery verification passed') }
 }
 
 function Invoke-Scenario($name, $definition, $profile) {
@@ -115,6 +122,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     if (($Capture -or $definition.CheckPortalFrame) -and $definition.CaptureFlag) {
         $start.ArgumentList.Add($definition.CaptureFlag)
     }
+    if ($definition.ExtraFlag) { $start.ArgumentList.Add($definition.ExtraFlag) }
     $process = [System.Diagnostics.Process]::Start($start)
     try {
         if ($process.WaitForExit($TimeoutSeconds * 1000)) {

@@ -27,7 +27,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
-#include "PhysicsEngine/PhysicsHandleComponent.h"
+#include "Infrastructure/Puzzles/ObjectCarryComponent.h"
 #include "Puzzles/PuzzleCube.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
@@ -1339,10 +1339,8 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
 
 ATrainingChamberCharacter::ATrainingChamberCharacter()
 {
-    Grip = CreateDefaultSubobject<UPhysicsHandleComponent>(TEXT("CubeGrip"));
-    Grip->SetLinearStiffness(1800.0f);
-    Grip->SetLinearDamping(180.0f);
-    Grip->SetInterpolationSpeed(18.0f);
+    Grip = CreateDefaultSubobject<UObjectCarryComponent>(TEXT("CubeGrip"));
+    Grip->LoadChanged.BindUObject(this, &ATrainingChamberCharacter::SetMovementLoad);
 
     PlacementGhost = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PlacementGhost"));
     PlacementGhost->SetupAttachment(GetRootComponent());
@@ -1623,54 +1621,17 @@ void ATrainingChamberCharacter::Interact()
 
 bool ATrainingChamberCharacter::GrabBody(UBoxComponent& Body, float MassKg)
 {
-    if (GetHeldBody() || IsDoorClamped(&Body) || !Body.IsSimulatingPhysics() || !FMath::IsFinite(MassKg) ||
-        MassKg <= 0.0f || MassKg > Abandoned::Domain::Puzzles::MaximumCarryKg)
-    {
-        return false;
-    }
-    Grip->GrabComponentAtLocationWithRotation(&Body, NAME_None, Body.GetComponentLocation(), Body.GetComponentRotation());
-    if (GetHeldBody() != &Body)
-    {
-        return false;
-    }
-    Body.SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-    SetMovementLoad(MassKg);
-    return true;
+    return Grip->TryGrab(Body, MassKg);
 }
 
 UBoxComponent* ATrainingChamberCharacter::GetHeldBody() const
 {
-    return Cast<UBoxComponent>(Grip->GetGrabbedComponent());
+    return Grip->HeldBody();
 }
 
 bool ATrainingChamberCharacter::TransitHeldBody(const FTransform& Through)
 {
-    UBoxComponent* Body = GetHeldBody();
-    if (!Body)
-    {
-        return true;
-    }
-    const float Mass = Body->GetMass();
-    const FTransform Original = Body->GetComponentTransform();
-    const FVector Linear = Body->GetPhysicsLinearVelocity();
-    const FVector Angular = Body->GetPhysicsAngularVelocityInRadians();
-    Grip->ReleaseComponent();
-    Body->SetWorldTransform(Original * Through, false, nullptr, ETeleportType::TeleportPhysics);
-    if (GrabBody(*Body, Mass))
-    {
-        Body->SetPhysicsLinearVelocity(Through.TransformVectorNoScale(Linear));
-        Body->SetPhysicsAngularVelocityInRadians(Through.TransformVectorNoScale(Angular));
-        return true;
-    }
-    Body->SetWorldTransform(Original, false, nullptr, ETeleportType::TeleportPhysics);
-    Body->SetPhysicsLinearVelocity(Linear);
-    Body->SetPhysicsAngularVelocityInRadians(Angular);
-    if (!GrabBody(*Body, Mass))
-    {
-        Body->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-        SetMovementLoad(0.0f);
-    }
-    return false;
+    return Grip->Transit(Through);
 }
 
 APuzzleCube* ATrainingChamberCharacter::GetHeldCube() const
@@ -1688,54 +1649,19 @@ ADev20Actor* ATrainingChamberCharacter::GetHeldDev20() const
 void ATrainingChamberCharacter::ReleaseHeldObject()
 {
     UpdatePlacementGhost(nullptr);
-    SetMovementLoad(0.0f);
-    UPrimitiveComponent* Held = Grip->GetGrabbedComponent();
-    if (IsValid(Held))
-    {
-        Grip->ReleaseComponent();
-        Held->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-        Held->WakeRigidBody();
-    }
+    Grip->ReleaseComponent();
 }
 
 void ATrainingChamberCharacter::ThrowHeldObject()
 {
-    UPrimitiveComponent* Held = Grip->GetGrabbedComponent();
-    if (!IsValid(Held) || !Held->IsSimulatingPhysics())
-    {
-        return;
-    }
-
-    const FVector Direction = GetViewRotation().Vector();
-    const FVector CarryVelocity = GetVelocity();
-    ReleaseHeldObject();
-    Held->SetPhysicsLinearVelocity(CarryVelocity);
-    Held->AddImpulse(Direction * GetDefault<UTrainingChamberLayout>()->ThrowImpulse);
+    Grip->Throw(GetVelocity(), GetViewRotation().Vector() * GetDefault<UTrainingChamberLayout>()->ThrowImpulse);
+    UpdatePlacementGhost(GetHeldCube());
 }
 
 void ATrainingChamberCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    const UBoxComponent* Body = GetHeldBody();
-    if (!IsValid(Body))
-    {
-        UpdatePlacementGhost(nullptr);
-        return;
-    }
-
-    const FVector Origin = Camera->GetComponentLocation();
-    const FVector Direction = GetViewRotation().Vector();
-    FCollisionQueryParams Query(SCENE_QUERY_STAT(TrainingHold), false, this);
-    Query.AddIgnoredActor(Body->GetOwner());
-    FHitResult Hit;
-    const bool bWall = GetWorld()->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * HoldDistance, ECC_Visibility, Query);
-    const double Distance = bWall ? FMath::Clamp(Hit.Distance - Body->GetScaledBoxExtent().GetMax(), 0.0, HoldDistance) : HoldDistance;
-    if (Distance < 75.0 || FVector::DistSquared(Origin, Body->GetComponentLocation()) > FMath::Square(2.0 * Reach))
-    {
-        ReleaseHeldObject();
-        return;
-    }
-    Grip->SetTargetLocationAndRotation(Origin + Direction * Distance, FRotator(0.0, GetViewRotation().Yaw, 0.0));
+    Grip->UpdateHold(Camera->GetComponentLocation(), GetViewRotation(), HoldDistance, Reach);
     UpdatePlacementGhost(GetHeldCube());
 }
 
