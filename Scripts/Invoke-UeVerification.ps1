@@ -4,7 +4,7 @@ param(
     [string]$EngineRoot,
 
     [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
-                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
+                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -52,6 +52,9 @@ $entryFinish = @('Entry test: reset restored the weight lock', 'Entry test: Weig
                  'Entry test: crossed Weight exit.', 'First solution opened the door.', 'Alternate arrangement opened the door.',
                  'Entry course verification passed: balance released the passage.', 'Passage handhold verified', 'Vanguard verification passed')
 $courseSuccess = @('Entry test: crossed Stairs exit.', 'Entry test: crossed Button exit.') + $entryFinish
+$dev20Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"
+$dev20Transit = @('34 kg Chaos mass and carry slowdown confirmed.', 'loss of portal power returned the same item to its cradle.',
+                  'same 34 kg body remained in the grip after the portal.', "DEV-20 departed the portal bay in the player's grip.")
 $scenarios = @{
     EntryCourse = @{
         Map = $entry
@@ -155,14 +158,28 @@ $scenarios = @{
     FreeReflector = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; ExtraFlag = '-VerifyFreeReflector'; Success = @('Free reflector verification passed', 'Timed passage verification passed') }
     Gravity = @{ Map = "${entry}?game=/Script/Abandoned.GravityLabGameMode"; Flag = '-VerifyGravityLab'; Success = @('Gravity lab verification passed') }
     Dev20 = @{
-        Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"
+        Map = $dev20Map
         Flag = '-VerifyDev20'
+        CaptureFlag = '-CaptureDev20'
         Chambers = @('Button', 'Weight')
-        Success = @('DEV-20: Button measured and rejected 34 kg.', 'DEV-20: Weight measured and rejected 34 kg.',
+        Success = $dev20Transit + @('DEV-20: Button measured and rejected 34 kg.', 'DEV-20: Weight measured and rejected 34 kg.',
                     'DEV-20: Button held the player at the exit', 'DEV-20: Weight held the player at the exit',
                     'DEV-20 verification passed: portal, Button, Weight and final exit')
     }
-    Dev20Recovery = @{ Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"; Flag = '-VerifyDev20'; ExtraFlag = '-VerifyDev20Recovery'; Success = @('DEV-20 recovery verification passed') }
+    Dev20Recovery = @{
+        Map = $dev20Map
+        Flag = '-VerifyDev20'
+        ExtraFlag = '-VerifyDev20Recovery'
+        Chambers = @('Button')
+        Success = $dev20Transit + @('DEV-20: exercising loss outside the Button chamber bounds.', 'DEV-20 recovery verification passed')
+    }
+    Dev20VelocityNegative = @{
+        Map = $dev20Map
+        Flag = '-VerifyDev20'
+        ExtraFlag = '-ini:Game:[/Script/Abandoned.PortalLabLayout]:Departure=(Center=(X=2430,Y=-330,Z=145),Yaw=85,Console=(X=2630,Y=-260,Z=126))'
+        ExpectedError = 'LogPortalDev20Test: Error: DEV-20 portal test failed: carrier velocity did not match the 90 degree portal turn'
+        Success = @('same 34 kg body remained in the grip after the portal.')
+    }
 }
 
 function Invoke-Scenario($name, $definition, $profile) {

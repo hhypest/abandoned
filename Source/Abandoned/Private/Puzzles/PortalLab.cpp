@@ -4,6 +4,7 @@
 #include "Components/SphereComponent.h"
 #include "Verification/PortalShapeVerification.h"
 #include "Verification/CarryVerification.h"
+#include "Verification/PortalDev20Verification.h"
 #endif
 #include "Camera/PlayerCameraManager.h"
 #include "Components/BoxComponent.h"
@@ -21,7 +22,6 @@
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Infrastructure/Puzzles/UnrealPortalShape.h"
-#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
@@ -250,11 +250,12 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
         }
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    bVerifyDev20 = bDev20Run && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
-    bVerifyDev20RecoveryArrival = bVerifyDev20 && bDev20Recovered &&
-        FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20Recovery"));
+    if (bDev20Run)
+    {
+        UPortalDev20Verification::AttachIfRequested(*this, *Layout, *Dev20, *Mouths[0].Console, bDev20Recovered);
+    }
     bVerify = !bDev20Run && FParse::Param(FCommandLine::Get(), TEXT("VerifyPortalLab"));
-    bCapture = FParse::Param(FCommandLine::Get(), bDev20Run ? TEXT("CaptureDev20") : TEXT("CapturePortalLab"));
+    bCapture = FParse::Param(FCommandLine::Get(), TEXT("CapturePortalLab"));
 #endif
     SetActorTickEnabled(true);
 }
@@ -674,10 +675,6 @@ void APortalLabGameMode::Tick(float Delta)
     {
         Verify(*Player, Delta);
     }
-    if (bVerifyDev20)
-    {
-        VerifyDev20(*Player, Delta);
-    }
 #endif
 }
 
@@ -714,158 +711,10 @@ const TCHAR* APortalLabGameMode::GetMessage() const
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
-void APortalLabGameMode::VerifyDev20(APortalLabCharacter& Player, float Delta)
+FPortalTransitObservation APortalLabGameMode::GetTransitObservation() const
 {
-    using Abandoned::Domain::Expedition::Dev20MassKg;
-    VerificationTime += Delta;
-    const auto Fail = [this](const TCHAR* Reason)
-    {
-        UE_LOG(LogPortalLab, Error, TEXT("DEV-20 portal test failed at step %d: %s"), VerificationStep, Reason);
-        bVerifyDev20 = false;
-        FPlatformMisc::RequestExitWithStatus(false, 1);
-    };
-    const auto Next = [this]
-    {
-        ++VerificationStep;
-        VerificationTime = 0.0f;
-    };
-    const auto LookFrom = [&Player](FVector At, FVector Target)
-    {
-        At.Z = 92.0;
-        Player.PlaceAt(FTransform((Target - At - FVector(0, 0, Abandoned::MovementProfile::CameraHeight)).Rotation(), At));
-    };
-    const auto PowerAndTake = [&]
-    {
-        LookFrom(Layout->Arrival.Console + FVector(0, 120, 0), Layout->Arrival.Console);
-        Player.Interact();
-        LookFrom(Layout->Dev20Station - FVector(100, -30, 0), Dev20->GetActorLocation());
-        Player.Interact();
-        if (!Supply.IsPowered() || Player.GetHeldDev20() != Dev20 ||
-            !FMath::IsNearlyEqual(Player.GetCharacterMovement()->MaxWalkSpeed,
-                Abandoned::MovementProfile::WalkSpeed * Abandoned::Domain::Puzzles::CarrySpeedScale(Dev20MassKg), 0.05f))
-        {
-            return false;
-        }
-        Player.PlaceAt(FTransform(FRotator(-18, 0, 0), Layout->Arrival.Center - FVector(235, 0, 53)));
-        PlayerState = {};
-        return true;
-    };
-    if (!IsValid(Dev20) || VerificationTime > 8.0f)
-    {
-        Fail(TEXT("Could not complete the physical route"));
-        return;
-    }
-    if (bVerifyDev20RecoveryArrival)
-    {
-        if (VerificationTime < 0.25f)
-        {
-            return;
-        }
-        TArray<AActor*> Units;
-        UGameplayStatics::GetAllActorsOfClass(this, ADev20Actor::StaticClass(), Units);
-        if (Units.Num() != 1 || Player.GetHeldDev20() || Supply.IsPowered() ||
-            !Dev20->GetActorLocation().Equals(Layout->Dev20Station, 4.0))
-        {
-            Fail(TEXT("Recovery from the previous world did not restore one DEV-20 at the cradle"));
-            return;
-        }
-        UE_LOG(LogPortalLab, Display, TEXT("DEV-20 recovery verification passed: lost in Button, returned to the station."));
-        bVerifyDev20 = false;
-        FPlatformMisc::RequestExitWithStatus(false, 0);
-        return;
-    }
-    switch (VerificationStep)
-    {
-    case 0:
-        if (VerificationTime > 0.4f)
-        {
-            if (!FMath::IsNearlyEqual(Dev20->GetBody()->GetMass(), Dev20MassKg, 0.05f))
-            {
-                Fail(TEXT("Chaos mass is not 34 kg"));
-                return;
-            }
-            LookFrom(Layout->Dev20Station - FVector(133, -35, 0), Dev20->GetActorLocation());
-            VerifyDev20Item = Dev20;
-            Next();
-        }
-        break;
-    case 1:
-        if (bCapture && VerificationTime >= 0.12f)
-        {
-            FScreenshotRequest::RequestScreenshot(TEXT("DEV20-Station"), false, false);
-            bCapture = false;
-        }
-        if (VerificationTime > 0.20f)
-        {
-            if (!PowerAndTake())
-            {
-                Fail(TEXT("Could not power the pair or pick up DEV-20 with the expected carry speed"));
-                return;
-            }
-            UE_LOG(LogPortalLab, Display, TEXT("DEV-20: 34 kg Chaos mass and carry slowdown confirmed."));
-            Next();
-        }
-        break;
-    case 2:
-        if (VerificationTime > 0.30f)
-        {
-            Player.Move(FVector::ForwardVector);
-            if (PlayerState.Approach == 0)
-            {
-                ToggleSupply();
-                Next();
-            }
-        }
-        break;
-    case 3:
-        if (bInterrupted)
-        {
-            if (Supply.IsPowered() || Player.GetHeldDev20() || VerifyDev20Item.Get() != Dev20 ||
-                !Dev20->GetActorLocation().Equals(Layout->Dev20Station, 4.0))
-            {
-                Fail(TEXT("Power loss failed to recover the same DEV-20 at its station"));
-                return;
-            }
-            UE_LOG(LogPortalLab, Display, TEXT("DEV-20: loss of portal power returned the same item to its cradle."));
-            if (!PowerAndTake())
-            {
-                Fail(TEXT("Recovered DEV-20 could not be carried again"));
-                return;
-            }
-            Next();
-        }
-        break;
-    case 4:
-        if (VerificationTime >= 0.40f)
-        {
-            Player.GetCharacterMovement()->SetMovementMode(MOVE_Falling);
-            Player.GetCharacterMovement()->Velocity = FVector(660, 0, 560);
-            Next();
-        }
-        break;
-    case 5:
-        Player.Move(FVector::ForwardVector);
-        if (bDev20Crossed)
-        {
-            if (Player.GetHeldDev20() != VerifyDev20Item.Get() || Transfers != 1 ||
-                LastBefore.X <= 300.0 || !LastAfter.Equals(FVector(-LastBefore.Y, LastBefore.X, LastBefore.Z), 0.05))
-            {
-                Fail(TEXT("Portal traversal lost DEV-20 or its carrier's velocity"));
-                return;
-            }
-            UE_LOG(LogPortalLab, Display, TEXT("DEV-20: same 34 kg body remained in the grip after the portal."));
-            Next();
-        }
-        break;
-    case 6:
-        if (Player.GetHeldDev20() != Dev20)
-        {
-            Fail(TEXT("DEV-20 was lost before the chamber hand-off"));
-            return;
-        }
-        Player.Move(FVector::ForwardVector);
-        break;
-    }
+    return {Supply.IsPowered(), PlayerState.Approach == 0, bInterrupted, bDev20Crossed,
+        Transfers, LastBefore, LastAfter};
 }
 
 void APortalLabGameMode::InspectTransfer(const FVector& Before, const FVector& After)
