@@ -17,6 +17,7 @@ class APuzzleCharacter : public AAbandonedCharacter
 public:
     static constexpr double HoldDistanceCm = 165.0;
     APuzzleCharacter();
+    UBoxComponent* GetHeldBody() const;
     APuzzleCube* GetHeldCube() const;
     ADev20Actor* GetHeldDev20() const;
     const TCHAR* GetPlacementPrompt() const;
@@ -31,7 +32,6 @@ protected:
     virtual void Interact();
     void ResetChamber();
     UPrimitiveComponent* TraceInteractable() const;
-    UBoxComponent* GetHeldBody() const;
     bool GrabBody(UBoxComponent& Body, float MassKg);
     bool TransitHeldBody(const FTransform& Through);
 

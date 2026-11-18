@@ -30,7 +30,7 @@ bool ATrainingChamberGameMode::SpawnRelayTraces(UStaticMesh& Mesh, UMaterialInte
 
 void ATrainingChamberGameMode::UpdateRelayTraces()
 {
-    const auto& State = Circuit.GetState();
+    const auto& State = PlateCircuit->GetState();
     const bool Powered[] = {State.PlatePressed, State.AlternatePlatePressed, State.ExitEnabled};
     for (int32 Index = 0; Index < RelayTraces.Num(); ++Index)
     {

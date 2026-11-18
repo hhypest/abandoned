@@ -157,7 +157,10 @@ $scenarios = @{
         Map = $entry
         Flag = '-VerifyDoorClamp'
         CaptureFlag = '-CaptureDoorClamp'
-        Success = @('Door clamp verification passed')
+        Success = @('Door retained the object, rejected pickup and showed both warning signs.',
+                    'Door released the object with its original mass and pickup restored.',
+                    'Chamber reset cleared the clamp, restored the cube and hid its signs.',
+                    'Door clamp verification passed: capture, release, reset and player checkpoint.')
     }
     Portals = @{
         Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode"
