@@ -158,7 +158,7 @@ $scenarios = @{
     }
     Optics = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; CaptureFlag = '-CapturePowerLab'; Success = @('Power lab verification passed', 'Timed passage verification passed') }
     FreeReflector = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; ExtraFlag = '-VerifyFreeReflector'; CaptureFlag = '-CapturePowerLab'; Success = @('Free reflector verification passed', 'Power lab verification passed', 'Timed passage verification passed') }
-    Gravity = @{ Map = "${entry}?game=/Script/Abandoned.GravityLabGameMode"; Flag = '-VerifyGravityLab'; Success = @('Gravity lab verification passed') }
+    Gravity = @{ Map = "${entry}?game=/Script/Abandoned.GravityLabGameMode"; Flag = '-VerifyGravityLab'; CaptureFlag = '-CaptureGravityLab'; Success = @('Gravity lab verification passed') }
     Dev20 = @{
         Map = $dev20Map
         Flag = '-VerifyDev20'
