@@ -22,5 +22,8 @@ public:
     void ReleaseComponent() override;
 
 private:
+    UFUNCTION()
+    void OnHeldActorEndPlay(AActor* Actor, EEndPlayReason::Type Reason);
+    TWeakObjectPtr<AActor> HeldActor;
     TOptional<ECollisionResponse> OriginalPawnResponse;
 };

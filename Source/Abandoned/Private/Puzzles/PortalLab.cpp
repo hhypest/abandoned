@@ -943,6 +943,15 @@ void APortalLabGameMode::Verify(APortalLabCharacter& Player, float Delta)
             }
             Cubes[0]->ResetPosition(Layout->SmallCube);
             UE_LOG(LogPortalLab, Display, TEXT("Rejected carry transit restored pose, velocities, pawn response and movement load."));
+            const float UnloadedSpeed = Player.GetCharacterMovement()->MaxWalkSpeed;
+            APuzzleCube* TemporaryCube = SpawnCube(0);
+            if (!TemporaryCube || !Carry->TryGrab(*TemporaryCube->GetBody(), TemporaryCube->GetMassKg()) ||
+                !TemporaryCube->Destroy() || Carry->HeldBody() ||
+                !FMath::IsNearlyEqual(Player.GetCharacterMovement()->MaxWalkSpeed, UnloadedSpeed))
+            {
+                Fail(TEXT("Destroying a held cube left a grip or movement load"));
+                return;
+            }
             Player.PlaceAt(FTransform(FRotator::ZeroRotator, Center - FVector(320, 0, 53)));
 #if WITH_EDITOR
             FAssetCompilingManager::Get().FinishAllCompilation();

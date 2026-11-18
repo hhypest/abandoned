@@ -3,6 +3,7 @@
 #include "Components/BoxComponent.h"
 #include "Domain/Puzzles/BallastRules.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "Infrastructure/Puzzles/UnrealSlidingDoor.h"
 
 UObjectCarryComponent::UObjectCarryComponent()
@@ -25,19 +26,39 @@ bool UObjectCarryComponent::TryGrab(UBoxComponent& Body, float MassKg)
     {
         return false;
     }
+    if (OriginalPawnResponse)
+    {
+        // The previous body may have disappeared between two character ticks.
+        ReleaseComponent();
+    }
     GrabComponentAtLocationWithRotation(&Body, NAME_None, Body.GetComponentLocation(), Body.GetComponentRotation());
     if (HeldBody() != &Body)
     {
         return false;
     }
     OriginalPawnResponse = Body.GetCollisionResponseToChannel(ECC_Pawn);
+    if (AActor* Actor = Body.GetOwner())
+    {
+        HeldActor = Actor;
+        Actor->OnEndPlay.AddUniqueDynamic(this, &UObjectCarryComponent::OnHeldActorEndPlay);
+    }
     Body.SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
     LoadChanged.ExecuteIfBound(MassKg);
     return true;
 }
 
+void UObjectCarryComponent::OnHeldActorEndPlay(AActor* Actor, EEndPlayReason::Type Reason)
+{
+    ReleaseComponent();
+}
+
 void UObjectCarryComponent::ReleaseComponent()
 {
+    if (AActor* Actor = HeldActor.Get())
+    {
+        Actor->OnEndPlay.RemoveDynamic(this, &UObjectCarryComponent::OnHeldActorEndPlay);
+    }
+    HeldActor.Reset();
     if (OriginalPawnResponse)
     {
         if (auto* Body = HeldBody())
@@ -92,7 +113,10 @@ void UObjectCarryComponent::UpdateHold(const FVector& Origin, const FRotator& Vi
     const UBoxComponent* Body = HeldBody();
     if (!Body)
     {
-        if (OriginalPawnResponse) { ReleaseComponent(); }
+        if (OriginalPawnResponse)
+        {
+            ReleaseComponent();
+        }
         return;
     }
     FCollisionQueryParams Query(SCENE_QUERY_STAT(TrainingHold), false, GetOwner());
