@@ -1,9 +1,7 @@
 #include "Puzzles/PortalLab.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-#include "Components/SphereComponent.h"
-#include "Verification/PortalShapeVerification.h"
-#include "Verification/CarryVerification.h"
+#include "Verification/PortalLabVerification.h"
 #include "Verification/PortalDev20Verification.h"
 #endif
 #include "Camera/PlayerCameraManager.h"
@@ -24,7 +22,6 @@
 #include "Infrastructure/Puzzles/UnrealPortalShape.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Player/AbandonedTestController.h"
-#include "Player/MovementProfile.h"
 #include "Puzzles/PortalLabLayout.h"
 #include "Puzzles/PuzzleCube.h"
 #include "RenderCommandFence.h"
@@ -254,8 +251,10 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
     {
         UPortalDev20Verification::AttachIfRequested(*this, *Layout, *Dev20, *Mouths[0].Console, bDev20Recovered);
     }
-    bVerify = !bDev20Run && FParse::Param(FCommandLine::Get(), TEXT("VerifyPortalLab"));
-    bCapture = FParse::Param(FCommandLine::Get(), TEXT("CapturePortalLab"));
+    else
+    {
+        UPortalLabVerification::AttachIfRequested(*this);
+    }
 #endif
     SetActorTickEnabled(true);
 }
@@ -670,12 +669,6 @@ void APortalLabGameMode::Tick(float Delta)
     }
     UpdateMouths();
     CaptureView(*Player);
-#if WITH_DEV_AUTOMATION_TESTS
-    if (bVerify)
-    {
-        Verify(*Player, Delta);
-    }
-#endif
 }
 
 const TCHAR* APortalLabGameMode::GetMessage() const
@@ -726,277 +719,6 @@ void APortalLabGameMode::InspectTransfer(const FVector& Before, const FVector& A
         Transfers, *Before.ToCompactString(), *After.ToCompactString(), Before.Size(), After.Size());
 }
 
-void APortalLabGameMode::Verify(APortalLabCharacter& Player, float Delta)
-{
-    VerificationTime += Delta;
-    const auto Fail = [this, &Player](const TCHAR* Reason)
-    {
-        UE_LOG(LogPortalLab, Error, TEXT("Portal lab test failed at step %d: %s. Player %s, traversals %d, blocked %d."),
-            VerificationStep, Reason, *Player.GetActorLocation().ToCompactString(), Transfers, BlockedTransfers);
-        bVerify = false;
-        FPlatformMisc::RequestExitWithStatus(false, 1);
-    };
-    const auto Next = [this](const TCHAR* Message)
-    {
-        UE_LOG(LogPortalLab, Display, TEXT("Portal lab: %s"), Message);
-        VerificationTime = 0.0f;
-        ++VerificationStep;
-    };
-    const auto LookFrom = [&Player](FVector At, FVector Target)
-    {
-        At.Z = 92.0;
-        Player.PlaceAt(FTransform((Target - At - FVector(0, 0, 75)).Rotation(), At));
-    };
-    const auto VelocityRotated = [this]
-    {
-        return LastBefore.X > 300.0 && LastAfter.Equals(FVector(-LastBefore.Y, LastBefore.X, LastBefore.Z), 0.05);
-    };
-    if (VerificationTime > 8.0f)
-    {
-        Fail(TEXT("Timed out waiting for a physical transition"));
-        return;
-    }
-    switch (VerificationStep)
-    {
-    case 0:
-        if (VerificationTime >= 0.2f)
-        {
-            const FVector Center = Layout->Arrival.Center;
-            const FCollisionQueryParams Query(SCENE_QUERY_STAT(ClosedPortal), false, &Player);
-            if (!Abandoned::Verification::VerifyPortalShapeProjection())
-            {
-                Fail(TEXT("Incorrect capsule or rotated box aperture extent"));
-                return;
-            }
-            FHitResult Hit;
-            GetWorld()->LineTraceSingleByChannel(Hit, Center - FVector(100, 0, 0),
-                Center + FVector(100, 0, 0), ECC_Visibility, Query);
-            if (Supply.IsPowered() || Hit.GetComponent() != Mouths[0].Shutter)
-            {
-                Fail(TEXT("The unpowered portal was not solid"));
-                return;
-            }
-            LookFrom(Layout->Arrival.Console + FVector(0, 120, 0), Layout->Arrival.Console);
-            Player.Interact();
-            if (!Supply.IsPowered())
-            {
-                Fail(TEXT("Portal console did not power the pair"));
-                return;
-            }
-            // Present an unsupported body crossing a powered entrance from its approach side.
-            auto* Sphere = NewObject<USphereComponent>(&Player);
-            const FTransform& Entrance = Mouths[0].Pose;
-            Sphere->SetWorldLocation(Entrance.TransformPosition(FVector(-1, 0, 0)));
-            FTraveler Unsupported{Entrance.TransformPosition(FVector(1, 0, 0)), 0, true};
-            const FTransform Before = Player.GetActorTransform();
-            const FVector Speed = Player.GetCharacterMovement()->Velocity;
-            ObserveTraveler(Player, *Sphere, Unsupported, &Player);
-            if (!Unsupported.bUnsupportedShape || Unsupported.bTracked || Unsupported.Approach != INDEX_NONE ||
-                !Player.GetActorTransform().Equals(Before) || !Player.GetCharacterMovement()->Velocity.Equals(Speed))
-            {
-                Fail(TEXT("Unsupported shape changed the traveler or retained a pending crossing"));
-                return;
-            }
-            UE_LOG(LogPortalLab, Display, TEXT("Portal collision shapes verified: capsule, rotated box and rejected sphere."));
-            auto* Carry = Player.FindComponentByClass<UObjectCarryComponent>();
-            if (!Carry || !Abandoned::Verification::VerifyRejectedCarryTransit(
-                    *Carry, *Cubes[0]->GetBody(), *Player.GetCharacterMovement()))
-            {
-                Fail(TEXT("Failed re-grab did not restore carry state"));
-                return;
-            }
-            Cubes[0]->ResetPosition(Layout->SmallCube);
-            UE_LOG(LogPortalLab, Display, TEXT("Rejected carry transit restored pose, velocities, pawn response and movement load."));
-            const float UnloadedSpeed = Player.GetCharacterMovement()->MaxWalkSpeed;
-            APuzzleCube* TemporaryCube = SpawnCube(0);
-            if (!TemporaryCube || !Carry->TryGrab(*TemporaryCube->GetBody(), TemporaryCube->GetMassKg()) ||
-                !TemporaryCube->Destroy() || Carry->HeldBody() ||
-                !FMath::IsNearlyEqual(Player.GetCharacterMovement()->MaxWalkSpeed, UnloadedSpeed))
-            {
-                Fail(TEXT("Destroying a held cube left a grip or movement load"));
-                return;
-            }
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Center - FVector(320, 0, 53)));
-            Next(TEXT("Unpowered shutter blocked the aperture. Console supplied the pair."));
-        }
-        break;
-    case 1:
-        if (bCapture && !bRequestedFirstPortalFrame && Mouths[0].Window->IsVisible())
-        {
-            FScreenshotRequest::RequestScreenshot(TEXT("PortalLab-FirstVisible"), false, false);
-            bRequestedFirstPortalFrame = true;
-        }
-        if (VerificationTime >= 0.50f)
-        {
-            if (!Mouths[0].Window->IsVisible() || Mouths[1].Window->IsVisible())
-            {
-                Fail(TEXT("Portal view failed to select the entrance"));
-                return;
-            }
-            TArray<FLinearColor> Pixels;
-            const int32 X = ViewTexture->SizeX / 2;
-            const int32 Y = ViewTexture->SizeY / 2;
-            FTextureRenderTargetResource* Resource = ViewTexture->GameThread_GetRenderTargetResource();
-            if (!Resource || !Resource->ReadLinearColorPixels(Pixels, FReadSurfaceDataFlags(RCM_MinMax),
-                FIntRect(X - 1, Y - 1, X + 2, Y + 2)) || Pixels.IsEmpty())
-            {
-                Fail(TEXT("Could not read the linked aperture capture"));
-                return;
-            }
-            const FLinearColor Sample = Pixels[Pixels.Num() / 2];
-            UE_LOG(LogPortalLab, Display, TEXT("Linked scene center %s via %s."),
-                *Sample.ToString(), *GetNameSafe(Mouths[0].Window->GetMaterial(0)));
-            if (Sample.R <= 0.0f || Sample.R <= Sample.B)
-            {
-                Fail(TEXT("The aperture capture did not contain the destination's warm wall panel"));
-                return;
-            }
-            if (bCapture)
-            {
-                FScreenshotRequest::RequestScreenshot(TEXT("PortalLab-Active"), false, false);
-            }
-            Next(TEXT("Powered entrance captured the linked room."));
-        }
-        break;
-    case 2:
-        if (VerificationTime >= 0.15f)
-        {
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
-            PlayerState = {};
-            Cubes[0]->ResetPosition(Layout->Arrival.Center - FVector(100, 0, 46));
-            CubeStates[0] = {};
-            Cubes[0]->GetBody()->SetPhysicsLinearVelocity(FVector(1350, 0, 30));
-            Next(TEXT("Sent a free physical cube through the frame."));
-        }
-        break;
-    case 3:
-        if (Transfers == 1)
-        {
-            if (!VelocityRotated() || Cubes[0]->GetActorLocation().X < Layout->Departure.Center.X - 80.0)
-            {
-                Fail(TEXT("The free cube did not arrive with the rotated velocity"));
-                return;
-            }
-            Cubes[0]->ResetPosition(Layout->SmallCube);
-            CubeStates[0] = {};
-            Cubes[1]->ResetPosition(Layout->Departure.Center + FVector(0, 38, -103));
-            CubeStates[1] = {};
-            Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Arrival.Center - FVector(135, 0, 53)));
-            PlayerState = {};
-            Next(TEXT("Free cube retained speed through the 90 degree turn. Testing a blocked exit."));
-        }
-        break;
-    case 4:
-        Player.Move(FVector::ForwardVector);
-        if (BlockedTransfers > 0)
-        {
-            if (Transfers != 1 || Player.GetActorLocation().X >= Layout->Arrival.Center.X)
-            {
-                Fail(TEXT("An occupied exit admitted the player"));
-                return;
-            }
-            Cubes[1]->ResetPosition(Layout->LargeCube);
-            CubeStates[1] = {};
-            LookFrom(Layout->SmallCube - FVector(130, 0, 0), Cubes[0]->GetActorLocation());
-            Player.Interact();
-            VerifyItem = Player.GetHeldCube();
-            if (VerifyItem.Get() != Cubes[0])
-            {
-                Fail(TEXT("Player did not pick up the test cube"));
-                return;
-            }
-            Player.PlaceAt(FTransform(FRotator(-18, 0, 0), Layout->Arrival.Center - FVector(235, 0, 53)));
-            PlayerState = {};
-            Next(TEXT("Occupied exit stopped transit. The player picked up a cube."));
-        }
-        break;
-    case 5:
-        if (VerificationTime >= 0.28f)
-        {
-            Player.GetCharacterMovement()->SetMovementMode(MOVE_Falling);
-            Player.GetCharacterMovement()->Velocity = FVector(660, 0, 560);
-            Next(TEXT("Entering the portal airborne with the cube held."));
-        }
-        break;
-    case 6:
-        Player.Move(FVector::ForwardVector);
-        if (Transfers == 2)
-        {
-            if (!VerifyItem.IsValid() || Player.GetHeldCube() != VerifyItem.Get() ||
-                !VelocityRotated() || FMath::Abs(LastBefore.Z) < 25.0 ||
-                !FMath::IsNearlyEqual(Player.GetViewRotation().Yaw, 90.0, 1.0) ||
-                !Player.GetCharacterMovement()->Velocity.Equals(LastAfter, 0.1))
-            {
-                Fail(TEXT("Transfer lost motion, aim or ownership of the held object"));
-                return;
-            }
-            Next(TEXT("Player arrived airborne with the same cube, rotated view and unchanged speed."));
-        }
-        break;
-    case 7:
-        if (VerificationTime > 0.22f)
-        {
-            if (Transfers != 2 || !VerifyItem.IsValid() || Player.GetHeldCube() != VerifyItem.Get())
-            {
-                Fail(TEXT("Immediate reverse transfer or loss of grip"));
-                return;
-            }
-            Player.PlaceAt(FTransform(FRotator(-18, -90, 0), Layout->Departure.Center + FVector(0, 238, -53)));
-            PlayerState = {};
-            Next(TEXT("No repeat transit at the exit. Returning with the same cube."));
-        }
-        break;
-    case 8:
-        if (VerificationTime > 0.30f)
-        {
-            Player.Move(FVector::ForwardVector);
-        }
-        if (Transfers == 3)
-        {
-            if (!VerifyItem.IsValid() || Player.GetHeldCube() != VerifyItem.Get() ||
-                LastBefore.Y >= -300.0 || !LastAfter.Equals(FVector(LastBefore.Y, -LastBefore.X, LastBefore.Z), 0.05))
-            {
-                Fail(TEXT("Reverse transit lost the cube or the inverse velocity transform"));
-                return;
-            }
-            Next(TEXT("The inverse passage retained the cube and speed."));
-        }
-        break;
-    case 9:
-        if (VerificationTime > 0.22f)
-        {
-            Player.PlaceAt(FTransform(FRotator(-18, 0, 0), Layout->Arrival.Center - FVector(238, 0, 53)));
-            PlayerState = {};
-            Next(TEXT("Approaching the first portal again to test loss of power."));
-        }
-        break;
-    case 10:
-        if (VerificationTime > 0.30f)
-        {
-            Player.Move(FVector::ForwardVector);
-            if (PlayerState.Approach == 0)
-            {
-                ToggleSupply();
-                Next(TEXT("Cut the supply while the carried object overlapped the active frame."));
-            }
-        }
-        break;
-    case 11:
-        if (bInterrupted)
-        {
-            if (Supply.IsPowered() || VerifyItem.IsValid() || Player.GetHeldBody() || !IsValid(Cubes[0]) ||
-                !Player.GetActorLocation().Equals(Layout->Spawn, 4.0))
-            {
-                Fail(TEXT("Power loss did not destroy the item and restore the checkpoint"));
-                return;
-            }
-            UE_LOG(LogPortalLab, Display, TEXT("Portal lab verification passed: view, power, free cube, blocked exit, carried item, inertia and interruption."));
-            bVerify = false;
-            FPlatformMisc::RequestExitWithStatus(false, 0);
-        }
-        break;
-    }
-}
 #endif
 
 void APortalLabGameMode::ResetPuzzle(APuzzleCharacter& Player)
