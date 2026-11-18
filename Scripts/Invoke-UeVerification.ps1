@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)]
     [string]$EngineRoot,
 
-    [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
+    [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
                  'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
@@ -48,14 +48,39 @@ $expectedRenderer = [ordered]@{
 $renderQueries = $expectedRenderer.Keys -join ','
 $vanguard = "${entry}?game=/Script/Abandoned.VanguardRouteGameMode"
 $wristSuccess = @('Wrist terminal verification passed', 'Radiation passage verification passed')
+$entryFinish = @('Entry test: reset restored the weight lock', 'Entry test: Weight accepted 20 kg',
+                 'Entry test: crossed Weight exit.', 'First solution opened the door.', 'Alternate arrangement opened the door.',
+                 'Entry course verification passed: balance released the passage.', 'Passage handhold verified', 'Vanguard verification passed')
+$courseSuccess = @('Entry test: crossed Stairs exit.', 'Entry test: crossed Button exit.') + $entryFinish
 $scenarios = @{
     EntryCourse = @{
         Map = $entry
         Flag = '-VerifyEntryCourse'
         CaptureFlag = '-CaptureVanguard'
-        Success = @('Training chamber ready. Balance', 'First solution opened the door.', 'Alternate arrangement opened the door.',
-                    'Entry course verification passed: balance released the passage.',
-                    'Passage handhold verified', 'Vanguard verification passed')
+        Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
+        Success = $courseSuccess
+    }
+    EntryCourseAlternate = @{
+        Map = $entry
+        Flag = '-VerifyEntryCourse'
+        ExtraFlag = @('-VerifyEntryAlternatePlate', '-VerifyEntryAlternateWeight')
+        CaptureFlag = '-CaptureEntryCourse'
+        Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
+        Success = $courseSuccess + @('Entry alternate solution: cube snapped to plate B.', 'alternate solution assembled, 10 + 5 + 5 kg.')
+    }
+    EntryCheckpoint = @{
+        Map = $entry
+        Flag = '-VerifyEntryCheckpoint'
+        SeedCheckpoint = 'Weight'
+        Chambers = @('Weight', 'Balance')
+        Success = $entryFinish + @('Loaded campaign checkpoint v2: Weight', 'Saved campaign checkpoint v2: Balance (1 archive records).')
+    }
+    EntryWeightNegative = @{
+        Map = "${entry}?Chamber=Weight"
+        Flag = '-VerifyEntryCourse'
+        ExtraFlag = '-ini:Game:[/Script/Abandoned.EntryWeightLayout]:PlateActivationMassKg=10'
+        ExpectedError = 'LogEntryChamberTest: Error: Entry test failed: weight lock must reject the partial stack'
+        Success = @('Vanguard verification passed')
     }
     WristTerminal = @{
         Map = "${vanguard}?Chamber=Passage?RadiationRun=1"
@@ -129,12 +154,24 @@ $scenarios = @{
     Optics = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; Success = @('Power lab verification passed', 'Timed passage verification passed') }
     FreeReflector = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; ExtraFlag = '-VerifyFreeReflector'; Success = @('Free reflector verification passed', 'Timed passage verification passed') }
     Gravity = @{ Map = "${entry}?game=/Script/Abandoned.GravityLabGameMode"; Flag = '-VerifyGravityLab'; Success = @('Gravity lab verification passed') }
-    Dev20 = @{ Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"; Flag = '-VerifyDev20'; Success = @('DEV-20 verification passed: portal, Button, Weight and final exit') }
+    Dev20 = @{
+        Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"
+        Flag = '-VerifyDev20'
+        Chambers = @('Button', 'Weight')
+        Success = @('DEV-20: Button measured and rejected 34 kg.', 'DEV-20: Weight measured and rejected 34 kg.',
+                    'DEV-20: Button held the player at the exit', 'DEV-20: Weight held the player at the exit',
+                    'DEV-20 verification passed: portal, Button, Weight and final exit')
+    }
     Dev20Recovery = @{ Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"; Flag = '-VerifyDev20'; ExtraFlag = '-VerifyDev20Recovery'; Success = @('DEV-20 recovery verification passed') }
 }
 
 function Invoke-Scenario($name, $definition, $profile) {
     $null = New-Item -ItemType Directory -Path $profile
+    if ($definition.SeedCheckpoint) {
+        $saveFolder = New-Item -ItemType Directory -Path (Join-Path $profile 'Saved/SaveGames') -Force
+        $slot = Join-Path $saveFolder.FullName 'AbandonedCampaign.v2.json'
+        @{ version = 2; checkpoint = $definition.SeedCheckpoint; archive = @() } | ConvertTo-Json | Set-Content -LiteralPath $slot -Encoding utf8
+    }
     $log = Join-Path $profile 'Game.log'
     $result = [ordered]@{
         Name = $name
@@ -167,7 +204,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     if (($Capture -or $definition.CheckPortalFrame) -and $definition.CaptureFlag) {
         $start.ArgumentList.Add($definition.CaptureFlag)
     }
-    if ($definition.ExtraFlag) { $start.ArgumentList.Add($definition.ExtraFlag) }
+    foreach ($arg in $definition.ExtraFlag) { $start.ArgumentList.Add($arg) }
     $process = [System.Diagnostics.Process]::Start($start)
     try {
         if ($process.WaitForExit($TimeoutSeconds * 1000)) {
@@ -202,6 +239,11 @@ function Invoke-Scenario($name, $definition, $profile) {
         !($result.RendererSettings -match $pattern)
     })
     $result.RhiWarnings = @($lines -match 'Log(?:VulkanRHI|RHI): Warning:')
+    if ($definition.Chambers) {
+        $result.Chambers = @(foreach ($line in $lines) {
+            if ($line -match 'LogTrainingChamber: Display: Training chamber ready\. (\w+),') { $Matches[1] }
+        })
+    }
     if ($definition.CheckPortalFrame) {
         $firstFrame = Join-Path $profile 'Saved/Screenshots/WindowsEditor/PortalLab-FirstVisible.png'
         if (Test-Path -LiteralPath $firstFrame -PathType Leaf) {
@@ -236,6 +278,15 @@ function Invoke-Scenario($name, $definition, $profile) {
     } elseif ($result.SuccessMarkers.Count -ne $definition.Success.Count) {
         $missing = $definition.Success | Where-Object { $_ -notin $result.SuccessMarkers }
         $result.Reason = "Missing success markers: $($missing -join ', ')"
+    } elseif ($definition.Chambers -and ($result.Chambers -join ',') -cne ($definition.Chambers -join ',')) {
+        $result.Reason = "Unexpected chamber sequence: $($result.Chambers -join ', ')"
+    } elseif ($definition.SeedCheckpoint) {
+        $saved = Get-Content -LiteralPath $slot -Raw | ConvertFrom-Json
+        if ($saved.version -eq 2 -and $saved.checkpoint -ceq 'Balance' -and $saved.archive.Count -eq 1 -and $saved.archive[0] -ceq 'oxygen-restored') {
+            $result.Outcome = 'Passed'
+        } else {
+            $result.Reason = 'The resumed route did not persist Balance and the oxygen-restored record.'
+        }
     } else {
         $result.Outcome = 'Passed'
     }

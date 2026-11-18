@@ -92,18 +92,6 @@ private:
     bool bCheckpointWriteFailed = false;
     void AdvanceCourse(const ATrainingChamberCharacter& Player);
 
-#if WITH_DEV_AUTOMATION_TESTS
-    void VerifyEntryChamber(ATrainingChamberCharacter& Player, float DeltaSeconds);
-    bool bCapturedCourseScreenshot = false;
-    bool bVerifyEntryCourse = false;
-    bool bVerifyEntryCheckpoint = false;
-    bool bVerifiedWeightReset = false;
-    bool bVerifyDev20 = false;
-    int32 Dev20TestPhase = 0;
-    int32 CourseTestStep = 0;
-    float CourseTestTime = 0.0f;
-#endif
-
     UPROPERTY(Transient)
     TArray<TObjectPtr<APuzzleCube>> Cubes;
 
