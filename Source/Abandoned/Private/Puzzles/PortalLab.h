@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Domain/Puzzles/PortalTransit.h"
+#include "Infrastructure/Puzzles/PortalTransitComponent.h"
 #include "Domain/Puzzles/PowerSignals.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
@@ -65,14 +65,6 @@ public:
 private:
     friend class APortalLabCharacter;
 
-    struct FTraveler
-    {
-        FVector Previous = FVector::ZeroVector;
-        int32 Approach = INDEX_NONE;
-        bool bTracked = false;
-        bool bUnsupportedShape = false;
-    };
-
     EPuzzleCubeType CubeType(int32 Index) const;
     APuzzleCube* SpawnCube(int32 Index);
     void ResetLab(APortalLabCharacter& Player, bool bInterrupted = false);
@@ -80,18 +72,8 @@ private:
     void RecoverDev20();
     bool UseConsole(const UPrimitiveComponent& Target);
     void UpdateMouths(const APlayerController* Viewer);
-    void ObserveTraveler(AActor& Actor, UPrimitiveComponent& Body, FTraveler& State,
-        APortalLabCharacter* Player, int32 CubeIndex = INDEX_NONE);
-    bool ExitClear(const UPrimitiveComponent& Body, const FTransform& Destination,
-        const UPrimitiveComponent* Other) const;
-
 #if WITH_DEV_AUTOMATION_TESTS
     friend struct FPortalLabFixture;
-    void InspectTransfer(const FVector& Before, const FVector& After);
-    int32 Transfers = 0;
-    int32 BlockedTransfers = 0;
-    FVector LastBefore = FVector::ZeroVector;
-    FVector LastAfter = FVector::ZeroVector;
 #endif
 
     UPROPERTY()
@@ -124,13 +106,15 @@ private:
     UPROPERTY()
     TObjectPtr<UPortalRoomViewComponent> RoomView;
 
-    FTraveler PlayerState;
-    FTraveler CubeStates[2];
-    FTraveler Dev20State;
+    UPROPERTY()
+    TObjectPtr<UPortalTransitComponent> Transit;
+
+    FPortalTravelerState PlayerState;
+    FPortalTravelerState CubeStates[2];
+    FPortalTravelerState Dev20State;
     Abandoned::Domain::Puzzles::SignalOutput Supply{Abandoned::Domain::Puzzles::SignalMode::Toggle};
     bool bCrossedWithItem = false;
     bool bInterrupted = false;
-    bool bExitOccupied = false;
     bool bDev20Run = false;
     bool bDev20Crossed = false;
     bool bDev20Departed = false;

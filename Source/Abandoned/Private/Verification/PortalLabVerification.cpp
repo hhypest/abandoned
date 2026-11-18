@@ -28,7 +28,7 @@ struct FPortalLabFixture
 
     bool IsReady() const
     {
-        return IsValid(Lab.Layout) && IsValid(Lab.RoomView) && IsValid(Lab.RoomView->TextureTarget) &&
+        return IsValid(Lab.Layout) && IsValid(Lab.Transit) && IsValid(Lab.RoomView) && IsValid(Lab.RoomView->TextureTarget) &&
             Lab.Mouths.Num() == 2 && IsValid(Lab.Mouths[0].Console) && IsValid(Lab.Mouths[0].Shutter) &&
             IsValid(Lab.RoomView->Windows[0]) && IsValid(Lab.RoomView->Windows[1]) &&
             Lab.Cubes.Num() == 2 && IsValid(Lab.Cubes[0]) && IsValid(Lab.Cubes[1]);
@@ -37,7 +37,7 @@ struct FPortalLabFixture
     APuzzleCube& Cube(int32 Index) const { return *Lab.Cubes[Index]; }
     const FPortalMouth& Mouth(int32 Index) const { return Lab.Mouths[Index]; }
     const UStaticMeshComponent& Window(int32 Index) const { return *Lab.RoomView->Windows[Index]; }
-    int32 BlockedTransfers() const { return Lab.BlockedTransfers; }
+    int32 BlockedTransfers() const { return Lab.Transit->GetStats().Blocked; }
 
     void Place(const FTransform& Pose)
     {
@@ -61,10 +61,10 @@ struct FPortalLabFixture
         auto* Sphere = NewObject<USphereComponent>(&Player);
         const FTransform& Entrance = Mouth(0).Pose;
         Sphere->SetWorldLocation(Entrance.TransformPosition(FVector(-1, 0, 0)));
-        APortalLabGameMode::FTraveler Probe{Entrance.TransformPosition(FVector(1, 0, 0)), 0, true};
+        FPortalTravelerState Probe{Entrance.TransformPosition(FVector(1, 0, 0)), 0, true};
         const FTransform Before = Player.GetActorTransform();
         const FVector Speed = Player.GetCharacterMovement()->Velocity;
-        Lab.ObserveTraveler(Player, *Sphere, Probe, &Player);
+        Lab.Transit->Observe(*Sphere, Probe, Lab.Supply.IsPowered());
         return Probe.bUnsupportedShape && !Probe.bTracked && Probe.Approach == INDEX_NONE &&
             Player.GetActorTransform().Equals(Before) && Player.GetCharacterMovement()->Velocity.Equals(Speed);
     }

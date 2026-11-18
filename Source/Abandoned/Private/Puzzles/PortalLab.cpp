@@ -10,13 +10,10 @@
 #include "Engine/Canvas.h"
 #include "Engine/World.h"
 #include "Expedition/Dev20Actor.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Infrastructure/Puzzles/PortalRoomViewComponent.h"
-#include "Infrastructure/Puzzles/UnrealPortalShape.h"
-#include "Infrastructure/Puzzles/UnrealPortalTransform.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Player/AbandonedTestController.h"
 #include "Puzzles/PortalLabLayout.h"
@@ -32,21 +29,11 @@ namespace
 using Abandoned::Domain::Puzzles::PortalEvent;
 constexpr double HalfWidth = 118.0;
 constexpr double HalfHeight = 145.0;
-constexpr double Clearance = 6.0;
-
-bool Fits(const FVector& Local, const FVector& Extent)
-{
-    return Abandoned::Domain::Puzzles::FitsPortal(Local.Y, Local.Z, HalfWidth, HalfHeight, Extent.Y, Extent.Z);
-}
-
-bool IntersectsAperture(const FVector& Local, const FVector& Extent)
-{
-    return FMath::Abs(Local.Y) < HalfWidth + Extent.Y && FMath::Abs(Local.Z) < HalfHeight + Extent.Z;
-}
 }
 
 APortalLabGameMode::APortalLabGameMode()
 {
+    Transit = CreateDefaultSubobject<UPortalTransitComponent>(TEXT("PortalTransit"));
     DefaultPawnClass = APortalLabCharacter::StaticClass();
     PlayerControllerClass = AAbandonedTestController::StaticClass();
     HUDClass = APortalLabHUD::StaticClass();
@@ -156,7 +143,9 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
         }
     }
 
-    RoomView = UPortalRoomViewComponent::Create(World, Mouths[0].Pose, Mouths[1].Pose, FVector2D(HalfWidth, HalfHeight));
+    const FVector2D ApertureHalfSize(HalfWidth, HalfHeight);
+    Transit->Configure(Mouths[0].Pose, Mouths[1].Pose, ApertureHalfSize);
+    RoomView = UPortalRoomViewComponent::Create(World, Mouths[0].Pose, Mouths[1].Pose, ApertureHalfSize);
     if (!RoomView)
     {
         Error = TEXT("Could not initialize the portal room view.");
@@ -248,7 +237,7 @@ void APortalLabGameMode::ResetLab(APortalLabCharacter& Player, bool bPowerFailur
     }
     bCrossedWithItem = false;
     bInterrupted = bPowerFailure;
-    bExitOccupied = false;
+    Transit->ClearExitStatus();
     if (bDev20Run)
     {
         RecoverDev20();
@@ -276,7 +265,7 @@ void APortalLabGameMode::ToggleSupply()
     Supply.Observe(true, 0.0f);
     Supply.Observe(false, 0.0f);
     bInterrupted = false;
-    bExitOccupied = false;
+    Transit->ClearExitStatus();
 }
 
 bool APortalLabGameMode::UseConsole(const UPrimitiveComponent& Target)
@@ -304,179 +293,6 @@ void APortalLabGameMode::UpdateMouths(const APlayerController* Viewer)
     RoomView->UpdateView(bPowered ? Viewer : nullptr);
 }
 
-bool APortalLabGameMode::ExitClear(const UPrimitiveComponent& Body, const FTransform& Destination,
-    const UPrimitiveComponent* Other) const
-{
-    FCollisionQueryParams Query(SCENE_QUERY_STAT(PortalClearance), false, Body.GetOwner());
-    if (Other)
-    {
-        Query.AddIgnoredActor(Other->GetOwner());
-    }
-    return !GetWorld()->OverlapBlockingTestByChannel(Destination.GetLocation(), Destination.GetRotation(),
-        Body.GetCollisionObjectType(), Body.GetCollisionShape(-0.7f), Query,
-        FCollisionResponseParams(Body.GetCollisionResponseToChannels()));
-}
-
-void APortalLabGameMode::ObserveTraveler(AActor& Actor, UPrimitiveComponent& Body, FTraveler& State,
-    APortalLabCharacter* Player, int32 CubeIndex)
-{
-    const FVector Here = Body.GetComponentLocation();
-    const FVector Previous = State.bTracked ? State.Previous : Here;
-    const int32 PriorApproach = State.Approach;
-    State.Approach = INDEX_NONE;
-    State.Previous = Here;
-    State.bTracked = true;
-    UBoxComponent* Held = Player ? Player->GetHeldBody() : nullptr;
-    for (int32 Index = 0; Index < Mouths.Num(); ++Index)
-    {
-        const FTransform& Source = Mouths[Index].Pose;
-        const FTransform& Destination = Mouths[1 - Index].Pose;
-        const FVector Local = Source.InverseTransformPositionNoScale(Here);
-        const FVector Last = Source.InverseTransformPositionNoScale(Previous);
-        const auto Measured = Abandoned::Infrastructure::Puzzles::TryPortalExtent(Body, Source);
-        if (!Measured)
-        {
-            if (!State.bUnsupportedShape)
-            {
-                UE_LOG(LogPortalLab, Warning, TEXT("Portal transit rejected unsupported collision component %s (%s)."),
-                    *Body.GetName(), *Body.GetClass()->GetName());
-            }
-            State = {};
-            State.bUnsupportedShape = true;
-            return;
-        }
-        State.bUnsupportedShape = false;
-        const FVector Extent = Measured.GetValue();
-        const bool bCrossedPlane = Last.X > 0.0 && Local.X <= 0.0;
-        const FVector Threshold = bCrossedPlane ? FMath::Lerp(Last, Local, Last.X / (Last.X - Local.X)) : Local;
-        const bool bCrossed = bCrossedPlane && FMath::Abs(Threshold.Y) <= HalfWidth &&
-            FMath::Abs(Threshold.Z) <= HalfHeight;
-        bool bFits = Fits(Threshold, Extent);
-        const bool bMovingIn = Last.X >= Local.X - 0.1;
-        bool bTouching = Local.X >= 0.0 && Local.X <= Extent.X + 1.0 && bMovingIn && IntersectsAperture(Local, Extent);
-        FVector HeldExtent = FVector::ZeroVector;
-        if (Held && (bTouching || bCrossed || (Local.X > 0.0 && Local.X <= 220.0)))
-        {
-            const FVector HeldLocal = Source.InverseTransformPositionNoScale(Held->GetComponentLocation());
-            HeldExtent = Abandoned::Infrastructure::Puzzles::PortalBoxExtent(*Held, Source);
-            bFits = bFits && Fits(HeldLocal, HeldExtent);
-            bTouching = bTouching || (Local.X > 0.0 && bMovingIn && HeldLocal.X >= -180.0 &&
-                HeldLocal.X <= HeldExtent.X && IntersectsAperture(HeldLocal, HeldExtent));
-        }
-
-        FTransform Through;
-        FTransform Target;
-        bool bClear = false;
-        if (Supply.IsPowered() && bCrossed && bFits)
-        {
-            Through = Abandoned::Infrastructure::Puzzles::PortalLinkTransform(Source, Destination);
-            const double Out = Destination.InverseTransformPositionNoScale(Through.TransformPosition(Here)).X;
-            double ForwardOffset = Extent.X + Clearance - Out;
-            if (Held)
-            {
-                const double HeldOut = Destination.InverseTransformPositionNoScale(
-                    Through.TransformPosition(Held->GetComponentLocation())).X;
-                ForwardOffset = FMath::Max(ForwardOffset, HeldExtent.X + Clearance - HeldOut);
-            }
-            Through.AddToTranslation(Destination.GetUnitAxis(EAxis::X) * FMath::Max(0.0, ForwardOffset));
-            Target = Actor.GetActorTransform() * Through;
-            bClear = ExitClear(Body, Target, Held) &&
-                (!Held || ExitClear(*Held, Held->GetComponentTransform() * Through, &Body));
-        }
-        const PortalEvent Event = Abandoned::Domain::Puzzles::ObservePortal(
-            Supply.IsPowered(), PriorApproach == Index, bTouching, bCrossed, bFits, bClear);
-        if (Event == PortalEvent::Approach)
-        {
-            State.Approach = Index;
-        }
-        if (Event == PortalEvent::Interrupted)
-        {
-            if (Player)
-            {
-                APuzzleCube* Lost = Player->GetHeldCube();
-                Player->ReleaseHeldObject();
-                if (Lost)
-                {
-                    Lost->Destroy();
-                }
-                ResetLab(*Player, true);
-                UE_LOG(LogPortalLab, Display, TEXT("Transit interrupted. Restored the checkpoint."));
-            }
-            else
-            {
-                if (&Actor == Dev20)
-                {
-                    RecoverDev20();
-                    bDev20Recovered = true;
-                }
-                else if (Cubes.IsValidIndex(CubeIndex))
-                {
-                    Actor.Destroy();
-                    Cubes[CubeIndex] = SpawnCube(CubeIndex);
-                    State = {};
-                }
-            }
-            return;
-        }
-        const bool bTransferred = Event == PortalEvent::Transfer && (!Player || Player->TransitHeldBody(Through));
-        if (!bTransferred && Event != PortalEvent::Blocked && Event != PortalEvent::Transfer)
-        {
-            continue;
-        }
-
-        const FVector Before = Player ? Player->GetCharacterMovement()->Velocity : Body.GetPhysicsLinearVelocity();
-        const FVector Angular = Player ? FVector::ZeroVector : Body.GetPhysicsAngularVelocityInRadians();
-        FVector After;
-        if (bTransferred)
-        {
-            if (Player)
-            {
-                Player->SetBase(nullptr);
-                if (AController* Controller = Player->GetController())
-                {
-                    Controller->SetControlRotation((Through.GetRotation() * Controller->GetControlRotation().Quaternion()).Rotator());
-                }
-                bCrossedWithItem |= Held != nullptr;
-                bDev20Crossed |= IsValid(Dev20) && Held == Dev20->GetBody();
-            }
-            Actor.SetActorTransform(Target, false, nullptr, ETeleportType::TeleportPhysics);
-            After = Through.TransformVectorNoScale(Before);
-            bExitOccupied = false;
-#if WITH_DEV_AUTOMATION_TESTS
-            InspectTransfer(Before, After);
-#endif
-        }
-        else
-        {
-            const FVector Normal = Source.GetUnitAxis(EAxis::X);
-            const FVector Correction = Normal * (Extent.X + Clearance - Local.X);
-            if (Player && Held)
-            {
-                Player->TransitHeldBody(FTransform(Correction));
-            }
-            Actor.SetActorLocation(Actor.GetActorLocation() + Correction, false, nullptr, ETeleportType::TeleportPhysics);
-            After = Before - FMath::Min(0.0, FVector::DotProduct(Before, Normal)) * Normal;
-            bExitOccupied = true;
-#if WITH_DEV_AUTOMATION_TESTS
-            ++BlockedTransfers;
-#endif
-        }
-        if (Player)
-        {
-            UCharacterMovementComponent& Movement = *Player->GetCharacterMovement();
-            Movement.Velocity = After;
-            Movement.UpdateComponentVelocity();
-        }
-        else
-        {
-            Body.SetPhysicsLinearVelocity(After);
-            Body.SetPhysicsAngularVelocityInRadians(bTransferred ? Through.TransformVectorNoScale(Angular) : Angular);
-        }
-        State = {Body.GetComponentLocation(), INDEX_NONE, true};
-        return;
-    }
-}
-
 void APortalLabGameMode::Tick(float Delta)
 {
     Super::Tick(Delta);
@@ -486,13 +302,34 @@ void APortalLabGameMode::Tick(float Delta)
     {
         return;
     }
-    ObserveTraveler(*Player, *Player->GetCapsuleComponent(), PlayerState, Player);
+    const PortalEvent Crossing = Transit->Observe(*Player->GetCapsuleComponent(), PlayerState, Supply.IsPowered());
+    if (Crossing == PortalEvent::Interrupted)
+    {
+        APuzzleCube* Lost = Player->GetHeldCube();
+        Player->ReleaseHeldObject();
+        if (Lost)
+        {
+            Lost->Destroy();
+        }
+        ResetLab(*Player, true);
+        UE_LOG(LogPortalLab, Display, TEXT("Transit interrupted. Restored the checkpoint."));
+    }
+    else if (Crossing == PortalEvent::Transfer)
+    {
+        bCrossedWithItem |= Player->GetHeldBody() != nullptr;
+        bDev20Crossed |= IsValid(Dev20) && Player->GetHeldDev20() == Dev20;
+    }
     for (int32 Index = 0; Index < Cubes.Num(); ++Index)
     {
         if (APuzzleCube* Cube = Cubes[Index]; IsValid(Cube) && Cube != Player->GetHeldCube() &&
             Cube->GetBody()->IsSimulatingPhysics())
         {
-            ObserveTraveler(*Cube, *Cube->GetBody(), CubeStates[Index], nullptr, Index);
+            if (Transit->Observe(*Cube->GetBody(), CubeStates[Index], Supply.IsPowered()) == PortalEvent::Interrupted)
+            {
+                Cube->Destroy();
+                Cubes[Index] = SpawnCube(Index);
+                CubeStates[Index] = {};
+            }
         }
         else
         {
@@ -512,7 +349,11 @@ void APortalLabGameMode::Tick(float Delta)
         }
         if (IsValid(Dev20) && Player->GetHeldDev20() != Dev20)
         {
-            ObserveTraveler(*Dev20, *Dev20->GetBody(), Dev20State, nullptr);
+            if (Transit->Observe(*Dev20->GetBody(), Dev20State, Supply.IsPowered()) == PortalEvent::Interrupted)
+            {
+                RecoverDev20();
+                bDev20Recovered = true;
+            }
         }
         else
         {
@@ -543,7 +384,7 @@ const TCHAR* APortalLabGameMode::GetMessage() const
             return bDev20Recovered ? TEXT("DEV-20 returned to its cradle. Power the pair [E].")
                 : TEXT("DEV-20 transport. Power the pair [E], then take DEV-20 from its cradle.");
         }
-        if (bExitOccupied)
+        if (Transit->IsExitOccupied())
         {
             return TEXT("Exit blocked. Clear the destination before crossing.");
         }
@@ -558,7 +399,7 @@ const TCHAR* APortalLabGameMode::GetMessage() const
     {
         return TEXT("Use the console [E] to power the portal pair.");
     }
-    if (bExitOccupied)
+    if (Transit->IsExitOccupied())
     {
         return TEXT("Exit blocked. Clear the destination before crossing.");
     }
@@ -569,17 +410,9 @@ const TCHAR* APortalLabGameMode::GetMessage() const
 #if WITH_DEV_AUTOMATION_TESTS
 FPortalTransitObservation APortalLabGameMode::GetTransitObservation() const
 {
+    const FPortalTransferStats& Stats = Transit->GetStats();
     return {Supply.IsPowered(), PlayerState.Approach == 0, bInterrupted, bDev20Crossed,
-        Transfers, LastBefore, LastAfter};
-}
-
-void APortalLabGameMode::InspectTransfer(const FVector& Before, const FVector& After)
-{
-    ++Transfers;
-    LastBefore = Before;
-    LastAfter = After;
-    UE_LOG(LogPortalLab, Display, TEXT("Transfer %d: velocity %s -> %s, speed %.2f -> %.2f cm/s."),
-        Transfers, *Before.ToCompactString(), *After.ToCompactString(), Before.Size(), After.Size());
+        Stats.Transfers, Stats.LastBefore, Stats.LastAfter};
 }
 
 #endif
