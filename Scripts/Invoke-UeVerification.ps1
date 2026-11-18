@@ -4,7 +4,7 @@ param(
     [string]$EngineRoot,
 
     [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
-                 'Training', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'ParallelCircuit', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
+                 'Training', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -91,7 +91,14 @@ $scenarios = @{
         Success = @('Chamber hints verification passed')
     }
     PlateBalance = @{ Map = $entry; Flag = '-VerifyBalanceChamber'; Success = @('Balance chamber verification passed') }
-    ParallelCircuit = @{ Map = $entry; Flag = '-VerifyParallelCircuit'; Success = @('Parallel circuit verification passed') }
+    ParallelCircuit = @{ Map = $entry; Flag = '-VerifyParallelCircuit'; CaptureFlag = '-CaptureParallelCircuit'; Success = @('Parallel circuit verification passed') }
+    ParallelCircuitNegative = @{
+        Map = $entry
+        Flag = '-VerifyParallelCircuit'
+        ExtraFlag = '-ini:Game:[/Script/Abandoned.EntryButtonLayout]:PlateMaximumMassKg=150'
+        ExpectedError = 'LogParallelCircuit: Error: Parallel circuit verification failed: overloaded plate A still sends a signal'
+        Success = @('Parallel circuit verification passed')
+    }
     Optics = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; Success = @('Power lab verification passed', 'Timed passage verification passed') }
     FreeReflector = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; ExtraFlag = '-VerifyFreeReflector'; Success = @('Free reflector verification passed', 'Timed passage verification passed') }
     Gravity = @{ Map = "${entry}?game=/Script/Abandoned.GravityLabGameMode"; Flag = '-VerifyGravityLab'; Success = @('Gravity lab verification passed') }
