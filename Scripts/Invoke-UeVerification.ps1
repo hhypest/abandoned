@@ -50,7 +50,10 @@ $vanguard = "${entry}?game=/Script/Abandoned.VanguardRouteGameMode"
 $wristSuccess = @('Wrist terminal verification passed', 'Radiation passage verification passed')
 $entryFinish = @('Entry test: reset restored the weight lock', 'Entry test: Weight accepted 20 kg',
                  'Entry test: crossed Weight exit.', 'First solution opened the door.', 'Alternate arrangement opened the door.',
-                 'Entry course verification passed: balance released the passage.', 'Passage handhold verified', 'Vanguard verification passed')
+                 'Entry course verification passed: balance released the passage.',
+                 'Passage ledge stopped walking, a short Space jump and a crouch jump.',
+                 'Passage climb rejected an obstructed landing.', 'Passage handhold verified',
+                 'Passage climb verified: held Space and landed on top.', 'Vanguard verification passed')
 $courseSuccess = @('Entry test: crossed Stairs exit.', 'Entry test: crossed Button exit.') + $entryFinish
 $dev20Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"
 $dev20Transit = @('34 kg Chaos mass and carry slowdown confirmed.', 'loss of portal power returned the same item to its cradle.',
