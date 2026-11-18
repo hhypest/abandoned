@@ -3,11 +3,16 @@ param(
     [Parameter(Mandatory)]
     [string]$EngineRoot,
 
-    [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative')]
-    [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative'),
+    [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals')]
+    [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
     [int]$FramesPerSecond = 60,
+
+    [ValidateSet('1280x720', '1920x1080')]
+    [string]$Resolution = '1920x1080',
+
+    [switch]$Capture,
 
     [ValidateRange(1, 3600)]
     [int]$TimeoutSeconds = 180
@@ -27,18 +32,33 @@ if ($buildVersion.MajorVersion -ne 5 -or $buildVersion.MinorVersion -ne 7) {
 }
 
 $entry = '/Engine/Maps/Entry'
+$dimensions = $Resolution.Split('x')
+$expectedRenderer = [ordered]@{
+    'r.DynamicGlobalIlluminationMethod' = 1
+    'r.ReflectionMethod' = 1
+    'r.GenerateMeshDistanceFields' = 1
+    'r.Lumen.HardwareRayTracing' = 0
+    'r.Nanite.ProjectEnabled' = 1
+    'r.Shadow.Virtual.Enable' = 1
+    'r.AntiAliasingMethod' = 4
+    'sg.GlobalIlluminationQuality' = 2
+    'sg.ReflectionQuality' = 2
+}
+$renderQueries = $expectedRenderer.Keys -join ','
 $vanguard = "${entry}?game=/Script/Abandoned.VanguardRouteGameMode"
 $wristSuccess = @('Wrist terminal verification passed', 'Radiation passage verification passed')
 $scenarios = @{
     EntryCourse = @{
         Map = $entry
         Flag = '-VerifyEntryCourse'
+        CaptureFlag = '-CaptureVanguard'
         Success = @('Training chamber ready. Balance', 'Entry course verification passed',
                     'Passage handhold verified', 'Vanguard verification passed')
     }
     WristTerminal = @{
         Map = "${vanguard}?Chamber=Passage?RadiationRun=1"
         Flag = '-VerifyWristTerminal'
+        CaptureFlag = '-CaptureWristTerminal'
         Success = $wristSuccess
     }
     WristTerminalNegative = @{
@@ -46,6 +66,19 @@ $scenarios = @{
         Flag = '-VerifyWristTerminal'
         Success = $wristSuccess
         ExpectedError = 'LogWristTerminal: Error: Wrist terminal verification failed: acquired record should survive travel and occur once'
+    }
+    DoorClamp = @{
+        Map = $entry
+        Flag = '-VerifyDoorClamp'
+        CaptureFlag = '-CaptureDoorClamp'
+        Success = @('Door clamp verification passed')
+    }
+    Portals = @{
+        Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode"
+        Flag = '-VerifyPortalLab'
+        CaptureFlag = '-CapturePortalLab'
+        CheckPortalFrame = $true
+        Success = @('Portal lab verification passed')
     }
 }
 
@@ -61,6 +94,10 @@ function Invoke-Scenario($name, $definition, $profile) {
         TimedOut = $false
         Vulkan = $false
         Gpu = $null
+        RendererSettings = @()
+        RendererMismatches = @()
+        RhiWarnings = @()
+        DisplayedPortal = $null
         SuccessMarkers = @()
         FailureMarkers = @()
         Outcome = 'Failed'
@@ -71,9 +108,12 @@ function Invoke-Scenario($name, $definition, $profile) {
     $start.UseShellExecute = $false
     $start.WorkingDirectory = $repo
     foreach ($arg in @($project, $definition.Map, $definition.Flag, '-game', '-vulkan', '-unattended',
-                       '-windowed', '-ResX=1280', '-ResY=720', '-benchmark', "-fps=$FramesPerSecond",
-                       "-UserDir=$profile", "-abslog=$log")) {
+                       '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])", '-benchmark', "-fps=$FramesPerSecond",
+                       "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$renderQueries")) {
         $start.ArgumentList.Add($arg)
+    }
+    if (($Capture -or $definition.CheckPortalFrame) -and $definition.CaptureFlag) {
+        $start.ArgumentList.Add($definition.CaptureFlag)
     }
     $process = [System.Diagnostics.Process]::Start($start)
     try {
@@ -100,9 +140,21 @@ function Invoke-Scenario($name, $definition, $profile) {
     }
 
     $lines = Get-Content -LiteralPath $log
-    $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM5: VULKAN_SM5')
+    $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6')
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1
     if ($gpuLine -match 'DeviceName:\s*(.+)$') { $result.Gpu = $Matches[1].Trim() }
+    $result.RendererSettings = @($lines -match '(?:r\.(?:DynamicGlobalIlluminationMethod|ReflectionMethod|GenerateMeshDistanceFields|Lumen.HardwareRayTracing|Nanite.ProjectEnabled|Shadow.Virtual.Enable|AntiAliasingMethod)|sg\.(?:GlobalIlluminationQuality|ReflectionQuality))\s*=')
+    $result.RendererMismatches = @($expectedRenderer.Keys | Where-Object {
+        $pattern = [regex]::Escape($_) + '\s*=\s*"?' + $expectedRenderer[$_] + '"?(?:\s|$)'
+        !($result.RendererSettings -match $pattern)
+    })
+    $result.RhiWarnings = @($lines -match 'Log(?:VulkanRHI|RHI): Warning:')
+    if ($definition.CheckPortalFrame) {
+        $frame = Join-Path $profile 'Saved/Screenshots/WindowsEditor/PortalLab-Active.png'
+        if (Test-Path -LiteralPath $frame -PathType Leaf) {
+            $result.DisplayedPortal = & (Join-Path $PSScriptRoot 'Read-PortalFrame.ps1') -Path $frame
+        }
+    }
     $exitRequestPattern = 'FPlatformMisc::RequestExitWithStatus\(\s*\d+\s*,\s*[1-9]\d*\s*,'
     $result.FailureMarkers = @($lines -match ": Error:|Fatal error:|$exitRequestPattern")
     $result.SuccessMarkers = @($definition.Success | Where-Object {
@@ -111,11 +163,16 @@ function Invoke-Scenario($name, $definition, $profile) {
 
     # Use the same verdict for the positive cases and the negative control.
     if (!$result.Vulkan) {
-        $result.Reason = 'Vulkan SM5 was not confirmed in the game log.'
+        $result.Reason = 'Vulkan SM6 was not confirmed in the game log.'
+    } elseif ($result.RendererMismatches.Count -gt 0) {
+        $result.Reason = "Renderer profile was not confirmed: $($result.RendererMismatches -join ', ')"
     } elseif ($result.FailureMarkers.Count -gt 0) {
         $result.Reason = $result.FailureMarkers[0]
     } elseif ($result.ExitCode -ne 0) {
         $result.Reason = "Unreal exited with code $($result.ExitCode)."
+    } elseif ($definition.CheckPortalFrame -and (!$result.DisplayedPortal -or !$result.DisplayedPortal.WarmWall -or
+        $result.DisplayedPortal.Width -ne [int]$dimensions[0] -or $result.DisplayedPortal.Height -ne [int]$dimensions[1])) {
+        $result.Reason = 'The displayed portal aperture frame was not confirmed.'
     } elseif ($result.SuccessMarkers.Count -ne $definition.Success.Count) {
         $missing = $definition.Success | Where-Object { $_ -notin $result.SuccessMarkers }
         $result.Reason = "Missing success markers: $($missing -join ', ')"
@@ -126,7 +183,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     if ($definition.ExpectedError) {
         $expected = [regex]::Escape($definition.ExpectedError)
         $unexpected = $result.FailureMarkers -notmatch "$expected|$exitRequestPattern"
-        if ($result.Outcome -eq 'Failed' -and $result.Vulkan -and $result.ExitCode -in @(0, 1) -and
+        if ($result.Outcome -eq 'Failed' -and $result.Vulkan -and $result.RendererMismatches.Count -eq 0 -and $result.ExitCode -in @(0, 1) -and
             $result.FailureMarkers -match $expected -and $result.FailureMarkers -match $exitRequestPattern -and
             !$unexpected -and $result.SuccessMarkers.Count -eq 0) {
             $result.Outcome = 'ExpectedFailure'
@@ -147,7 +204,7 @@ $root = Join-Path $repo "Saved/UeVerification/$runId"
 $null = New-Item -ItemType Directory -Path $root -Force
 
 $results = @(foreach ($name in ($Scenario | Select-Object -Unique)) {
-    Write-Host "Running $name on Vulkan SM5..."
+    Write-Host "Running $name on Vulkan SM6..."
     $profile = Join-Path $root $name
     try {
         Invoke-Scenario $name $scenarios[$name] $profile
@@ -160,8 +217,8 @@ $report = [ordered]@{
     TrackedChanges = [bool]$trackedChanges
     Unreal = "$($buildVersion.MajorVersion).$($buildVersion.MinorVersion).$($buildVersion.PatchVersion)"
     OperatingSystem = $PSVersionTable.OS
-    Rhi = 'VULKAN_SM5'
-    Resolution = '1280x720'
+    Rhi = 'VULKAN_SM6'
+    Resolution = $Resolution
     FramesPerSecond = $FramesPerSecond
     Scenarios = $results
 }

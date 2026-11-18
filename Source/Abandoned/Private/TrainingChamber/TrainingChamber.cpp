@@ -1,5 +1,6 @@
 #include "TrainingChamber.h"
 #include "TrainingChamberLayout.h"
+#include "Verification/DoorClampVerification.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
@@ -86,7 +87,7 @@ void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedi
 #if WITH_DEV_AUTOMATION_TESTS
     bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
     bVerifyHints = FParse::Param(FCommandLine::Get(), TEXT("VerifyChamberHints"));
-    bVerifyDoorClamp = FParse::Param(FCommandLine::Get(), TEXT("VerifyDoorClamp"));
+    const bool bVerifyDoorClamp = Abandoned::Verification::WantsDoorClampVerification();
     bVerifyParallelCircuit = FParse::Param(FCommandLine::Get(), TEXT("VerifyParallelCircuit"));
     bVerifyBalance = FParse::Param(FCommandLine::Get(), TEXT("VerifyBalanceChamber"));
     bVerifyEntryCheckpoint = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint"));
@@ -154,7 +155,7 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
     }
 #if WITH_DEV_AUTOMATION_TESTS
     if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || bVerifyHints ||
-        bVerifyDoorClamp || bVerifyParallelCircuit)
+        Abandoned::Verification::WantsDoorClampVerification() || bVerifyParallelCircuit)
     {
         return;
     }
@@ -345,6 +346,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         Abandoned::Scene::AddLight(World, Light);
     }
     SaveEntryCheckpoint();
+    UDoorClampVerification::Attach(*this);
     UE_LOG(LogTrainingChamber, Display, TEXT("Training chamber ready. %s, %d cubes, plate released, exit closed."),
         *WriteSegment(Course.Current), Cubes.Num());
 }
@@ -439,11 +441,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     }
 
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyDoorClamp)
-    {
-        VerifyDoorClamp(*Player, DeltaSeconds);
-    }
-    else if (bVerifyHints)
+    if (bVerifyHints)
     {
         VerifyHints(*Player, DeltaSeconds);
     }

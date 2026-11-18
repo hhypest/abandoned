@@ -27,7 +27,7 @@ function Invoke-Game($Profile, $Name, $Map, $Markers, $Flag = '') {
     $launch = '"{0}" "{1}" {2} -game -vulkan -unattended -windowed -ResX=1280 -ResY=720 -benchmark -fps=60 -forcelogflush -UserDir="{3}" -abslog="{4}"' -f $project,$Map,$Flag,$Profile,$log
     $game = Start-Process -FilePath $editor -ArgumentList $launch -WindowStyle Hidden -PassThru
     $watch = [Diagnostics.Stopwatch]::StartNew()
-    $expected = @('Vulkan RHI ShaderPlatform for SM5: VULKAN_SM5') + $Markers
+    $expected = @('Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6') + $Markers
     try {
         while ($watch.Elapsed.TotalSeconds -lt 90) {
             if (Test-Path -LiteralPath $log) {
