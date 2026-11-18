@@ -76,7 +76,7 @@ $run = Start-Process $editor -ArgumentList $args -Wait -PassThru
 | Оптика и импульс | `?game=/Script/Abandoned.PowerLabGameMode` | `-VerifyPowerLab -CapturePowerLab` | `Power lab verification passed`, `Timed door crossed with`, затем `Timed passage verification passed`. |
 | Свободный отражатель | `?game=/Script/Abandoned.PowerLabGameMode` | `-VerifyPowerLab -VerifyFreeReflector -CapturePowerLab` | `Free reflector verification passed`, затем `Timed passage verification passed` после сброса. Кадр `PowerLab-Free-Reflector.png` показывает зеркало вне площадки. |
 | Гравитация | `?game=/Script/Abandoned.GravityLabGameMode` | `-VerifyGravityLab` | `Gravity lab verification passed` |
-| Порталы | `?game=/Script/Abandoned.PortalLabGameMode` | `-VerifyPortalLab` | `Portal lab verification passed` |
+| Порталы | `?game=/Script/Abandoned.PortalLabGameMode` | `-VerifyPortalLab` | `Portal collision shapes verified`, затем `Portal lab verification passed` |
 | DEV‑20 | `?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1` | `-VerifyDev20 -CaptureDev20` | `DEV-20 verification passed: portal, Button, Weight and final exit` |
 | Возврат DEV‑20 после потери в камере | `?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1` | `-VerifyDev20 -VerifyDev20Recovery` | `DEV-20 recovery verification passed` |
 

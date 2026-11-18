@@ -78,7 +78,7 @@ $scenarios = @{
         Flag = '-VerifyPortalLab'
         CaptureFlag = '-CapturePortalLab'
         CheckPortalFrame = $true
-        Success = @('Portal lab verification passed')
+        Success = @('Portal collision shapes verified', 'Portal lab verification passed')
     }
 }
 

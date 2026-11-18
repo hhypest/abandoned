@@ -55,6 +55,7 @@ private:
         FVector Previous = FVector::ZeroVector;
         int32 Approach = INDEX_NONE;
         bool bTracked = false;
+        bool bUnsupportedShape = false;
     };
 
     EPuzzleCubeType CubeType(int32 Index) const;
