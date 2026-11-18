@@ -1,5 +1,9 @@
 #include "Puzzles/GravityLab.h"
 
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Verification/GravityLabVerification.h"
+#endif
+
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -14,11 +18,8 @@
 #include "Puzzles/GravityLabLayout.h"
 #include "Puzzles/PuzzleCube.h"
 #include "UObject/ConstructorHelpers.h"
-#include "UnrealClient.h"
 #include "World/Blockout.h"
 #include "World/SceneAssembly.h"
-
-DEFINE_LOG_CATEGORY_STATIC(LogGravityLab, Log, All);
 
 namespace
 {
@@ -135,10 +136,6 @@ void AGravityLabGameMode::InitGame(const FString& Map, const FString& Options, F
             FieldMarkers.Add(Marker);
         }
     }
-#if WITH_DEV_AUTOMATION_TESTS
-    bVerify = FParse::Param(FCommandLine::Get(), TEXT("VerifyGravityLab"));
-    bCapture = FParse::Param(FCommandLine::Get(), TEXT("CaptureGravityLab"));
-#endif
     SetActorTickEnabled(true);
 }
 
@@ -151,6 +148,9 @@ void AGravityLabGameMode::HandleStartingNewPlayer_Implementation(APlayerControll
         {
             Player->AddTickPrerequisiteActor(this);
             Player->GetCharacterMovement()->AddTickPrerequisiteActor(this);
+#if WITH_DEV_AUTOMATION_TESTS
+            UGravityLabVerification::AttachIfRequested(*this, *Player);
+#endif
         }
     }
 }
@@ -225,12 +225,6 @@ void AGravityLabGameMode::Tick(float Delta)
     {
         bReachedGoal = true;
     }
-#if WITH_DEV_AUTOMATION_TESTS
-    if (bVerify)
-    {
-        Verify(*Player, Delta);
-    }
-#endif
 }
 
 const TCHAR* AGravityLabGameMode::GetDirectionLabel() const
@@ -244,199 +238,6 @@ const TCHAR* AGravityLabGameMode::GetDirectionLabel() const
     }
     return TEXT("floor");
 }
-
-#if WITH_DEV_AUTOMATION_TESTS
-void AGravityLabGameMode::Verify(AGravityLabCharacter& Player, float Delta)
-{
-    StepTime += Delta;
-    const auto Fail = [this, &Player](const TCHAR* Reason)
-    {
-        UE_LOG(LogGravityLab, Error, TEXT("Gravity lab verification failed at %d: %s. Player %s, gravity %s."),
-            Step, Reason, *Player.GetActorLocation().ToCompactString(),
-            *Player.GetCharacterMovement()->GetGravityDirection().ToCompactString());
-        bVerify = false;
-        FPlatformMisc::RequestExitWithStatus(false, 1);
-    };
-    const auto Next = [this](const TCHAR* Message)
-    {
-        ++Step;
-        StepTime = 0.0f;
-        UE_LOG(LogGravityLab, Display, TEXT("Gravity lab: %s"), Message);
-    };
-    const auto SetDirectionAtTerminal = [this, &Player](Direction NewDirection)
-    {
-        Player.PlaceAtLab(FVector(Layout->Terminal.X, Layout->Terminal.Y + 142.0, 92.0), Layout->Terminal);
-        Player.SelectDirection(NewDirection);
-    };
-    const auto UsePowerSwitch = [this, &Player]
-    {
-        Player.PlaceAtLab(FVector(Layout->PowerSwitch.X, Layout->PowerSwitch.Y + 142.0, 92.0), Layout->PowerSwitch);
-        Player.Interact();
-    };
-    if (StepTime > 7.0f)
-    {
-        Fail(TEXT("Timed out waiting for the physical field transition"));
-        return;
-    }
-    switch (Step)
-    {
-    case 0:
-        if (StepTime >= 0.15f)
-        {
-            const double ContactZ = Large->GetHalfSize() + 0.2;
-            const FVector Base(Layout->LargeStart.X, Layout->LargeStart.Y, ContactZ);
-            Large->ResetPosition(Base);
-            const FVector Top = Base + FVector(0, 0, Large->GetHalfSize() + Small->GetHalfSize() + 0.2);
-            if (!Small->SnapTo(*Large->GetBody(), Top, FRotator::ZeroRotator) ||
-                Small->GetBody()->IsSimulatingPhysics() || Large->GetBody()->IsSimulatingPhysics())
-            {
-                Fail(TEXT("Could not set up a snapped stack under ordinary gravity"));
-                return;
-            }
-            SetDirectionAtTerminal(Direction::Left);
-            UsePowerSwitch();
-            if (!IsPowered() || Selected != Direction::Left)
-            {
-                Fail(TEXT("The terminal and power switch were unreachable"));
-                return;
-            }
-            Next(TEXT("Set left at the terminal and powered the field."));
-        }
-        break;
-    case 1:
-        if (Small->HasSnapConstraints() || Large->HasSnapConstraints() ||
-            !Small->GetBody()->IsSimulatingPhysics() || !Large->GetBody()->IsSimulatingPhysics())
-        {
-            Fail(TEXT("Sideways gravity did not release the snapped stack"));
-            return;
-        }
-        Small->ResetPosition(Layout->SmallStart + FVector(0, 0, 250));
-        Large->ResetPosition(Layout->LargeStart + FVector(0, 0, 250));
-        Next(TEXT("Sideways gravity released the stack and restored physics to both cubes."));
-        break;
-    case 2:
-        if (StepTime >= 0.26f)
-        {
-            const double LightSpeed = -Small->GetVelocity().Y;
-            const double HeavySpeed = -Large->GetVelocity().Y;
-            if (!Player.GetCharacterMovement()->GetGravityDirection().Equals(FVector::DownVector) ||
-                HeavySpeed < 100.0 || LightSpeed <= HeavySpeed * 1.6 || LightSpeed >= HeavySpeed * 2.4)
-            {
-                Fail(TEXT("Gravity escaped its boundary or did not respect body mass"));
-                return;
-            }
-            UE_LOG(LogGravityLab, Display, TEXT("Gravity lab: lateral speeds %.1f cm/s (5 kg), %.1f cm/s (10 kg)."),
-                LightSpeed, HeavySpeed);
-            Player.PlaceAtLab(FVector(Layout->Field.Center.X - 330, 10, Layout->Goal.Center.Z),
-                FVector(Layout->Goal.Center.X, 10, Layout->Goal.Center.Z + 75));
-            Next(TEXT("Crossed the field boundary with the character."));
-        }
-        break;
-    case 3:
-        if (Player.GetCharacterMovement()->IsMovingOnGround() &&
-            Player.GetActorLocation().Y < Layout->Goal.Center.Y + 110.0)
-        {
-            if (Player.GetCharacterMovement()->GetGravityDirection().Y > -0.99 ||
-                Player.GetActorUpVector().Y < 0.99)
-            {
-                Fail(TEXT("The movement frame or capsule did not land on the left wall"));
-                return;
-            }
-            Next(TEXT("Landed on the wall with the capsule aligned."));
-        }
-        break;
-    case 4:
-        if (Player.GetActorLocation().X < Layout->Goal.Center.X - 20.0)
-        {
-            Player.Move(FVector::ForwardVector);
-        }
-        if (const double Offset = Player.GetActorLocation().Z - Layout->Goal.Center.Z; FMath::Abs(Offset) > 22.0)
-        {
-            Player.Move(FVector::RightVector * FMath::Clamp(Offset / 130.0, -0.6, 0.6));
-        }
-        if (HasReachedGoal())
-        {
-            const FVector ViewUp = FVector::VectorPlaneProject(FVector::RightVector,
-                Player.Camera->GetForwardVector()).GetSafeNormal();
-            if (Player.Camera->GetUpVector().Dot(ViewUp) < 0.97)
-            {
-                UE_LOG(LogGravityLab, Display, TEXT("Camera up %s, capsule up %s, camera rotation %s, visual field up %s, pitch %.2f yaw %.2f."),
-                    *Player.Camera->GetUpVector().ToCompactString(), *Player.GetActorUpVector().ToCompactString(),
-                    *Player.Camera->GetComponentRotation().ToCompactString(),
-                    *Player.ViewFrame.GetUpVector().ToCompactString(), Player.Pitch, Player.Yaw);
-                Fail(TEXT("The eye horizon did not follow the new vertical"));
-                return;
-            }
-            if (bCapture)
-            {
-                Player.Yaw = 175.0;
-                Player.Pitch = -9.0;
-                Player.UpdateView(1.0f);
-                FScreenshotRequest::RequestScreenshot(TEXT("GravityLab-Walk"), false, false);
-            }
-            Next(TEXT("Reached the marked target using gravity-relative movement."));
-        }
-        break;
-    case 5:
-        if (StepTime >= 0.15f)
-        {
-            Player.ResetChamber();
-            if (IsPowered() || HasReachedGoal() || !Player.GetCharacterMovement()->GetGravityDirection().Equals(FVector::DownVector))
-            {
-                Fail(TEXT("Reset did not restore normal gravity, power and objective"));
-                return;
-            }
-            SetDirectionAtTerminal(Direction::Up);
-            UsePowerSwitch();
-            Player.PlaceAtLab(Layout->Field.Center, Layout->Field.Center + FVector(500, 0, 75));
-            Player.ToggleHorizon();
-            Next(TEXT("Reset and selected ceiling gravity with instant horizon."));
-        }
-        break;
-    case 6:
-        if (Player.GetCharacterMovement()->IsMovingOnGround() && Player.GetActorLocation().Z > 490.0)
-        {
-            if (Player.GetCharacterMovement()->GetGravityDirection().Z < 0.99 || Player.Camera->GetUpVector().Z > -0.99)
-            {
-                Fail(TEXT("Ceiling gravity or instant horizon did not apply"));
-                return;
-            }
-            Player.ResetChamber();
-            SetDirectionAtTerminal(Direction::Right);
-            UsePowerSwitch();
-            Player.PlaceAtLab(Layout->Field.Center, Layout->Field.Center + FVector(500, 0, 75));
-            Next(TEXT("Ceiling gravity and instant horizon passed. Entered the right-wall field."));
-        }
-        break;
-    case 7:
-        if (Player.GetCharacterMovement()->IsMovingOnGround() && Player.GetActorLocation().Y > 240.0)
-        {
-            if (Player.GetCharacterMovement()->GetGravityDirection().Y < 0.99)
-            {
-                Fail(TEXT("The right-wall setting did not become active"));
-                return;
-            }
-            Next(TEXT("Landed on the right wall."));
-        }
-        break;
-    case 8:
-        Player.Move(FVector::ForwardVector);
-        if (Player.GetActorLocation().X > Bounds(Layout->Field).Max.X + 10.0)
-        {
-            if (!Player.GetCharacterMovement()->GetGravityDirection().Equals(FVector::DownVector) ||
-                Player.Camera->GetUpVector().Z < 0.99)
-            {
-                Fail(TEXT("Leaving the field did not restore ordinary gravity and horizon"));
-                return;
-            }
-            UE_LOG(LogGravityLab, Display, TEXT("Gravity lab verification passed: boundaries, mass, wall movement, ceiling and reset."));
-            bVerify = false;
-            FPlatformMisc::RequestExitWithStatus(false, 0);
-        }
-        break;
-    }
-}
-#endif
 
 AGravityLabCharacter::AGravityLabCharacter()
 {

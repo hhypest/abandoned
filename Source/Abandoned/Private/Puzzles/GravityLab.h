@@ -36,11 +36,7 @@ private:
     void ApplyField(APuzzleCube& Cube, const Abandoned::Domain::Puzzles::GravityField* Field);
     void UpdateFieldMarkers();
 #if WITH_DEV_AUTOMATION_TESTS
-    void Verify(AGravityLabCharacter& Player, float DeltaSeconds);
-    bool bVerify = false;
-    bool bCapture = false;
-    int32 Step = 0;
-    float StepTime = 0;
+    friend class UGravityLabVerification;
 #endif
 
     UPROPERTY()
@@ -94,6 +90,9 @@ protected:
 
 private:
     friend class AGravityLabGameMode;
+#if WITH_DEV_AUTOMATION_TESTS
+    friend class UGravityLabVerification;
+#endif
     using Direction = Abandoned::Domain::Puzzles::GravityDirection;
 
     void ChangeGravity(Direction Down, float Scale);
