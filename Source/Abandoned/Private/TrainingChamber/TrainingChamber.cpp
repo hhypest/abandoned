@@ -3,6 +3,7 @@
 #include "Verification/DoorClampVerification.h"
 #include "Verification/ChamberHintsVerification.h"
 #include "Verification/ParallelCircuitVerification.h"
+#include "Verification/PlateBalanceVerification.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
@@ -85,7 +86,6 @@ void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedi
         Layout = UChamberHintsVerification::CreateFixtureLayout(*this);
         return;
     }
-    bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
     const bool bVerifyDoorClamp = Abandoned::Verification::WantsDoorClampVerification();
     if (!bVerifyDoorClamp && UParallelCircuitVerification::IsRequested())
     {
@@ -93,7 +93,13 @@ void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedi
         Layout = GetDefault<UEntryButtonLayout>();
         return;
     }
-    bVerifyBalance = FParse::Param(FCommandLine::Get(), TEXT("VerifyBalanceChamber"));
+    if (!bVerifyDoorClamp && UPlateBalanceVerification::IsStandaloneRequested())
+    {
+        Course = StartCourse({Segment::Balance}, nullptr);
+        Layout = GetDefault<UWeightBalanceLayout>();
+        return;
+    }
+    bVerifyChamber = FParse::Param(FCommandLine::Get(), TEXT("VerifyTrainingChamber"));
     bVerifyEntryCheckpoint = FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint"));
     bVerifyDev20 = Dev20Stage.has_value() && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20"));
     bVerifyEntryCourse = bVerifyDev20 || bVerifyEntryCheckpoint || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse"));
@@ -101,12 +107,6 @@ void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedi
     {
         Arrival.Chamber = Segment::Weight;
         bReadCheckpoint = false;
-    }
-    else if (bVerifyBalance)
-    {
-        Arrival = {Segment::Balance};
-        bVerifyEntryCourse = false;
-        bVerifyChamber = false;
     }
     else if (bVerifyChamber)
     {
@@ -153,7 +153,8 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
         return;
     }
 #if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || bVerifyBalance || UChamberHintsVerification::IsRequested() ||
+    if (bVerifyChamber || (bVerifyEntryCourse && !bVerifyEntryCheckpoint) || UPlateBalanceVerification::IsStandaloneRequested() ||
+        UChamberHintsVerification::IsRequested() ||
         Abandoned::Verification::WantsDoorClampVerification() || UParallelCircuitVerification::IsRequested())
     {
         return;
@@ -185,18 +186,6 @@ void ATrainingChamberGameMode::AdvanceCourse(const ATrainingChamberCharacter& Pl
 #endif
         return;
     }
-#if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyBalance)
-    {
-        UE_LOG(LogTrainingChamber, Display, TEXT("Balance chamber verification passed: three plates, two solutions, reset and exit."));
-        FPlatformMisc::RequestExitWithStatus(false, 0);
-        return;
-    }
-    if (Course.Current == Segment::Balance && bVerifyEntryCourse)
-    {
-        UE_LOG(LogTrainingChamber, Display, TEXT("Entry course verification passed: balance released the passage."));
-    }
-#endif
     if (const auto Next = Abandoned::Application::Expedition::NextCourseDestination(Course))
     {
         Abandoned::Infrastructure::Expedition::TravelToWorld(this, *Next);
@@ -348,6 +337,10 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     SaveEntryCheckpoint();
 #if WITH_DEV_AUTOMATION_TESTS
     UChamberHintsVerification::Attach(*this);
+    if (Course.Current == Segment::Balance && (UPlateBalanceVerification::IsStandaloneRequested() || bVerifyEntryCourse))
+    {
+        UPlateBalanceVerification::Attach(*this, Cubes, Plates);
+    }
     if (Course.Current == Segment::Button && UParallelCircuitVerification::IsRequested())
     {
         UParallelCircuitVerification::Attach(*this, Cubes, RelayTraces, RelayIdleMaterial, RelayPoweredMaterial);
@@ -452,11 +445,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     {
         VerifyChamber(*Player, DeltaSeconds);
     }
-    else if (bVerifyBalance || (bVerifyEntryCourse && Course.Current == Segment::Balance))
-    {
-        VerifyBalanceChamber(*Player, DeltaSeconds);
-    }
-    else if (bVerifyEntryCourse)
+    else if (bVerifyEntryCourse && Course.Current != Segment::Balance)
     {
         VerifyEntryChamber(*Player, DeltaSeconds);
     }
