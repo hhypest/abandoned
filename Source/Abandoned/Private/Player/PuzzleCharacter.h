@@ -15,6 +15,7 @@ class APuzzleCharacter : public AAbandonedCharacter
     GENERATED_BODY()
 
 public:
+    static constexpr double HoldDistanceCm = 165.0;
     APuzzleCharacter();
     APuzzleCube* GetHeldCube() const;
     ADev20Actor* GetHeldDev20() const;

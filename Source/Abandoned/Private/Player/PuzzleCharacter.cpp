@@ -18,7 +18,6 @@
 namespace
 {
 constexpr double Reach = 280.0;
-constexpr double HoldDistance = 165.0;
 }
 
 APuzzleCharacter::APuzzleCharacter()
@@ -156,7 +155,7 @@ void APuzzleCharacter::ThrowHeldObject()
 void APuzzleCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    Grip->UpdateHold(Camera->GetComponentLocation(), GetViewRotation(), HoldDistance, Reach);
+    Grip->UpdateHold(Camera->GetComponentLocation(), GetViewRotation(), HoldDistanceCm, Reach);
     Placement->UpdatePreview(GetHeldCube(), Camera->GetComponentLocation(), InteractionRayEnd());
 }
 

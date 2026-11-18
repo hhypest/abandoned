@@ -45,7 +45,6 @@ using Abandoned::Domain::Puzzles::CircuitRules;
 using Abandoned::Infrastructure::Expedition::UnrealCheckpointStore;
 using Abandoned::Infrastructure::Expedition::WriteSegment;
 constexpr double DoorTravel = 280.0;
-constexpr double HoldDistance = 165.0;
 }
 
 ATrainingChamberGameMode::ATrainingChamberGameMode()
@@ -792,7 +791,7 @@ void ATrainingChamberGameMode::VerifyEntryChamber(ATrainingChamberCharacter& Pla
     const auto AimHold = [&AimFrom, this](const FVector& Target, FVector Approach)
     {
         const double Height = Target.Z - Layout->Spawn.Z - Abandoned::MovementProfile::CameraHeight;
-        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(HoldDistance) - FMath::Square(Height)));
+        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(APuzzleCharacter::HoldDistanceCm) - FMath::Square(Height)));
         const FVector Start = Target - Approach * Forward;
         AimFrom(FVector(Start.X, Start.Y, Layout->Spawn.Z), Target);
     };
@@ -1026,7 +1025,7 @@ void ATrainingChamberGameMode::VerifyChamber(ATrainingChamberCharacter& Player, 
     const auto AimToHold = [this, &AimFrom](const FVector& Target, const FVector& Approach)
     {
         const double Height = Target.Z - (Layout->Spawn.Z + Abandoned::MovementProfile::CameraHeight);
-        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(HoldDistance) - FMath::Square(Height)));
+        const double Forward = FMath::Sqrt(FMath::Max(0.0, FMath::Square(APuzzleCharacter::HoldDistanceCm) - FMath::Square(Height)));
         const FVector Here = Target - Approach * Forward;
         AimFrom(FVector(Here.X, Here.Y, Layout->Spawn.Z), Target);
     };
