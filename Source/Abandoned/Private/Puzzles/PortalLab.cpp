@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Components/SphereComponent.h"
 #include "Verification/PortalShapeVerification.h"
+#include "Verification/CarryVerification.h"
 #endif
 #if WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
 #include "AssetCompilingManager.h"
@@ -933,6 +934,15 @@ void APortalLabGameMode::Verify(APortalLabCharacter& Player, float Delta)
                 return;
             }
             UE_LOG(LogPortalLab, Display, TEXT("Portal collision shapes verified: capsule, rotated box and rejected sphere."));
+            auto* Carry = Player.FindComponentByClass<UObjectCarryComponent>();
+            if (!Carry || !Abandoned::Verification::VerifyRejectedCarryTransit(
+                    *Carry, *Cubes[0]->GetBody(), *Player.GetCharacterMovement()))
+            {
+                Fail(TEXT("Failed re-grab did not restore carry state"));
+                return;
+            }
+            Cubes[0]->ResetPosition(Layout->SmallCube);
+            UE_LOG(LogPortalLab, Display, TEXT("Rejected carry transit restored pose, velocities, pawn response and movement load."));
             Player.PlaceAt(FTransform(FRotator::ZeroRotator, Center - FVector(320, 0, 53)));
 #if WITH_EDITOR
             FAssetCompilingManager::Get().FinishAllCompilation();
