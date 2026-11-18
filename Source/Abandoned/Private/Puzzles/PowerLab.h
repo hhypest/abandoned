@@ -88,12 +88,7 @@ private:
 
 #if WITH_DEV_AUTOMATION_TESTS
     friend class UOpticsVerification;
-    void StartPulseVerification(bool bCapture);
-    void VerifyPulse(APowerLabCharacter& Player, float DeltaSeconds);
-    bool bVerifyPulse = false;
-    bool bCapturePulse = false;
-    int32 PulseTestStep = 0;
-    float PulseTestTime = 0.0f;
+    friend class UPulseDoorVerification;
 #endif
 
     UPROPERTY()
@@ -176,6 +171,7 @@ private:
     friend class APowerLabGameMode;
 #if WITH_DEV_AUTOMATION_TESTS
     friend class UOpticsVerification;
+    friend class UPulseDoorVerification;
 #endif
 
     void AimMirror();

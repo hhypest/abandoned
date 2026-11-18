@@ -583,17 +583,11 @@ void APowerLabGameMode::Tick(float Delta)
     Reflection.PowerLine->SetMaterial(0, Doors.Reflection ? Amber : Inactive);
     ObservePulse(Delta, Player->GetActorLocation());
     if (MoveDoor(Interruption.Door, Interruption.Clamp, Layout->Interruption.Door, Doors.Interruption, Delta, *Player) ||
-        MoveDoor(Reflection.Door, Reflection.Clamp, Layout->Reflection.Door, Doors.Reflection, Delta, *Player) ||
-        MoveDoor(PulseDoor, PulseClamp, Layout->PulseDoor.Center, Pulse.IsPowered(), Delta, *Player, &Layout->PulseRetry))
+        MoveDoor(Reflection.Door, Reflection.Clamp, Layout->Reflection.Door, Doors.Reflection, Delta, *Player))
     {
         return;
     }
-#if WITH_DEV_AUTOMATION_TESTS
-    if (bVerifyPulse)
-    {
-        VerifyPulse(*Player, Delta);
-    }
-#endif
+    MoveDoor(PulseDoor, PulseClamp, Layout->PulseDoor.Center, Pulse.IsPowered(), Delta, *Player, &Layout->PulseRetry);
 }
 
 const TCHAR* APowerLabGameMode::GetObjective(const FVector& Player) const
