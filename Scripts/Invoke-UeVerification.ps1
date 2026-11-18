@@ -4,7 +4,7 @@ param(
     [string]$EngineRoot,
 
     [ValidateSet('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
-                 'Training', 'ChamberHints', 'PlateBalance', 'ParallelCircuit', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
+                 'Training', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'ParallelCircuit', 'Optics', 'FreeReflector', 'Gravity', 'Dev20', 'Dev20Recovery')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -82,7 +82,14 @@ $scenarios = @{
         Success = @('Portal collision shapes verified', 'Rejected carry transit restored', 'Portal lab verification passed')
     }
     Training = @{ Map = $entry; Flag = '-VerifyTrainingChamber'; Success = @('Verification passed: player weight, placement ghost, throw, staircase, detach and reset') }
-    ChamberHints = @{ Map = $entry; Flag = '-VerifyChamberHints'; Success = @('Chamber hints verification passed') }
+    ChamberHints = @{ Map = $entry; Flag = '-VerifyChamberHints'; CaptureFlag = '-CaptureChamberHints'; Success = @('Chamber hints verification passed') }
+    ChamberHintsNegative = @{
+        Map = $entry
+        Flag = '-VerifyChamberHints'
+        ExtraFlag = '-ini:Game:[/Script/Abandoned.EntryWeightLayout]:bRequiresButton=False'
+        ExpectedError = 'LogHintVerification: Error: Chamber hints failed at step 0: missing wall switch.'
+        Success = @('Chamber hints verification passed')
+    }
     PlateBalance = @{ Map = $entry; Flag = '-VerifyBalanceChamber'; Success = @('Balance chamber verification passed') }
     ParallelCircuit = @{ Map = $entry; Flag = '-VerifyParallelCircuit'; Success = @('Parallel circuit verification passed') }
     Optics = @{ Map = "${entry}?game=/Script/Abandoned.PowerLabGameMode"; Flag = '-VerifyPowerLab'; Success = @('Power lab verification passed', 'Timed passage verification passed') }
