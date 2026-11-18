@@ -4,6 +4,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Verification/VanguardFallVerification.h"
 #include "Verification/VanguardMantleVerification.h"
+#include "Verification/VanguardWristTerminalVerification.h"
 #endif
 
 #include "Application/Expedition/PassageProgress.h"
@@ -268,10 +269,12 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         FallCheck = UVanguardFallVerification::Attach(*this);
     }
-    bVerifyWristTerminal = (Radiation || AtStation()) && FParse::Param(FCommandLine::Get(), TEXT("VerifyWristTerminal"));
-    bCaptureWristTerminal = bVerifyWristTerminal && FParse::Param(FCommandLine::Get(), TEXT("CaptureWristTerminal"));
+    if ((Radiation || AtStation()) && FParse::Param(FCommandLine::Get(), TEXT("VerifyWristTerminal")))
+    {
+        WristCheck = UVanguardWristTerminalVerification::Attach(*this, Layout->Spawn.Z);
+    }
     bVerifyRadiation = (Radiation || AtStation()) &&
-        (bVerifyWristTerminal || FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation")));
+        (WristCheck.IsValid() || FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation")));
     bCaptureRadiation = FParse::Param(FCommandLine::Get(), TEXT("CaptureRadiation"));
     if (bVerifyRoute && !FallCheck.IsValid() && !bVerifyRadiation && !AtStation() && Passage->bEnableMantle)
     {
@@ -514,7 +517,7 @@ void AVanguardRouteGameMode::Tick(float DeltaSeconds)
 #if WITH_DEV_AUTOMATION_TESTS
     if (bVerifyRadiation)
     {
-        if (!bVerifyWristTerminal || VerifyWristTerminal(*Player, DeltaSeconds))
+        if (auto* Check = WristCheck.Get(); !Check || Check->CheckStep(*this, *Player, DeltaSeconds))
         {
             VerifyRadiation(*Player, DeltaSeconds);
         }

@@ -71,7 +71,7 @@ private:
     friend class UVanguardFallVerification;
     TWeakObjectPtr<class UVanguardFallVerification> FallCheck;
     void VerifyRadiation(AVanguardCharacter& Player, float DeltaSeconds);
-    bool VerifyWristTerminal(AVanguardCharacter& Player, float DeltaSeconds);
+    TWeakObjectPtr<class UVanguardWristTerminalVerification> WristCheck;
     TWeakObjectPtr<class UVanguardMantleVerification> MantleCheck;
     enum class ERadiationVerification
     {
@@ -80,10 +80,6 @@ private:
     bool bVerifyRoute = false;
     bool bVerifyRadiation = false;
     bool bCaptureRadiation = false;
-    bool bVerifyWristTerminal = false;
-    bool bCaptureWristTerminal = false;
-    int TerminalInputStep = 0;
-    float TerminalVerificationSeconds = 0.0f;
     bool bCaptureRoute = false;
     float VerificationSeconds = 0.0f;
     bool bCaptured = false;
@@ -146,6 +142,7 @@ private:
     void ToggleFlashlight();
     void PlayInjuryBreath();
 #if WITH_DEV_AUTOMATION_TESTS
+    friend class UVanguardWristTerminalVerification;
     friend class UVanguardMantleVerification;
     friend class UVanguardFallVerification;
 #endif

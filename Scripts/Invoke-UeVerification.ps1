@@ -105,7 +105,7 @@ $scenarios = @{
         Map = "${vanguard}?Chamber=Passage?RadiationRun=1"
         Flag = '-VerifyWristTerminal'
         CaptureFlag = '-CaptureWristTerminal'
-        Success = $wristSuccess
+        Success = $wristSuccess + @('Wrist status matched the live exposure dose.', 'Wrist archive after checkpoint recovery: one forecast record.')
     }
     WristTerminalNegative = @{
         Map = "${vanguard}?Chamber=Vanguard"
