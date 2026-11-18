@@ -1,0 +1,46 @@
+#pragma once
+
+#include "Player/AbandonedCharacter.h"
+#include "PuzzleCharacter.generated.h"
+
+class ADev20Actor;
+class APuzzleCube;
+class UBoxComponent;
+class UCubePlacementComponent;
+class UObjectCarryComponent;
+
+UCLASS(Abstract)
+class APuzzleCharacter : public AAbandonedCharacter
+{
+    GENERATED_BODY()
+
+public:
+    APuzzleCharacter();
+    APuzzleCube* GetHeldCube() const;
+    ADev20Actor* GetHeldDev20() const;
+    const TCHAR* GetPlacementPrompt() const;
+    const UCubePlacementComponent& GetPlacementPreview() const { return *Placement; }
+    void ReleaseHeldObject();
+
+protected:
+    void BindAdditionalInput(UEnhancedInputComponent& Input) override;
+    void Tick(float DeltaSeconds) override;
+    void UnPossessed() override;
+    void EndPlay(const EEndPlayReason::Type Reason) override;
+    virtual void Interact();
+    void ResetChamber();
+    UPrimitiveComponent* TraceInteractable() const;
+    UBoxComponent* GetHeldBody() const;
+    bool GrabBody(UBoxComponent& Body, float MassKg);
+    bool TransitHeldBody(const FTransform& Through);
+
+private:
+    FVector InteractionRayEnd() const;
+    void ThrowHeldObject();
+
+    UPROPERTY()
+    TObjectPtr<UObjectCarryComponent> Grip;
+
+    UPROPERTY(VisibleAnywhere)
+    TObjectPtr<UCubePlacementComponent> Placement;
+};

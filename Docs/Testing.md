@@ -37,11 +37,13 @@ pwsh -NoProfile -File Scripts/Invoke-UeVerification.ps1 -EngineRoot 'C:\Program 
 
 ### Остальные сценарии и ручной запуск
 
-Для проверки общей переноски на стендах выполните в PowerShell 7:
+Для проверки постановки, переноски и команд устройств в камерах и на трёх стендах выполните команду в PowerShell 7.
 
 ```powershell
-./Scripts/Invoke-UeVerification.ps1 -EngineRoot $ueRoot -Scenario Training,DoorClamp,Optics,FreeReflector,Gravity,Portals,Dev20,Dev20Recovery
+./Scripts/Invoke-UeVerification.ps1 -EngineRoot $ueRoot -Scenario Training,ChamberHints,PlateBalance,ParallelCircuit,DoorClamp,Optics,FreeReflector,Gravity,Portals,Dev20,Dev20Recovery,EntryCourse
 ```
+
+`Training` сверяет положение призрака с фактической постановкой на плиту и куб, проверяет бросок и сброс. `ChamberHints` проверяет чтение терминала и сброс страниц, `PlateBalance` проходит два решения на трёх плитах, а `ParallelCircuit` проверяет снятие нагрузки и восстановление питания.
 
 В сценарии `Portals` тест увеличивает физическую массу удерживаемого куба выше предела захвата непосредственно перед переносом. После отказа сверяются поза, линейная и угловая скорости куба, исходная реакция на столкновение с игроком и скорость ходьбы. Второй случай удаляет временный куб во время удержания и проверяет снятие нагрузки в том же кадре. Затем тот же стенд проверяет успешный перенос с предметом в руках.
 

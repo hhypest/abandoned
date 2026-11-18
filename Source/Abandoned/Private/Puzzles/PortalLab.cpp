@@ -1133,18 +1133,17 @@ void APortalLabGameMode::Verify(APortalLabCharacter& Player, float Delta)
 }
 #endif
 
-void APortalLabCharacter::ResetChamber()
+void APortalLabGameMode::ResetPuzzle(APuzzleCharacter& Player)
 {
-    if (APortalLabGameMode* Lab = GetWorld()->GetAuthGameMode<APortalLabGameMode>())
+    if (auto* LabPlayer = Cast<APortalLabCharacter>(&Player))
     {
-        Lab->ResetLab(*this);
+        ResetLab(*LabPlayer);
     }
 }
 
-bool APortalLabCharacter::InteractWithDevice(UPrimitiveComponent& Target)
+bool APortalLabGameMode::UseDevice(APuzzleCharacter&, UPrimitiveComponent& Target)
 {
-    APortalLabGameMode* Lab = GetWorld()->GetAuthGameMode<APortalLabGameMode>();
-    return Lab && Lab->UseConsole(Target);
+    return UseConsole(Target);
 }
 
 void APortalLabHUD::DrawHUD()

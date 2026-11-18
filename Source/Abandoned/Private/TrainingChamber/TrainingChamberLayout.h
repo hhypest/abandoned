@@ -123,15 +123,6 @@ public:
     float PlayerMassKg = 85.0f;
 
     UPROPERTY(Config)
-    float ThrowImpulse = 4200.0f;
-
-    UPROPERTY(Config)
-    FLinearColor PlacementGhostTint = FLinearColor(0.10, 0.82, 1.0, 0.42);
-
-    UPROPERTY(Config)
-    FLinearColor BlockedGhostTint = FLinearColor(0.90, 0.10, 0.14, 0.48);
-
-    UPROPERTY(Config)
     FSceneBlock ExitZone;
 
     UPROPERTY(Config)
@@ -162,7 +153,7 @@ public:
             FMath::IsFinite(PlateMaximumMassKg) && PlateMaximumMassKg >= PlateActivationMassKg)) &&
             (!bRequiresButton || Button.IsValid()) && (!bRequiresStack || StackZone.IsValid()) &&
             FMath::IsFinite(PlayerMassKg) && PlayerMassKg > 0.0f &&
-            FMath::IsFinite(ThrowImpulse) && ThrowImpulse > 0.0f && !CubeSpawns.IsEmpty() &&
+            !CubeSpawns.IsEmpty() &&
             !CubeSpawns.ContainsByPredicate([this](const FTrainingCubeSpawn& Cube)
             {
                 return Cube.Center.ContainsNaN() || !GetCubeBounds().IsInside(Cube.Center) ||

@@ -910,25 +910,25 @@ void APowerLabCharacter::Interact()
     Super::Interact();
 }
 
-bool APowerLabCharacter::InteractWithDevice(UPrimitiveComponent& Target)
+bool APowerLabGameMode::UseDevice(APuzzleCharacter& Player, UPrimitiveComponent& Target)
 {
-    APowerLabGameMode* Lab = GetWorld()->GetAuthGameMode<APowerLabGameMode>();
-    return Lab && Lab->Interact(*this, Target);
+    auto* LabPlayer = Cast<APowerLabCharacter>(&Player);
+    return LabPlayer && Interact(*LabPlayer, Target);
 }
 
-void APowerLabCharacter::PlaceHeldDevice(UBoxComponent& Body)
+void APowerLabGameMode::PlaceDevice(APuzzleCharacter& Player, UBoxComponent& Body)
 {
-    if (APowerLabGameMode* Lab = GetWorld()->GetAuthGameMode<APowerLabGameMode>(); Lab && &Body == Lab->Mirror)
+    if (auto* LabPlayer = Cast<APowerLabCharacter>(&Player); LabPlayer && &Body == Mirror)
     {
-        Lab->PlaceMirror(*this);
+        PlaceMirror(*LabPlayer);
     }
 }
 
-void APowerLabCharacter::ResetChamber()
+void APowerLabGameMode::ResetPuzzle(APuzzleCharacter& Player)
 {
-    if (APowerLabGameMode* Lab = GetWorld()->GetAuthGameMode<APowerLabGameMode>())
+    if (auto* LabPlayer = Cast<APowerLabCharacter>(&Player))
     {
-        Lab->ResetLab(*this);
+        ResetLab(*LabPlayer);
     }
 }
 

@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "TrainingChamberLayout.h"
+#include "Infrastructure/Puzzles/CubePlacementComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -121,7 +122,7 @@ void ATrainingChamberGameMode::VerifyBalanceChamber(ATrainingChamberCharacter& P
         }
         break;
     case 3:
-        if (Player.PreviewSupport.Get() == Plates[2].Body && !Player.bPreviewBlocked &&
+        if (Player.GetPlacementPreview().GetPreviewSupport() == Plates[2].Body && !Player.GetPlacementPreview().IsPreviewBlocked() &&
             Cubes[2]->GetBody()->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(28.0))
         {
             Player.Interact();
