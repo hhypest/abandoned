@@ -58,6 +58,14 @@ pwsh -NoProfile -File Scripts/Invoke-UeVerification.ps1 -EngineRoot 'C:\Program 
 ./Scripts/Invoke-UeVerification.ps1 -EngineRoot $ueRoot -Scenario Training,ChamberHints,PlateBalance,ParallelCircuit,DoorClamp,Optics,FreeReflector,Gravity,Portals,Dev20,Dev20Recovery,EntryCourse
 ```
 
+Чтобы проверить выгрузку игровых объектов и восстановление кампании, запустите три сценария.
+
+```powershell
+./Scripts/Invoke-UeVerification.ps1 -EngineRoot $ueRoot -Scenario WorldLifetime,EntryCourse,EntryCheckpoint
+```
+
+`WorldLifetime` использует консольные команды UE после инициализации Vulkan. Для каждого мира в поле `WorldEvents` отчёта сохраняются класс загруженного GameMode, число живых экземпляров проверяемых классов и события выгрузки. Пропуск очистки, лишний владелец или неполная последовательность завершают проверку ошибкой. [Владельцы и результаты приёмки](AuditProgress.md#приёмка-a-03)
+
 Для учебного стенда запустите оба сценария с отдельными профилями.
 
 ```powershell
