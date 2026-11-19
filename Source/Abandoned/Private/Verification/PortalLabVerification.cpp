@@ -9,6 +9,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Player/MovementProfile.h"
+#include "ProfilingDebugging/CsvProfiler.h"
 #include "Puzzles/PortalLab.h"
 #include "Puzzles/PortalLabLayout.h"
 #include "Puzzles/PuzzleCube.h"
@@ -37,6 +38,16 @@ struct FPortalLabFixture
     APuzzleCube& Cube(int32 Index) const { return *Lab.Cubes[Index]; }
     const FPortalMouth& Mouth(int32 Index) const { return Lab.Mouths[Index]; }
     const UStaticMeshComponent& Window(int32 Index) const { return *Lab.RoomView->Windows[Index]; }
+    void HoldPortalForProfile(bool bFreezeCapture)
+    {
+        // Keep the powered aperture and its last verified image in the same scene.
+        Lab.RoomView->SetVisibility(!bFreezeCapture, false);
+        UE_LOG(LogPortalLabTest, Display, TEXT("Portal profile ready: %s, target %dx%d, view %s."),
+            bFreezeCapture ? TEXT("frozen") : TEXT("active"), Lab.RoomView->TextureTarget->SizeX,
+            Lab.RoomView->TextureTarget->SizeY, *Controller.GetControlRotation().ToString());
+        CSV_EVENT_GLOBAL(TEXT("PortalProfileReady"));
+    }
+
     int32 BlockedTransfers() const { return Lab.Transit->GetStats().Blocked; }
 
     void Place(const FTransform& Pose)
@@ -280,6 +291,12 @@ void UPortalLabVerification::Check(FPortalLabFixture& Fixture)
             if (Sample.R <= 0.0f || Sample.R <= Sample.B)
             {
                 Fail(TEXT("The aperture capture did not contain the destination's warm wall panel"));
+                return;
+            }
+            if (FParse::Param(FCommandLine::Get(), TEXT("ProfilePortal")))
+            {
+                Fixture.HoldPortalForProfile(FParse::Param(FCommandLine::Get(), TEXT("FreezePortalCapture")));
+                SetComponentTickEnabled(false);
                 return;
             }
             Next(EPhase::LaunchCube, TEXT("Powered entrance captured the linked room."));

@@ -10,6 +10,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Player/MovementProfile.h"
+#include "ProfilingDebugging/CsvProfiler.h"
 #include "Verification/VanguardMantleVerification.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVanguardRouteTest, Log, All);
@@ -64,6 +65,14 @@ void UVanguardRouteVerification::Finish(bool bPassed)
 {
     bFinished = true;
     FlashlightKey.Release();
+#if CSV_PROFILER
+    if (bPassed && FParse::Param(FCommandLine::Get(), TEXT("ExitAfterCsvProfiling")) && FCsvProfiler::Get()->IsCapturing())
+    {
+        // The profiler requests exit after it has written the final gameplay frames to disk.
+        FCsvProfiler::Get()->EndCapture();
+        return;
+    }
+#endif
     FPlatformMisc::RequestExitWithStatus(false, bPassed ? 0 : 1);
 }
 
