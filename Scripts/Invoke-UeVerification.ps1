@@ -45,6 +45,15 @@ if ($version.ProductMajorPart -ne 5 -or $version.ProductMinorPart -ne 7) {
 $entry = '/Engine/Maps/Entry'
 $controlMap = "${entry}?game=/Script/Engine.GameModeBase"
 $fieldProbe = 'rhi.DumpResourceMemory all Name=PhysicsField_ClipmapBuffer'
+$lightmapProbe = 'rhi.DumpResourceMemory all Name=VolumetricLightmap'
+# Sample the initial world and each settled replacement in the same process.
+$controlReloads = 12
+$travelCommands = @("100:$lightmapProbe", "120:$fieldProbe")
+for ($i = 1; $i -le $controlReloads; $i++) {
+    $travelCommands += "$($i * 120 + 30):open $controlMap", "$($i * 120 + 115):$lightmapProbe"
+}
+$lastProbeFrame = ($controlReloads + 1) * 120
+$travelCommands += "${lastProbeFrame}:$fieldProbe", "$($lastProbeFrame + 60):quit"
 $dimensions = $Resolution.Split('x')
 $expectedRenderer = [ordered]@{
     'r.DynamicGlobalIlluminationMethod' = 1
@@ -94,10 +103,11 @@ $scenarios = @{
     }
     VulkanTravelControl = @{
         Map = $controlMap
-        ControlVisits = 3
+        ControlVisits = $controlReloads + 1
         ExpectedEmptyFieldProbes = 2
-        Flag = "-csvExecCmds=120:$fieldProbe,150:open $controlMap,240:open $controlMap,360:$fieldProbe,420:quit"
-        ExecCommand = 'CsvProfile FRAMES=450'
+        LightmapsPerWorld = 9 # The cooked Entry map's eight brick textures and its indirection texture.
+        Flag = "-csvExecCmds=$($travelCommands -join ',')"
+        ExecCommand = "fx.Niagara.AsyncGpuTrace.GlobalSdfEnabled,r.AllowStaticLighting,CsvProfile FRAMES=$($lastProbeFrame + 90)"
         Success = @('CsvExecCommand : quit', 'LogExit: Exiting.')
     }
     VanguardRoute = @{
@@ -374,6 +384,13 @@ function Invoke-Scenario($name, $definition, $profile) {
             if ($line -match "LogLoad: Game class is '([^']+)'") { $Matches[1] }
         })
         $result.FieldProbes = @($lines -match 'RHIResources: Shown .*PhysicsField_ClipmapBuffer')
+        if ($definition.LightmapsPerWorld) {
+            $result.LightmapCounts = @(foreach ($line in $lines) {
+                if ($line -match 'RHIResources: Shown (\d+) entries with name VolumetricLightmap\.') {
+                    [int]$Matches[1]
+                }
+            })
+        }
     }
     if ($definition.Chambers) {
         $result.Chambers = @(foreach ($line in $lines) {
@@ -418,6 +435,9 @@ function Invoke-Scenario($name, $definition, $profile) {
     } elseif ($definition.ExpectedEmptyFieldProbes -and ($result.FieldProbes.Count -ne $definition.ExpectedEmptyFieldProbes -or
         @($result.FieldProbes -notmatch 'RHIResources: Shown 0 entries with name PhysicsField_ClipmapBuffer\.').Count -gt 0)) {
         $result.Reason = 'Expected two empty GPU physics-field inventories across the control map reloads.'
+    } elseif ($definition.LightmapsPerWorld -and ($result.LightmapCounts.Count -ne $definition.ControlVisits -or
+        @($result.LightmapCounts -ne $definition.LightmapsPerWorld).Count -gt 0)) {
+        $result.Reason = "Expected $($definition.LightmapsPerWorld) live volumetric lightmap textures in each of $($definition.ControlVisits) worlds. Observed: $($result.LightmapCounts -join ', ')"
     } elseif ($definition.CheckPortalFrame -and (!$result.FirstVisiblePortal -or !$result.FirstVisiblePortal.WarmWall -or
         $result.FirstVisiblePortal.Width -ne [int]$dimensions[0] -or $result.FirstVisiblePortal.Height -ne [int]$dimensions[1])) {
         $result.Reason = 'The first visible portal frame was not confirmed.'
