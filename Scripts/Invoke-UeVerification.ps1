@@ -1,9 +1,12 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Editor')]
 param(
-    [Parameter(Mandatory)]
+    [Parameter(Mandatory, ParameterSetName = 'Editor')]
     [string]$EngineRoot,
 
-    [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime',
+    [Parameter(Mandatory, ParameterSetName = 'Package')]
+    [string]$PackageRoot,
+
+    [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
                  'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
@@ -21,18 +24,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$engine = (Resolve-Path -LiteralPath $EngineRoot).Path
-$editor = Join-Path $engine 'Engine/Binaries/Win64/UnrealEditor.exe'
-$project = Join-Path $repo 'Abandoned.uproject'
-if (!(Test-Path -LiteralPath $editor -PathType Leaf)) {
-    throw "UnrealEditor.exe was not found at $editor"
+$target = $PSCmdlet.ParameterSetName
+if ($target -eq 'Package') {
+    $workingDir = (Resolve-Path -LiteralPath $PackageRoot).Path
+    # The bootstrap executable starts a child. Wait for the actual game and its RHI shutdown.
+    $executable = Join-Path $workingDir 'Abandoned/Binaries/Win64/Abandoned.exe'
+    $screenshotPlatform = 'Windows'
+} else {
+    $engine = (Resolve-Path -LiteralPath $EngineRoot).Path
+    $workingDir = $repo
+    $executable = Join-Path $engine 'Engine/Binaries/Win64/UnrealEditor.exe'
+    $screenshotPlatform = 'WindowsEditor'
 }
-$buildVersion = Get-Content -LiteralPath (Join-Path $engine 'Engine/Build/Build.version') -Raw | ConvertFrom-Json
-if ($buildVersion.MajorVersion -ne 5 -or $buildVersion.MinorVersion -ne 7) {
-    throw 'This project requires Unreal Engine 5.7.'
-}
+if (!(Test-Path -LiteralPath $executable -PathType Leaf)) { throw "Missing executable: $executable" }
 
 $entry = '/Engine/Maps/Entry'
+$controlMap = "${entry}?game=/Script/Engine.GameModeBase"
+$fieldProbe = 'rhi.DumpResourceMemory all Name=PhysicsField_ClipmapBuffer'
 $dimensions = $Resolution.Split('x')
 $expectedRenderer = [ordered]@{
     'r.DynamicGlobalIlluminationMethod' = 1
@@ -42,6 +50,7 @@ $expectedRenderer = [ordered]@{
     'r.Nanite.ProjectEnabled' = 1
     'r.Shadow.Virtual.Enable' = 1
     'r.AntiAliasingMethod' = 4
+    'r.PhysicsField.EnableField' = 0
     'sg.GlobalIlluminationQuality' = 2
     'sg.ReflectionQuality' = 2
 }
@@ -72,6 +81,21 @@ $fallsSuccess = @('Vanguard fall verified at 250 cm.', 'Passage fall 300.0 cm: m
                   'Vanguard minor injury slowed ground movement, then restored normal speed.', 'Vanguard fall verified at 300 cm.',
                   'Passage fall 325.0 cm: fatal.', 'Passage checkpoint recovery: Balance (fall).', 'Balance chamber verification passed')
 $scenarios = @{
+    VulkanExitControl = @{
+        Map = $controlMap
+        ControlVisits = 1
+        Flag = '-csvExecCmds=120:quit'
+        ExecCommand = 'CsvProfile FRAMES=150'
+        Success = @("LogLoad: Game class is 'GameModeBase'", 'LogExit: Exiting.')
+    }
+    VulkanTravelControl = @{
+        Map = $controlMap
+        ControlVisits = 3
+        ExpectedEmptyFieldProbes = 2
+        Flag = "-csvExecCmds=120:$fieldProbe,150:open $controlMap,240:open $controlMap,360:$fieldProbe,420:quit"
+        ExecCommand = 'CsvProfile FRAMES=450'
+        Success = @('CsvExecCommand : quit', 'LogExit: Exiting.')
+    }
     VanguardRoute = @{
         Map = "${vanguard}?Chamber=Passage"
         Flag = '-VerifyVanguard'
@@ -276,10 +300,14 @@ function Invoke-Scenario($name, $definition, $profile) {
     }
 
     $execCommands = (@($renderQueries, $definition.ExecCommand) | Where-Object { $_ }) -join ','
-    $start = [System.Diagnostics.ProcessStartInfo]::new($editor)
+    $start = [System.Diagnostics.ProcessStartInfo]::new($executable)
     $start.UseShellExecute = $false
-    $start.WorkingDirectory = $repo
-    foreach ($arg in @($project, $definition.Map, $definition.Flag, '-game', '-vulkan', '-unattended',
+    $start.WorkingDirectory = $workingDir
+    if ($target -eq 'Editor') { $start.ArgumentList.Add((Join-Path $repo 'Abandoned.uproject')) }
+    # Exercise the configured startup map for the packaged campaign, including checkpoint restore.
+    if ($target -eq 'Editor' -or $definition.Map -ne $entry) { $start.ArgumentList.Add($definition.Map) }
+    if ($target -eq 'Editor') { $start.ArgumentList.Add('-game') }
+    foreach ($arg in @($definition.Flag, '-vulkan', '-unattended',
                        '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])",
                        "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$execCommands")) {
         $start.ArgumentList.Add($arg)
@@ -317,15 +345,32 @@ function Invoke-Scenario($name, $definition, $profile) {
     }
 
     $lines = Get-Content -LiteralPath $log
+    $versionLine = $lines -match '^LogInit: Engine Version:' | Select-Object -First 1
+    $result.Unreal = if ($versionLine -match 'Engine Version: (\d+\.\d+\.\d+)') { $Matches[1] }
+    $result.DevelopmentBuild = [bool]($lines -match 'LogInit: Build Configuration: Development\s*$')
+    $result.ShutdownComplete = [bool]($lines -match 'LogExit: Exiting\.')
+    $result.AllocatorWarnings = [ordered]@{
+        PooledBuffer = @($lines -match 'LogVulkanRHI: Warning: .*has unfreed PooledBuffer resources').Count
+        Image = @($lines -match 'LogVulkanRHI: Warning: .*has unfreed Image resources').Count
+        BufferNotReleased = @($lines -match 'LogVulkanRHI: Warning: Suballocation\(s\) for Buffer').Count
+        LeakEntries = @($lines -match 'LogVulkanRHI: Warning:\s+\*\* LEAK ').Count
+    }
     $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6')
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1
     if ($gpuLine -match 'DeviceName:\s*(.+)$') { $result.Gpu = $Matches[1].Trim() }
-    $result.RendererSettings = @($lines -match '(?:r\.(?:DynamicGlobalIlluminationMethod|ReflectionMethod|GenerateMeshDistanceFields|Lumen.HardwareRayTracing|Nanite.ProjectEnabled|Shadow.Virtual.Enable|AntiAliasingMethod)|sg\.(?:GlobalIlluminationQuality|ReflectionQuality))\s*=')
+    $rendererPattern = ($expectedRenderer.Keys | ForEach-Object { [regex]::Escape($_) }) -join '|'
+    $result.RendererSettings = @($lines -match "(?:$rendererPattern)\s*=")
     $result.RendererMismatches = @($expectedRenderer.Keys | Where-Object {
         $pattern = [regex]::Escape($_) + '\s*=\s*"?' + $expectedRenderer[$_] + '"?(?:\s|$)'
         !($result.RendererSettings -match $pattern)
     })
     $result.RhiWarnings = @($lines -match 'Log(?:VulkanRHI|RHI): Warning:')
+    if ($definition.ControlVisits) {
+        $result.ControlModes = @(foreach ($line in $lines) {
+            if ($line -match "LogLoad: Game class is '([^']+)'") { $Matches[1] }
+        })
+        $result.FieldProbes = @($lines -match 'RHIResources: Shown .*PhysicsField_ClipmapBuffer')
+    }
     if ($definition.Chambers) {
         $result.Chambers = @(foreach ($line in $lines) {
             if ($line -match 'LogTrainingChamber: Display: Training chamber ready\. (\w+),') { $Matches[1] }
@@ -335,11 +380,11 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.WorldEvents = @(Read-WorldLifetimeEvents $lines)
     }
     if ($definition.CheckPortalFrame) {
-        $firstFrame = Join-Path $profile 'Saved/Screenshots/WindowsEditor/PortalLab-FirstVisible.png'
+        $firstFrame = Join-Path $profile "Saved/Screenshots/$screenshotPlatform/PortalLab-FirstVisible.png"
         if (Test-Path -LiteralPath $firstFrame -PathType Leaf) {
             $result.FirstVisiblePortal = & (Join-Path $PSScriptRoot 'Read-PortalFrame.ps1') -Path $firstFrame
         }
-        $frame = Join-Path $profile 'Saved/Screenshots/WindowsEditor/PortalLab-Active.png'
+        $frame = Join-Path $profile "Saved/Screenshots/$screenshotPlatform/PortalLab-Active.png"
         if (Test-Path -LiteralPath $frame -PathType Leaf) {
             $result.DisplayedPortal = & (Join-Path $PSScriptRoot 'Read-PortalFrame.ps1') -Path $frame
         }
@@ -351,7 +396,11 @@ function Invoke-Scenario($name, $definition, $profile) {
     })
 
     # Use the same verdict for the positive cases and the negative control.
-    if (!$result.Vulkan) {
+    if ($result.Unreal -notlike '5.7.*' -or !$result.DevelopmentBuild) {
+        $result.Reason = 'UE 5.7 Development was not confirmed in the game log.'
+    } elseif (!$result.ShutdownComplete) {
+        $result.Reason = 'Unreal did not log completion of shutdown.'
+    } elseif (!$result.Vulkan) {
         $result.Reason = 'Vulkan SM6 was not confirmed in the game log.'
     } elseif ($result.RendererMismatches.Count -gt 0) {
         $result.Reason = "Renderer profile was not confirmed: $($result.RendererMismatches -join ', ')"
@@ -359,6 +408,12 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = $result.FailureMarkers[0]
     } elseif ($result.ExitCode -ne 0) {
         $result.Reason = "Unreal exited with code $($result.ExitCode)."
+    } elseif ($definition.ControlVisits -and ($result.ControlModes.Count -ne $definition.ControlVisits -or
+        @($result.ControlModes -ne 'GameModeBase').Count -gt 0)) {
+        $result.Reason = "Unexpected control worlds: $($result.ControlModes -join ', ')"
+    } elseif ($definition.ExpectedEmptyFieldProbes -and ($result.FieldProbes.Count -ne $definition.ExpectedEmptyFieldProbes -or
+        @($result.FieldProbes -notmatch 'RHIResources: Shown 0 entries with name PhysicsField_ClipmapBuffer\.').Count -gt 0)) {
+        $result.Reason = 'Expected two empty GPU physics-field inventories across the control map reloads.'
     } elseif ($definition.CheckPortalFrame -and (!$result.FirstVisiblePortal -or !$result.FirstVisiblePortal.WarmWall -or
         $result.FirstVisiblePortal.Width -ne [int]$dimensions[0] -or $result.FirstVisiblePortal.Height -ne [int]$dimensions[1])) {
         $result.Reason = 'The first visible portal frame was not confirmed.'
@@ -387,7 +442,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     if ($definition.ExpectedError) {
         $expected = [regex]::Escape($definition.ExpectedError)
         $unexpected = $result.FailureMarkers -notmatch "$expected|$exitRequestPattern"
-        if ($result.Outcome -eq 'Failed' -and $result.Vulkan -and $result.RendererMismatches.Count -eq 0 -and $result.ExitCode -in @(0, 1) -and
+        if ($result.Outcome -eq 'Failed' -and $result.ShutdownComplete -and $result.DevelopmentBuild -and $result.Unreal -like '5.7.*' -and $result.Vulkan -and $result.RendererMismatches.Count -eq 0 -and $result.ExitCode -in @(0, 1) -and
             $result.FailureMarkers -match $expected -and $result.FailureMarkers -match $exitRequestPattern -and
             !$unexpected -and $result.SuccessMarkers.Count -eq 0) {
             $result.Outcome = 'ExpectedFailure'
@@ -419,7 +474,10 @@ $results = @(foreach ($name in ($Scenario | Select-Object -Unique)) {
 $report = [ordered]@{
     Commit = $commit
     TrackedChanges = [bool]$trackedChanges
-    Unreal = "$($buildVersion.MajorVersion).$($buildVersion.MinorVersion).$($buildVersion.PatchVersion)"
+    Unreal = ($results.Unreal | Where-Object { $_ } | Select-Object -Unique) -join ', '
+    Target = $target
+    Executable = $executable
+    ExecutableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
     OperatingSystem = $PSVersionTable.OS
     Rhi = 'VULKAN_SM6'
     Resolution = $Resolution

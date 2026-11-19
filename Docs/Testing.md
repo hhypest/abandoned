@@ -35,6 +35,23 @@ pwsh -NoProfile -File Scripts/Invoke-UeVerification.ps1 -EngineRoot 'C:\Program 
 
 Успех требует Vulkan SM6, кода `0`, всех ожидаемых маркеров и отсутствия ошибок. Отрицательный контроль запускает проверку терминала сразу на станции с пустым архивом. Он должен зарегистрировать предусмотренный провал с `ExpectedFailure`, даже если Unreal завершится с кодом `0`. Таймаут, посторонняя ошибка, отсутствие маркеров или неожиданное поведение отрицательного контроля дают `Failed` и ненулевой код запускателя. GitHub Actions выполняет автономные C++20-тесты и Git LFS. UE-прогон выполняется локально на доверенной Windows-машине с Vulkan.
 
+### Упакованная игра Win64 Development
+
+Из корня рабочей копии с загруженными Git LFS-ассетами выполните в PowerShell 7 следующие команды. Укажите путь к своей установке UE 5.7 в `$ueRoot`. AutomationTool собирает игру и готовит контент для Windows. Готовая папка `Windows` содержит запускатель `Abandoned.exe` и контейнеры контента. [Этапы BuildCookRun в UE 5.7](https://dev.epicgames.com/documentation/en-us/unreal-engine/build-operations-cooking-packaging-deploying-and-running-projects-in-unreal-engine?application_version=5.7)
+
+```powershell
+$ueRoot = 'C:\Program Files\Epic Games\UE_5.7'
+$project = (Resolve-Path ./Abandoned.uproject).Path
+$archive = Join-Path $PWD 'Saved/A07Package'
+& "$ueRoot/Engine/Build/BatchFiles/RunUAT.bat" BuildCookRun "-project=$project" -platform=Win64 -clientconfig=Development -build -cook -stage -pak -iostore -package -archive "-archivedirectory=$archive" -nop4 -unattended -utf8output
+if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
+./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Scenario EntryCourse,EntryCheckpoint,VulkanExitControl,VulkanTravelControl,Gravity
+```
+
+Запускатель ждёт завершения игрового процесса в `Abandoned/Binaries/Win64`. Оба сценария кампании стартуют со штатной карты пакета и получают отдельные каталоги сохранений. Путь и SHA‑256 исполняемого файла, фактическая версия UE, GPU, маркеры прохождения и код завершения записываются в `Saved/UeVerification/<прогон>/report.json`. Поле `Commit` относится к рабочей копии запускателя. Для повторной проверки сохраняйте весь каталог пакета вместе с журналом сборки.
+
+`VulkanExitControl` открывает карту Entry со стандартным `GameModeBase` и завершает игру. `VulkanTravelControl` дважды переоткрывает эту же карту в одном процессе. До и после переходов он запрашивает у RHI число живых `PhysicsField_ClipmapBuffer`. При текущем профиле оба замера должны дать ноль. В `AllocatorWarnings` указано число диагностик аллокатора, а в `RhiWarnings` сохранены исходные сообщения. Игровой результат и освобождение GPU-памяти оцениваются отдельно.
+
 ### Остальные сценарии и ручной запуск
 
 Для регрессии сквозного маршрута, сохранений и переноса DEV‑20 используйте отдельный процесс Vulkan для каждого сценария.
