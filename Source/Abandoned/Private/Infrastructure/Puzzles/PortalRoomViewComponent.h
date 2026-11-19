@@ -1,11 +1,22 @@
 #pragma once
 
 #include "Components/SceneCaptureComponent2D.h"
+#include "Components/StaticMeshComponent.h"
 #include "PortalRoomViewComponent.generated.h"
 
 class APlayerController;
 class UStaticMesh;
-class UStaticMeshComponent;
+
+// A powered aperture must draw the linked room on its first visible frame. Keep
+// precaching its material, but submit this mesh even if the first draw must wait for a PSO.
+UCLASS()
+class UPortalApertureMeshComponent final : public UStaticMeshComponent
+{
+    GENERATED_BODY()
+
+protected:
+    virtual bool UsePSOPrecacheRenderProxyDelay() const override { return false; }
+};
 
 UCLASS()
 class UPortalRoomViewComponent final : public USceneCaptureComponent2D

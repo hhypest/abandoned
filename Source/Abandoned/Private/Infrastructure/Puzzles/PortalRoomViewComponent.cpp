@@ -68,7 +68,7 @@ void UPortalRoomViewComponent::InitializeWindows(UStaticMesh& Plane, const FVect
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(Windows); ++Index)
     {
         const FTransform& Pose = Poses[Index];
-        auto* Window = NewObject<UStaticMeshComponent>(GetOwner());
+        auto* Window = NewObject<UPortalApertureMeshComponent>(GetOwner());
         GetOwner()->AddInstanceComponent(Window);
         // Apertures stay in the room while the capture root follows the linked camera.
         Window->SetupAttachment(this);
@@ -158,12 +158,6 @@ void UPortalRoomViewComponent::UpdateView(const APlayerController* Viewer)
     SetWorldLocationAndRotation(Through.TransformPosition(Eye), Through.GetRotation() * Rotation);
     if (!Windows[Visible]->IsVisible())
     {
-        // Cooked builds can defer this mesh's scene proxy until its material PSOs are ready.
-        // Keep the aperture hidden during that work and capture from the current eye when it is ready.
-        if (Windows[Visible]->IsPSOPrecaching())
-        {
-            return;
-        }
         // Submit the linked view before exposing its surface in the main viewport.
         CaptureScene();
         Windows[Visible]->SetVisibility(true);
