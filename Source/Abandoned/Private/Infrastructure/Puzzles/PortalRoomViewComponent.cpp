@@ -68,7 +68,7 @@ void UPortalRoomViewComponent::InitializeWindows(UStaticMesh& Plane, const FVect
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(Windows); ++Index)
     {
         const FTransform& Pose = Poses[Index];
-        auto* Window = NewObject<UStaticMeshComponent>(GetOwner());
+        auto* Window = NewObject<UPortalApertureMeshComponent>(GetOwner());
         GetOwner()->AddInstanceComponent(Window);
         // Apertures stay in the room while the capture root follows the linked camera.
         Window->SetupAttachment(this);
