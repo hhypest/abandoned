@@ -369,6 +369,9 @@ function Invoke-Scenario($name, $definition, $profile) {
         BufferNotReleased = @($lines -match 'LogVulkanRHI: Warning: Suballocation\(s\) for Buffer').Count
         LeakEntries = @($lines -match 'LogVulkanRHI: Warning:\s+\*\* LEAK ').Count
     }
+    $checkAllocatorOnExit = $target -eq 'Package' -and $name -in @(
+        'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
+    )
     $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6')
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1
     if ($gpuLine -match 'DeviceName:\s*(.+)$') { $result.Gpu = $Matches[1].Trim() }
@@ -429,6 +432,8 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = $result.FailureMarkers[0]
     } elseif ($result.ExitCode -ne 0) {
         $result.Reason = "Unreal exited with code $($result.ExitCode)."
+    } elseif ($checkAllocatorOnExit -and ($result.AllocatorWarnings.Values -gt 0)) {
+        $result.Reason = "Vulkan reported unreleased suballocations at shutdown: $($result.AllocatorWarnings | ConvertTo-Json -Compress)"
     } elseif ($definition.ControlVisits -and ($result.ControlModes.Count -ne $definition.ControlVisits -or
         @($result.ControlModes -ne 'GameModeBase').Count -gt 0)) {
         $result.Reason = "Unexpected control worlds: $($result.ControlModes -join ', ')"
