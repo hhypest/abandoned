@@ -1,0 +1,12 @@
+diff --git a/Engine/Source/Runtime/Renderer/Private/SceneTextures.cpp b/Engine/Source/Runtime/Renderer/Private/SceneTextures.cpp
+index a9a073e6c..d57609e14 100644
+--- a/Engine/Source/Runtime/Renderer/Private/SceneTextures.cpp
++++ b/Engine/Source/Runtime/Renderer/Private/SceneTextures.cpp
+@@ -1018,6 +1018,7 @@ void FSceneTextureExtracts::QueueExtractions(FRDGBuilder& GraphBuilder, const FS
+ void FSceneTextureExtracts::Release()
+ {
+ 	Depth = {};
++	PartialDepth = {};
+ 	CustomDepth = {};
+ 	UniformBuffer = {};
+ 	MobileUniformBuffer = {};

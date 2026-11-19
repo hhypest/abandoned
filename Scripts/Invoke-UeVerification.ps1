@@ -364,6 +364,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     $result.DevelopmentBuild = [bool]($lines -match 'LogInit: Build Configuration: Development\s*$')
     $result.ShutdownComplete = [bool]($lines -match 'LogExit: Exiting\.')
     $result.AllocatorWarnings = [ordered]@{
+        DeviceMemoryWarnings = @($lines -match 'LogVulkanRHI: Warning:\s+Found [1-9]\d* unfreed allocations!').Count
         PooledBuffer = @($lines -match 'LogVulkanRHI: Warning: .*has unfreed PooledBuffer resources').Count
         Image = @($lines -match 'LogVulkanRHI: Warning: .*has unfreed Image resources').Count
         BufferNotReleased = @($lines -match 'LogVulkanRHI: Warning: Suballocation\(s\) for Buffer').Count
@@ -433,7 +434,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     } elseif ($result.ExitCode -ne 0) {
         $result.Reason = "Unreal exited with code $($result.ExitCode)."
     } elseif ($checkAllocatorOnExit -and ($result.AllocatorWarnings.Values -gt 0)) {
-        $result.Reason = "Vulkan reported unreleased suballocations at shutdown: $($result.AllocatorWarnings | ConvertTo-Json -Compress)"
+        $result.Reason = "Vulkan reported unreleased memory at shutdown: $($result.AllocatorWarnings | ConvertTo-Json -Compress)"
     } elseif ($definition.ControlVisits -and ($result.ControlModes.Count -ne $definition.ControlVisits -or
         @($result.ControlModes -ne 'GameModeBase').Count -gt 0)) {
         $result.Reason = "Unexpected control worlds: $($result.ControlModes -join ', ')"

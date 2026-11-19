@@ -9,6 +9,21 @@
 3. При добавлении контента проверьте `git lfs status` и обновите реестр исходников, лицензию и атрибуцию. Рабочие FBX, текстуры и архивы можно держать в локальной папке `AssetSource/`.
 4. В PR укажите сценарий проверки, результаты и ограничения. Для карт укажите путь и условия старта. Для графических изменений добавьте кадры из запуска с указанными RHI, GPU и настройками.
 
+## Исправление Renderer в UE 5.7.4
+
+Для упакованной игры используйте исходную сборку UE 5.7.4. В проверенной ревизии Epic `260bb2e1c5610b31c63a36206eedd289409c5f11` функция `FSceneTextureExtracts::Release()` пропускает ссылку на частичную глубину. Из корня Abandoned один раз примените поправку к отдельной рабочей копии исходников движка, подготовленной для сборки. Бинарная установка из Launcher пригодна для разработки, но её готовый модуль Renderer содержит исходное поведение.
+
+```powershell
+$ueRoot = 'C:\src\UnrealEngine-5.7.4'
+$patch = (Resolve-Path ./Scripts/EnginePatches/UE-5.7.4-PartialDepth.patch).Path
+git -C $ueRoot apply --check $patch
+if ($LASTEXITCODE -ne 0) { throw 'Проверьте версию Renderer и наличие исправления.' }
+git -C $ueRoot apply $patch
+if ($LASTEXITCODE -ne 0) { throw 'Не удалось применить исправление Renderer.' }
+```
+
+Затем соберите редактор и игру из этой копии движка. При обновлении UE проверьте освобождение `PartialDepth` в исходниках новой версии и повторите `VulkanExitControl` и `EntryCourse` в пакете. [Протокол Vulkan](Docs/Testing.md#упакованная-игра-win64-development)
+
 ## Проверки перед PR
 
 - GitHub Actions запускает **C++20 and Git LFS** для PR в `main` и изменений в `main`. Проверка сравнивает diff с базой, валидирует указатели и содержимое Git LFS и запускает автономные C++20-тесты под MSVC на Windows.
@@ -20,7 +35,7 @@
 - Когда появится собственная стартовая карта, задайте её в **Project Settings → Maps & Modes**, проверьте состав включённых карт и выполните пробную сборку. Убедитесь, что она открывает игровой маршрут на машине без редактора.
 
   ```powershell
-  $ueRoot = 'C:\Program Files\Epic Games\UE_5.7'
+  $ueRoot = 'C:\src\UnrealEngine-5.7.4'
   $project = (Resolve-Path .\Abandoned.uproject).Path
   $archive = Join-Path (Get-Location).Path 'Artifacts\Win64'
   & "$ueRoot\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun "-project=$project" -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -package -archive "-archivedirectory=$archive"
