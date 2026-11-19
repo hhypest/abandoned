@@ -158,6 +158,12 @@ void UPortalRoomViewComponent::UpdateView(const APlayerController* Viewer)
     SetWorldLocationAndRotation(Through.TransformPosition(Eye), Through.GetRotation() * Rotation);
     if (!Windows[Visible]->IsVisible())
     {
+        // Cooked builds can defer this mesh's scene proxy until its material PSOs are ready.
+        // Keep the aperture hidden during that work and capture from the current eye when it is ready.
+        if (Windows[Visible]->IsPSOPrecaching())
+        {
+            return;
+        }
         // Submit the linked view before exposing its surface in the main viewport.
         CaptureScene();
         Windows[Visible]->SetVisibility(true);
