@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Async/Future.h"
 #include "Application/Expedition/EntryCourse.h"
 
 namespace Abandoned::Infrastructure::Expedition
@@ -10,10 +11,12 @@ class UnrealCheckpointStore final : public Application::Expedition::CheckpointSt
 public:
     Application::Expedition::Checkpoint Read() const override;
     bool Write(Domain::Expedition::Segment Chamber) const override;
+    TSharedFuture<bool> BeginArrival(Domain::Expedition::Segment Chamber) const;
     bool RecordResupply() const;
+    static void WaitForPublication();
 
 private:
-    bool Update(std::optional<Domain::Expedition::Segment> Chamber,
+    TSharedFuture<bool> Update(std::optional<Domain::Expedition::Segment> Chamber,
         std::optional<Domain::Expedition::SuitRecord> Record) const;
 };
 

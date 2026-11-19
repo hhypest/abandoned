@@ -1,4 +1,5 @@
 #include "TrainingChamber.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "TrainingChamberLayout.h"
 #include "Verification/DoorClampVerification.h"
 #include "Verification/ChamberHintsVerification.h"
@@ -140,6 +141,7 @@ void ATrainingChamberGameMode::SelectLayout(const Abandoned::Application::Expedi
 
 void ATrainingChamberGameMode::SaveEntryCheckpoint()
 {
+    TRACE_CPUPROFILER_EVENT_SCOPE(Training_SaveEntryCheckpoint);
     if (bDev20Run)
     {
         return;
@@ -154,10 +156,9 @@ void ATrainingChamberGameMode::SaveEntryCheckpoint()
     }
 #endif
     if (GetWorld()->WorldType == EWorldType::Game &&
-        !Abandoned::Application::Expedition::RecordArrival(Course, UnrealCheckpointStore{}))
+        Abandoned::Application::Expedition::RequiresArrivalCheckpoint(Course))
     {
-        bCheckpointWriteFailed = true;
-        UE_LOG(LogTrainingChamber, Warning, TEXT("Could not save the entry checkpoint. Previous data preserved."));
+        ArrivalWrite = UnrealCheckpointStore{}.BeginArrival(Course.Current);
     }
 }
 
@@ -180,6 +181,7 @@ void ATrainingChamberGameMode::AdvanceCourse(const ATrainingChamberCharacter& Pl
 
 void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
+    TRACE_CPUPROFILER_EVENT_SCOPE(Training_InitGame);
     Super::InitGame(MapName, Options, ErrorMessage);
     if (!ErrorMessage.IsEmpty())
     {
@@ -312,9 +314,11 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
 
     for (const FSceneLight& Light : Layout->Lights)
     {
+        TRACE_CPUPROFILER_EVENT_SCOPE(Training_AddLight);
         Abandoned::Scene::AddLight(World, Light);
     }
     SaveEntryCheckpoint();
+    TRACE_CPUPROFILER_EVENT_SCOPE(Training_ArrivalReady);
 #if WITH_DEV_AUTOMATION_TESTS
     const bool bVerifyCourse = UEntryChamberVerification::IsRequested(bDev20Run);
     if (Course.Current == Segment::Sandbox && UTrainingVerification::IsRequested())

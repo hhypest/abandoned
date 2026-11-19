@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Async/Future.h"
 #include "Application/Expedition/EntryCourse.h"
 #include "Application/Puzzles/ChamberHintReader.h"
 #include "Domain/Expedition/Dev20.h"
@@ -49,7 +50,7 @@ public:
     const TArray<float>& GetPlateLoads() const { return PlateCircuit->GetLoads(); }
     bool IsExitEnabled() const { return PlateCircuit->IsExitEnabled(); }
     Abandoned::Application::Expedition::CheckpointIssue GetCheckpointIssue() const { return Course.Issue; }
-    bool HasCheckpointWriteFailed() const { return bCheckpointWriteFailed; }
+    bool HasCheckpointWriteFailed() const { return ArrivalWrite.IsReady() && !ArrivalWrite.Get(); }
     void PressButton();
     bool IsPlatePressed(int32 Index = 0) const { return PlateCircuit->IsPressed(Index); }
     bool IsDoorOpen() const { return DoorDrive->IsOpen(); }
@@ -66,7 +67,7 @@ private:
     void UpdateRelayTraces();
     void SelectLayout(const Abandoned::Application::Expedition::WorldDestination& Destination);
     void SaveEntryCheckpoint();
-    bool bCheckpointWriteFailed = false;
+    TSharedFuture<bool> ArrivalWrite;
     void AdvanceCourse(const ATrainingChamberCharacter& Player);
 
     UPROPERTY(Transient)

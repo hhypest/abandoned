@@ -56,14 +56,15 @@ def summarize(folder):
     if scenario == "Travel":
         weights = [i for i, frame in enumerate(frames)
                    if "CsvExecCommand : open /Engine/Maps/Entry?Chamber=Weight" in frame["EVENTS"]]
-        if len(weights) != 2:
+        if len(weights) < 2:
             raise ValueError("Missing Weight visit")
         log = (folder / "Game.log").read_text(encoding="utf-8-sig")
         loads = [float(s) * 1000 for s in re.findall(r"LogLoad: Took ([\d.]+) seconds to LoadMap\(/Engine/Maps/Entry\)", log)]
-        if len(loads) != 4:
-            raise ValueError("Expected initial load and three transitions")
+        if len(loads) != len(weights) * 2:
+            raise ValueError("World-load count differs from the captured Weight visits")
         result = {}
-        for name, i, load in zip(("First", "Repeat"), weights, (loads[1], loads[3])):
+        for visit, (i, load) in enumerate(zip(weights, loads[1::2]), start=1):
+            name = "First" if visit == 1 else "Repeat" if visit == 2 else f"Visit{visit}"
             result[name] = metrics(frames[i + 120:i + 420])
             result[name]["LoadMapMs"] = load
             result[name]["MaxTransitionFrameMs"] = max(f["FrameTime"] for f in frames[i:i + 12])

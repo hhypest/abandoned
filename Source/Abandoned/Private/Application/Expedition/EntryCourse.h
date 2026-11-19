@@ -56,10 +56,14 @@ inline CourseStart StartCourse(ChamberDestination Destination, const CheckpointS
     return {Saved.Chamber.value_or(Segment::Stairs), Saved.Issue};
 }
 
+inline bool RequiresArrivalCheckpoint(CourseStart State)
+{
+    return State.Issue == CheckpointIssue::None && !State.StandaloneBalance && Domain::Expedition::IsCheckpoint(State.Current);
+}
+
 inline bool RecordArrival(CourseStart State, const CheckpointStore& Store)
 {
-    return State.Issue != CheckpointIssue::None || State.StandaloneBalance ||
-        !Domain::Expedition::IsCheckpoint(State.Current) || Store.Write(State.Current);
+    return !RequiresArrivalCheckpoint(State) || Store.Write(State.Current);
 }
 
 inline std::optional<WorldDestination> NextCourseDestination(CourseStart State)
