@@ -2,9 +2,11 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$PackageRoot,
-    [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel'
+    [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
+    [switch]$TraceTravel
 )
 $ErrorActionPreference = 'Stop'
+if ($TraceTravel -and $Scenario -ne 'Travel') { throw 'TraceTravel requires the Travel scenario' }
 $root = (Resolve-Path -LiteralPath $PackageRoot).Path
 $exe = Join-Path $root 'Abandoned/Binaries/Win64/Abandoned.exe'
 $runDir = Join-Path $PSScriptRoot "../Saved/Performance/$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))-$Scenario-$([Guid]::NewGuid().ToString('N'))"
@@ -34,6 +36,11 @@ foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1
     "-UserDir=$dir", "-abslog=$dir/Game.log", '-ExitAfterCsvProfiling',
     "-ExecCmds=r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
+}
+if ($TraceTravel) {
+    $start.ArgumentList.Add('-trace=cpu,frame,bookmark,loadtime')
+    $start.ArgumentList.Add("-tracefile=$dir/Travel.utrace")
+    $start.ArgumentList.Add('-LogCmds=LogGarbage Verbose,LogAudioMixer Verbose')
 }
 # WDDM Dedicated Usage is attributed to the game PID, including its driver allocations.
 $category = [Diagnostics.PerformanceCounterCategory]::new('GPU Process Memory')
@@ -91,6 +98,10 @@ if ($Scenario -eq 'Travel') {
 $csv = @(Get-ChildItem -LiteralPath "$dir/Saved/Profiling/CSV" -Filter '*.csv')
 if ($csv.Count -ne 1 -or $csv[0].Length -lt 1000 -or !(($samples.DedicatedBytes | Measure-Object -Maximum).Maximum -gt 0)) {
     throw "Missing CSV or per-process WDDM data in $dir"
+}
+if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType Leaf) -or
+    (Get-Item -LiteralPath "$dir/Travel.utrace").Length -eq 0)) {
+    throw "Missing CPU trace in $dir"
 }
 [ordered]@{
     Scenario = $Scenario

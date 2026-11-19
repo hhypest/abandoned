@@ -35,11 +35,11 @@ pwsh -NoProfile -File Scripts/Invoke-UeVerification.ps1 -EngineRoot 'C:\Program 
 
 Успех требует Vulkan SM6, кода `0`, всех ожидаемых маркеров и отсутствия ошибок. Отрицательный контроль запускает проверку терминала сразу на станции с пустым архивом. Он должен зарегистрировать предусмотренный провал с `ExpectedFailure`, даже если Unreal завершится с кодом `0`. Таймаут, посторонняя ошибка, отсутствие маркеров или неожиданное поведение отрицательного контроля дают `Failed` и ненулевой код запускателя. GitHub Actions выполняет автономные C++20-тесты и Git LFS. UE-прогон выполняется локально на доверенной Windows-машине с Vulkan.
 
-Время кадра и память измеряются в отдельном прогоне с реальным временем. Протокол сравнивает первое и повторное посещения камеры, а также активный и остановленный захват портального вида в одной позиции. [Методика, результаты и команды](A07Performance.md)
+Время кадра и память измеряются в отдельном прогоне с реальным временем. Протокол сравнивает первое и повторное посещения камеры, а также активный и остановленный захват портального вида в одной позиции. [Методика, результаты и команды](A07Performance.md) · [Разбор паузы OpenLevel при переходе Stairs → Weight](A07OpenLevel.md)
 
 ### Упакованная игра Win64 Development
 
-Из корня рабочей копии с загруженными Git LFS-ассетами выполните в PowerShell 7 следующие команды. Для сборки с исправленным временем жизни глубины сцены укажите в `$ueRoot` рабочую копию исходников UE 5.7.4, подготовленную по [инструкции сборки Renderer](../CONTRIBUTING.md#исправление-renderer-в-ue-574). AutomationTool собирает игру и готовит контент для Windows. Готовая папка `Windows` содержит запускатель `Abandoned.exe` и контейнеры контента. [Этапы BuildCookRun в UE 5.7](https://dev.epicgames.com/documentation/en-us/unreal-engine/build-operations-cooking-packaging-deploying-and-running-projects-in-unreal-engine?application_version=5.7)
+Из корня рабочей копии с загруженными Git LFS-ассетами выполните в PowerShell 7 следующие команды. В `$ueRoot` укажите исходную сборку UE 5.7.4 с поправками [Renderer](../CONTRIBUTING.md#исправление-renderer-в-ue-574) и [AudioMixer](../CONTRIBUTING.md#исправление-audiomixer-и-трассировка-openlevel). AutomationTool собирает игру и готовит контент для Windows. Готовая папка `Windows` содержит запускатель `Abandoned.exe` и контейнеры контента. [Этапы BuildCookRun в UE 5.7](https://dev.epicgames.com/documentation/en-us/unreal-engine/build-operations-cooking-packaging-deploying-and-running-projects-in-unreal-engine?application_version=5.7)
 
 ```powershell
 $ueRoot = 'C:\src\UnrealEngine-5.7.4'
