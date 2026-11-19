@@ -1,0 +1,52 @@
+diff --git a/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp b/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp
+index f0cc427f1..ff5832b71 100644
+--- a/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp
++++ b/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp
+@@ -15806,6 +15806,7 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
+ 	// Unload the current world
+ 	if( WorldContext.World() )
+ 	{
++		TRACE_CPUPROFILER_EVENT_SCOPE(LoadMap_UnloadWorld);
+ 		// Notify listeners that all levels will be removed before we start tearing down the world.
+ 		FWorldDelegates::PreLevelRemovedFromWorld.Broadcast(nullptr, WorldContext.World());
+ 		WorldContext.World()->BeginTearingDown();
+@@ -15923,6 +15924,7 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
+ 		// Stop all audio to remove references to current level.
+ 		if (FAudioDevice* AudioDevice = WorldContext.World()->GetAudioDeviceRaw())
+ 		{
++			TRACE_CPUPROFILER_EVENT_SCOPE(LoadMap_AudioFlush);
+ 			AudioDevice->Flush(WorldContext.World());
+ 			AudioDevice->SetTransientPrimaryVolume(1.0f);
+ 		}
+@@ -15958,7 +15960,10 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
+
+ 	FMoviePlayerProxy::BlockingTick();
+
+-	WorldContext.OwningGameInstance->PreloadContentForURL(URL);
++	{
++		TRACE_CPUPROFILER_EVENT_SCOPE(LoadMap_PreloadWorld);
++		WorldContext.OwningGameInstance->PreloadContentForURL(URL);
++	}
+
+ 	UPackage* WorldPackage = NULL;
+ 	UWorld*	NewWorld = NULL;
+@@ -16276,7 +16281,10 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
+ 	{
+ 		GEngine->XRSystem->OnBeginPlay(WorldContext);
+ 	}
+-	WorldContext.World()->BeginPlay();
++	{
++		TRACE_CPUPROFILER_EVENT_SCOPE(LoadMap_BeginPlay);
++		WorldContext.World()->BeginPlay();
++	}
+
+ 	FMoviePlayerProxy::BlockingTick();
+ 	// send a callback message
+@@ -16335,6 +16343,7 @@ void UEngine::TrimMemory()
+ {
+ 	// Clean up the previous level out of memory.
+ 	{
++		TRACE_CPUPROFILER_EVENT_SCOPE(LoadMap_FullGC);
+ 		if (GEngine != nullptr)
+ 		{
+ 			GEngine->bGCPerformingFullPurge = true;

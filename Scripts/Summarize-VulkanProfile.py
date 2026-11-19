@@ -67,6 +67,9 @@ def summarize(folder):
             result[name] = metrics(frames[i + 120:i + 420])
             result[name]["LoadMapMs"] = load
             result[name]["MaxTransitionFrameMs"] = max(f["FrameTime"] for f in frames[i:i + 12])
+            # Include the command lead-in, travel and the next 120 rendered frames.
+            result[name]["TravelWindowMs"] = sum(f["FrameTime"] for f in frames[i - 3:i + 12])
+            result[name]["MaxRecoveryFrameMs"] = max(f["FrameTime"] for f in frames[i + 12:i + 132])
     elif scenario == "Campaign":
         result = {"Campaign": metrics(frames[120:])}
     else:

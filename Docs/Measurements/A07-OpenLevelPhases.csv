@@ -1,0 +1,7 @@
+Run,Visit,LoadMapMs,UnloadOtherMs,AudioFlushMs,FullGCMs,CreateWorldMs,OtherMs,BeginPlayMs
+baseline-marked,First,42.464,1.100,25.249,5.493,9.198,1.424,0.300
+baseline-marked,Repeat,68.482,1.063,49.661,5.383,11.310,1.065,0.298
+candidate-trace,First,26.568,1.101,0.026,13.061,10.853,1.527,0.307
+candidate-trace,Repeat,53.593,1.004,0.025,11.555,40.147,0.862,0.326
+matched-trace,First,27.898,1.032,0.027,13.909,11.553,1.377,0.300
+matched-trace,Repeat,23.436,1.199,0.028,11.438,9.796,0.975,0.307

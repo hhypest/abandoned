@@ -24,6 +24,20 @@ if ($LASTEXITCODE -ne 0) { throw 'Не удалось применить исп�
 
 Затем соберите редактор и игру из этой копии движка. При обновлении UE проверьте освобождение `PartialDepth` в исходниках новой версии и повторите `VulkanExitControl` и `EntryCourse` в пакете. [Протокол Vulkan](Docs/Testing.md#упакованная-игра-win64-development)
 
+## Исправление AudioMixer и трассировка OpenLevel
+
+Для игровой сборки также примените поправку AudioMixer к той же ревизии UE 5.7.4. В исходном движке неподвижный слушатель каждый кадр добавляет в очередь аудиорендера свою прежнюю трансформацию. Поправка сохраняет передачу изменений положения, ориентации и состава слушателей.
+
+```powershell
+$patch = (Resolve-Path ./Scripts/EnginePatches/UE-5.7.4-ListenerUpdates.patch).Path
+git -C $ueRoot apply --check $patch
+if ($LASTEXITCODE -ne 0) { throw 'Проверьте версию AudioMixer и наличие исправления.' }
+git -C $ueRoot apply $patch
+if ($LASTEXITCODE -ne 0) { throw 'Не удалось применить исправление AudioMixer.' }
+```
+
+Для сравнения фаз загрузки примените диагностический патч `Scripts/EnginePatches/UE-5.7.4-LoadMapScopes.patch` к обеим сравниваемым сборкам до компиляции. Он добавляет именованные интервалы CPU в Unreal Insights. [Методика, контрольная сборка и результаты](Docs/A07OpenLevel.md)
+
 ## Проверки перед PR
 
 - GitHub Actions запускает **C++20 and Git LFS** для PR в `main` и изменений в `main`. Проверка сравнивает diff с базой, валидирует указатели и содержимое Git LFS и запускает автономные C++20-тесты под MSVC на Windows.

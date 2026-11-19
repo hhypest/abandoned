@@ -1,0 +1,36 @@
+diff --git a/Engine/Source/Runtime/AudioMixer/Private/AudioMixerDevice.cpp b/Engine/Source/Runtime/AudioMixer/Private/AudioMixerDevice.cpp
+index e8b7f7657..1cfab2cbb 100644
+--- a/Engine/Source/Runtime/AudioMixer/Private/AudioMixerDevice.cpp
++++ b/Engine/Source/Runtime/AudioMixer/Private/AudioMixerDevice.cpp
+@@ -2,6 +2,7 @@
+
+ #include "AudioMixerDevice.h"
+
++#include "Algo/Compare.h"
+ #include "AssetRegistry/IAssetRegistry.h"
+ #include "Async/Async.h"
+ #include "AudioAnalytics.h"
+@@ -345,6 +346,7 @@ namespace Audio
+ 		// This audio device is the audio mixer
+ 		bAudioMixerModuleLoaded = true;
+
++		ListenerTransforms.Reset();
+ 		SourceManager = MakeUnique<FMixerSourceManager>(this);
+ 		RenderScheduler = MakeUnique<FAudioRenderScheduler>(this);
+
+@@ -564,6 +566,15 @@ namespace Audio
+ 	{
+ 		LLM_SCOPE(ELLMTag::AudioMixer);
+
++		// Only changes to the ordered listener poses need to reach the audio render thread.
++		if (Algo::Compare(InListeners, ListenerTransforms, [](const FListener& Listener, const FTransform& Sent)
++		{
++			return Listener.Transform.Equals(Sent, 0.0);
++		}))
++		{
++			return;
++		}
++
+ 		ListenerTransforms.Reset(InListeners.Num());
+
+ 		for (const FListener& Listener : InListeners)
