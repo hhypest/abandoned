@@ -23,6 +23,7 @@ struct FPortalTransitObservation
     bool bInterrupted;
     bool bDev20Crossed;
     int32 Transfers;
+    int32 BlockedTransfers;
     FVector Before;
     FVector After;
 };
