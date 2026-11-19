@@ -37,6 +37,10 @@ if ($target -eq 'Package') {
     $screenshotPlatform = 'WindowsEditor'
 }
 if (!(Test-Path -LiteralPath $executable -PathType Leaf)) { throw "Missing executable: $executable" }
+$version = (Get-Item -LiteralPath $executable).VersionInfo
+if ($version.ProductMajorPart -ne 5 -or $version.ProductMinorPart -ne 7) {
+    throw "This project requires UE 5.7. Found $($version.ProductVersion) at $executable"
+}
 
 $entry = '/Engine/Maps/Entry'
 $controlMap = "${entry}?game=/Script/Engine.GameModeBase"
