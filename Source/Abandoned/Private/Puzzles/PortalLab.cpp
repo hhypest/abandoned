@@ -182,7 +182,7 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
 #if WITH_DEV_AUTOMATION_TESTS
     if (bDev20Run)
     {
-        UPortalDev20Verification::AttachIfRequested(*this, *Layout, *Dev20, *Mouths[0].Console, bDev20Recovered);
+        UPortalDev20Verification::AttachIfRequested(*this, *Layout, *Dev20, *Mouths[0].Console, *Cubes[1], bDev20Recovered);
     }
     else
     {
@@ -412,7 +412,7 @@ FPortalTransitObservation APortalLabGameMode::GetTransitObservation() const
 {
     const FPortalTransferStats& Stats = Transit->GetStats();
     return {Supply.IsPowered(), PlayerState.Approach == 0, bInterrupted, bDev20Crossed,
-        Stats.Transfers, Stats.LastBefore, Stats.LastAfter};
+        Stats.Transfers, Stats.Blocked, Stats.LastBefore, Stats.LastAfter};
 }
 
 #endif

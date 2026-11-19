@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)]
     [string]$EngineRoot,
 
-    [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals',
+    [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime',
                  'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
@@ -66,7 +66,7 @@ $entryFinish = @('Entry test: reset restored the weight lock', 'Entry test: Weig
 $courseSuccess = @('Entry test: crossed Stairs exit.', 'Entry test: crossed Button exit.') + $entryFinish
 $dev20Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"
 $dev20Transit = @('34 kg Chaos mass and carry slowdown confirmed.', 'loss of portal power returned the same item to its cradle.',
-                  'same 34 kg body remained in the grip after the portal.', "DEV-20 departed the portal bay in the player's grip.")
+                  "occupied exit kept the sole unit in the carrier's grip.", 'same 34 kg body remained in the grip after the portal.', "DEV-20 departed the portal bay in the player's grip.")
 $balancePassage = "${vanguard}?Chamber=Passage?Checkpoint=Balance"
 $fallsSuccess = @('Vanguard fall verified at 250 cm.', 'Passage fall 300.0 cm: minor injury.',
                   'Vanguard minor injury slowed ground movement, then restored normal speed.', 'Vanguard fall verified at 300 cm.',
@@ -243,6 +243,9 @@ $scenarios = @{
     }
 }
 
+. (Join-Path $PSScriptRoot 'WorldLifetime.ps1')
+$scenarios.WorldLifetime = New-WorldLifetimeScenario $entry
+
 function Invoke-Scenario($name, $definition, $profile) {
     $null = New-Item -ItemType Directory -Path $profile
     if ($definition.SeedCheckpoint) {
@@ -272,12 +275,13 @@ function Invoke-Scenario($name, $definition, $profile) {
         Reason = $null
     }
 
+    $execCommands = (@($renderQueries, $definition.ExecCommand) | Where-Object { $_ }) -join ','
     $start = [System.Diagnostics.ProcessStartInfo]::new($editor)
     $start.UseShellExecute = $false
     $start.WorkingDirectory = $repo
     foreach ($arg in @($project, $definition.Map, $definition.Flag, '-game', '-vulkan', '-unattended',
                        '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])",
-                       "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$renderQueries")) {
+                       "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$execCommands")) {
         $start.ArgumentList.Add($arg)
     }
     if (!$definition.RealTime) {
@@ -327,6 +331,9 @@ function Invoke-Scenario($name, $definition, $profile) {
             if ($line -match 'LogTrainingChamber: Display: Training chamber ready\. (\w+),') { $Matches[1] }
         })
     }
+    if ($definition.ExpectedWorldEvents) {
+        $result.WorldEvents = @(Read-WorldLifetimeEvents $lines)
+    }
     if ($definition.CheckPortalFrame) {
         $firstFrame = Join-Path $profile 'Saved/Screenshots/WindowsEditor/PortalLab-FirstVisible.png'
         if (Test-Path -LiteralPath $firstFrame -PathType Leaf) {
@@ -363,6 +370,9 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = "Missing success markers: $($missing -join ', ')"
     } elseif ($definition.Chambers -and ($result.Chambers -join ',') -cne ($definition.Chambers -join ',')) {
         $result.Reason = "Unexpected chamber sequence: $($result.Chambers -join ', ')"
+    } elseif ($definition.ExpectedWorldEvents -and
+        ($result.WorldEvents -join '|') -cne ($definition.ExpectedWorldEvents -join '|')) {
+        $result.Reason = 'Unexpected world lifetime sequence. Check the loaded modes, live owner counts, teardown and cleanup in Game.log.'
     } elseif ($definition.SeedCheckpoint) {
         $saved = Get-Content -LiteralPath $slot -Raw | ConvertFrom-Json
         if ($saved.version -eq 2 -and $saved.checkpoint -ceq 'Balance' -and $saved.archive.Count -eq 1 -and $saved.archive[0] -ceq 'oxygen-restored') {

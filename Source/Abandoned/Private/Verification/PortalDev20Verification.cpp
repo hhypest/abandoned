@@ -12,6 +12,7 @@
 #include "Player/MovementProfile.h"
 #include "Puzzles/PortalLab.h"
 #include "Puzzles/PortalLabLayout.h"
+#include "Puzzles/PuzzleCube.h"
 #include "UnrealClient.h"
 #include "Verification/VerificationPlayerPose.h"
 
@@ -29,7 +30,7 @@ UPortalDev20Verification::UPortalDev20Verification()
 
 #if WITH_DEV_AUTOMATION_TESTS
 void UPortalDev20Verification::AttachIfRequested(APortalLabGameMode& Lab, const UPortalLabLayout& Settings,
-    ADev20Actor& Item, UBoxComponent& ArrivalConsole, bool bRecoveryArrival)
+    ADev20Actor& Item, UBoxComponent& ArrivalConsole, APuzzleCube& ExitBlocker, bool bRecoveryArrival)
 {
     if (!FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20")))
     {
@@ -39,6 +40,7 @@ void UPortalDev20Verification::AttachIfRequested(APortalLabGameMode& Lab, const 
     Test->Layout = &Settings;
     Test->Unit = &Item;
     Test->Console = &ArrivalConsole;
+    Test->Blocker = &ExitBlocker;
     Test->bCapture = FParse::Param(FCommandLine::Get(), TEXT("CaptureDev20"));
     if (bRecoveryArrival && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20Recovery")))
     {
@@ -86,7 +88,7 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
         return;
     }
     auto* Lab = Cast<APortalLabGameMode>(GetOwner());
-    if (!Lab || !Unit.IsValid() || !Layout.IsValid() || !Console.IsValid() || !IsValid(Unit->GetBody()))
+    if (!Lab || !Unit.IsValid() || !Layout.IsValid() || !Console.IsValid() || !Blocker.IsValid() || !IsValid(Unit->GetBody()))
     {
         Fail(TEXT("the original unit or its station fixture disappeared"));
         return;
@@ -109,6 +111,13 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
     {
         Player->AddMovementInput(FRotator(0, Controller->GetControlRotation().Yaw, 0).Vector());
     };
+    const auto IsSoleUnit = [&]
+    {
+        TArray<AActor*> Units;
+        UGameplayStatics::GetAllActorsOfClass(this, ADev20Actor::StaticClass(), Units);
+        return Units.Num() == 1 && Units[0] == Unit.Get();
+    };
+    const FTransform ApproachPose(FRotator(-18, 0, 0), Layout->Arrival.Center - FVector(235, 0, 53));
     switch (Phase)
     {
     case EPhase::Inspect:
@@ -155,8 +164,17 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
             return;
         }
         UE_LOG(LogPortalDev20Test, Display, TEXT("DEV-20: 34 kg Chaos mass and carry slowdown confirmed."));
-        PlacePlayer(*Player, FTransform(FRotator(-18, 0, 0), Layout->Arrival.Center - FVector(235, 0, 53)));
-        Advance(bPowerLossVerified ? EPhase::Launch : EPhase::Approach);
+        PlacePlayer(*Player, ApproachPose);
+        if (bPowerLossVerified)
+        {
+            BlockedBeforeApproach = Transit.BlockedTransfers;
+            Blocker->ResetPosition(Layout->Departure.Center + FVector(0, 38, -103));
+            Advance(EPhase::BlockedExit);
+        }
+        else
+        {
+            Advance(EPhase::Approach);
+        }
         break;
     case EPhase::Approach:
         if (Elapsed > 0.30f)
@@ -177,7 +195,7 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
     case EPhase::Interrupted:
         if (Transit.bInterrupted)
         {
-            if (Transit.bPowered || Player->GetHeldDev20() || !Unit->GetActorLocation().Equals(Layout->Dev20Station, 4.0))
+            if (!IsSoleUnit() || Transit.bPowered || Player->GetHeldDev20() || !Unit->GetActorLocation().Equals(Layout->Dev20Station, 4.0))
             {
                 Fail(TEXT("power loss failed to recover the same DEV-20 at its station"));
                 return;
@@ -185,6 +203,24 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
             UE_LOG(LogPortalDev20Test, Display, TEXT("DEV-20: loss of portal power returned the same item to its cradle."));
             bPowerLossVerified = true;
             Advance(EPhase::Power);
+        }
+        break;
+    case EPhase::BlockedExit:
+        WalkForward();
+        if (Transit.BlockedTransfers > BlockedBeforeApproach)
+        {
+            if (Transit.Transfers != 0 || Transit.bDev20Crossed || !IsSoleUnit() ||
+                Player->GetHeldDev20() != Unit.Get() || Player->GetActorLocation().X >= Layout->Arrival.Center.X ||
+                FVector::DistSquared(Unit->GetActorLocation(), Layout->Arrival.Center) >
+                    FVector::DistSquared(Unit->GetActorLocation(), Layout->Departure.Center))
+            {
+                Fail(TEXT("occupied exit moved the carrier, duplicated the unit or lost the grip"));
+                return;
+            }
+            Blocker->ResetPosition(Layout->LargeCube);
+            PlacePlayer(*Player, ApproachPose);
+            UE_LOG(LogPortalDev20Test, Display, TEXT("DEV-20: occupied exit kept the sole unit in the carrier's grip."));
+            Advance(EPhase::Launch);
         }
         break;
     case EPhase::Launch:
@@ -199,7 +235,7 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
         WalkForward();
         if (Transit.bDev20Crossed)
         {
-            if (Player->GetHeldDev20() != Unit.Get() || Transit.Transfers != 1)
+            if (!IsSoleUnit() || Player->GetHeldDev20() != Unit.Get() || Transit.Transfers != 1)
             {
                 Fail(TEXT("expected exactly one transfer with the original DEV-20 in the grip"));
                 return;
@@ -224,9 +260,7 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
     case EPhase::RecoveryArrival:
         if (Elapsed >= 0.25f)
         {
-            TArray<AActor*> Units;
-            UGameplayStatics::GetAllActorsOfClass(this, ADev20Actor::StaticClass(), Units);
-            if (Units.Num() != 1 || Units[0] != Unit.Get() || Player->GetHeldDev20() || Transit.bPowered ||
+            if (!IsSoleUnit() || Player->GetHeldDev20() || Transit.bPowered ||
                 !Unit->GetActorLocation().Equals(Layout->Dev20Station, 4.0) ||
                 !FMath::IsNearlyEqual(Unit->GetBody()->GetMass(), Dev20MassKg, 0.05f))
             {
