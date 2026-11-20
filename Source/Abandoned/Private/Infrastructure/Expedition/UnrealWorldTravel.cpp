@@ -22,9 +22,14 @@ std::optional<WorldDestination> ReadWorldDestination(const FString& Options, Ent
     return Decoded.Destination;
 }
 
-void TravelToWorld(const UObject* Context, const WorldDestination& Destination)
+void TravelToWorld(const UObject* Context, const WorldDestination& Destination, bool bSkipOutgoingRedraw)
 {
-    const std::string Options = EncodeWorldOptions(Destination);
+    std::string Options = EncodeWorldOptions(Destination);
+    if (bSkipOutgoingRedraw)
+    {
+        // LoadMap otherwise redraws the outgoing scene without presenting it before the full GC.
+        Options += "?quiet";
+    }
     UGameplayStatics::OpenLevel(Context, FName(UTF8_TO_TCHAR(EntryMapPath)), true, UTF8_TO_TCHAR(Options.c_str()));
 }
 }
