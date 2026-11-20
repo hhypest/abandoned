@@ -62,6 +62,11 @@ def summarize(folder):
         loads = [float(s) * 1000 for s in re.findall(r"LogLoad: Took ([\d.]+) seconds to LoadMap\(/Engine/Maps/Entry\)", log)]
         if len(loads) != len(weights) * 2:
             raise ValueError("World-load count differs from the captured Weight visits")
+        reserve_frames = None
+        if run.get("MapPageReserve") is not None:
+            reserve_frames = [i for i, frame in enumerate(frames) if "MapPageFirstFullEnd" in frame["EVENTS"]]
+            if len(reserve_frames) != len(weights):
+                raise ValueError("Missing or extra first-frame marker in Weight")
         result = {}
         for visit, (i, load) in enumerate(zip(weights, loads[1::2]), start=1):
             name = "First" if visit == 1 else "Repeat" if visit == 2 else f"Visit{visit}"
@@ -71,6 +76,14 @@ def summarize(folder):
             # Include the command lead-in, travel and the next 120 rendered frames.
             result[name]["TravelWindowMs"] = sum(f["FrameTime"] for f in frames[i - 3:i + 12])
             result[name]["MaxRecoveryFrameMs"] = max(f["FrameTime"] for f in frames[i + 12:i + 132])
+            if reserve_frames is not None:
+                end = reserve_frames[visit - 1]
+                if not i < end < i + 12 or end + 120 >= len(frames):
+                    raise ValueError(f"First full frame outside transition window for visit {visit}")
+                following = [f["FrameTime"] for f in frames[end + 1:end + 121]]
+                result[name].update(FirstFullFrameMs=frames[end]["FrameTime"],
+                                    Next11MaxMs=max(following[:11]), Next120MaxMs=max(following),
+                                    Next120P95Ms=sorted(following)[math.ceil(.95 * len(following)) - 1])
     elif scenario == "Campaign":
         result = {"Campaign": metrics(frames[120:])}
     else:

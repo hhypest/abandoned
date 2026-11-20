@@ -1,0 +1,303 @@
+diff --git a/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp b/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp
+index 53db6e3..cd9d205 100644
+--- a/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp
++++ b/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp
+@@ -675,6 +675,8 @@ void FUseSystemMallocForNew::operator delete[](void* Ptr)
+ #if !UE_BUILD_SHIPPING
+ namespace UE::MemStack
+ {
++bool TryKeepMapPage(void* Page);
++void* TryUseMapPage(uint32 Alignment);
+ extern thread_local bool* AuditedHeapMiss;
+ extern thread_local int32* AuditedPageFrees;
+ }
+@@ -685,6 +687,10 @@ void* FMemory::Malloc(SIZE_T Count, uint32 Alignment)
+ #if !UE_BUILD_SHIPPING
+ 	if (Count == 65536 && UE::MemStack::AuditedHeapMiss)
+ 	{
++		if (void* Page = UE::MemStack::TryUseMapPage(Alignment))
++		{
++			return Page;
++		}
+ 		*UE::MemStack::AuditedHeapMiss = true;
+ 	}
+ #endif
+@@ -701,8 +707,13 @@ void FMemory::Free(void* Original)
+ #if !UE_BUILD_SHIPPING
+ 	if (Original && UE::MemStack::AuditedPageFrees)
+ 	{
+-		++*UE::MemStack::AuditedPageFrees;
++		int32* Released = UE::MemStack::AuditedPageFrees;
+ 		TGuardValue<int32*> Guard(UE::MemStack::AuditedPageFrees, nullptr);
++		if (UE::MemStack::TryKeepMapPage(Original))
++		{
++			return;
++		}
++		++*Released;
+ 		return FMemory_FreeInline(Original);
+ 	}
+ #endif
+diff --git a/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp b/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp
+index 2873172..b8433a3 100644
+--- a/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp
++++ b/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp
+@@ -4,6 +4,8 @@
+ #include "Misc/MapPageTrimExperiment.h"
+ #include "ProfilingDebugging/CpuProfilerTrace.h"
+ #include "Misc/Parse.h"
++#include "Misc/ScopeLock.h"
++#include "ProfilingDebugging/CsvProfiler.h"
+ #include "Misc/CommandLine.h"
+ #include "Stats/Stats.h"
+ #include "HAL/IConsoleManager.h"
+@@ -26,10 +28,135 @@ static thread_local FPageAllocator::TPageAllocator** DeferTo = nullptr;
+ static std::atomic<bool> bCountPages{false};
+ static bool bDeferDrain = false;
+
++// This diagnostic holds only blocks that the page pool actually tried to free.
++constexpr int32 MaxReservePages = 128;
++static FCriticalSection ReserveLock;
++static void* ReservePages[MaxReservePages];
++static int32 Available = 0;
++static int32 Admitted = 0;
++static std::atomic<bool> ReserveOpen{false};
++static thread_local bool bTravelTrim = false;
++static bool bMeasureReserve = false;
++static bool bTestTrim = false;
++static int32 ReserveLimit = 0;
++enum class EWeightFrame { Idle, Loading, WaitForBegin, FirstFullFrame };
++static EWeightFrame WeightFrame = EWeightFrame::Idle;
++
++bool TryKeepMapPage(void* Page)
++{
++	if (!bTravelTrim || !ReserveOpen.load(std::memory_order_acquire))
++	{
++		return false;
++	}
++	FScopeLock Lock(&ReserveLock);
++	if (!ReserveOpen.load(std::memory_order_relaxed) || Admitted == ReserveLimit)
++	{
++		return false;
++	}
++	ReservePages[Available++] = Page;
++	++Admitted;
++	return true;
++}
++
++void* TryUseMapPage(uint32 Alignment)
++{
++	if (!ReserveOpen.load(std::memory_order_acquire))
++	{
++		return nullptr;
++	}
++	FScopeLock Lock(&ReserveLock);
++	for (int32 Index = Available - 1; Index >= 0; --Index)
++	{
++		void* Page = ReservePages[Index];
++		if (Alignment == 0 || IsAligned(Page, Alignment))
++		{
++			ReservePages[Index] = ReservePages[--Available];
++			return Page;
++		}
++	}
++	return nullptr;
++}
++
++static void CloseReserve(const TCHAR* Reason)
++{
++	if (!ReserveOpen.load(std::memory_order_acquire))
++	{
++		return;
++	}
++	void* Unused[MaxReservePages];
++	int32 Retained, Remaining;
++	{
++		FScopeLock Lock(&ReserveLock);
++		if (!ReserveOpen.exchange(false, std::memory_order_acq_rel))
++		{
++			return;
++		}
++		Retained = Admitted;
++		Remaining = Available;
++		FMemory::Memcpy(Unused, ReservePages, Remaining * sizeof(void*));
++		Available = Admitted = 0;
++	}
++	TGuardValue<int32*> Ignore(AuditedPageFrees, nullptr);
++	for (int32 Index = 0; Index < Remaining; ++Index)
++	{
++		FMemory::Free(Unused[Index]);
++	}
++	UE_LOG(LogTemp, Display, TEXT("MapPageReserve close=%s admitted=%d served=%d released=%d"),
++		Reason, Retained, Retained - Remaining, Remaining);
++}
++
++void FMapPageTrimExperiment::StartMap(bool bWeight)
++{
++	if (!bMeasureReserve)
++	{
++		return;
++	}
++	CloseReserve(TEXT("new-map"));
++	WeightFrame = bWeight ? EWeightFrame::Loading : EWeightFrame::Idle;
++	bTrackWeight = bWeight;
++	if (bWeight && ReserveLimit)
++	{
++		FScopeLock Lock(&ReserveLock);
++		ReserveOpen.store(true, std::memory_order_release);
++	}
++}
++
++void FMapPageTrimExperiment::Loaded()
++{
++	if (bTrackWeight)
++	{
++		WeightFrame = EWeightFrame::WaitForBegin;
++		bTrackWeight = false;
++	}
++}
++
++static void BeginWeightFrame()
++{
++	if (WeightFrame == EWeightFrame::WaitForBegin)
++	{
++		WeightFrame = EWeightFrame::FirstFullFrame;
++		if (bTestTrim)
++		{
++			FCoreDelegates::GetMemoryTrimDelegate().Broadcast();
++		}
++	}
++}
++
++static void EndWeightFrame()
++{
++	if (WeightFrame == EWeightFrame::FirstFullFrame)
++	{
++		TRACE_CPUPROFILER_EVENT_SCOPE(MemStack_FirstFullFrameEnd);
++		CSV_EVENT_GLOBAL(TEXT("MapPageFirstFullEnd"));
++		CloseReserve(TEXT("frame"));
++		WeightFrame = EWeightFrame::Idle;
++	}
++}
++
+ static void Drain(FPageAllocator::TPageAllocator& Pool)
+ {
+ 	TRACE_CPUPROFILER_EVENT_SCOPE(MemStack_TrimFreePages);
+-	if (!bCountPages.load(std::memory_order_relaxed))
++	if (!bCountPages.load(std::memory_order_relaxed) && !bTravelTrim)
+ 	{
+ 		Pool.Trim();
+ 		return;
+@@ -39,6 +166,7 @@ static void Drain(FPageAllocator::TPageAllocator& Pool)
+ 		TGuardValue<int32*> Observe(AuditedPageFrees, &Released);
+ 		Pool.Trim();
+ 	}
++	if (!bCountPages.load(std::memory_order_relaxed)) { return; }
+ 	TCHAR Label[48];
+ 	FCString::Snprintf(Label, UE_ARRAY_COUNT(Label), TEXT("MemStackDrain/%d"), Released);
+ 	TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(Label);
+@@ -46,12 +174,18 @@ static void Drain(FPageAllocator::TPageAllocator& Pool)
+
+ void FMapPageTrimExperiment::DuringWorldTrim(TFunctionRef<void()> Trim)
+ {
++	TGuardValue<bool> Target(bTravelTrim, bTrackWeight && ReserveLimit > 0);
+ 	TGuardValue<FPageAllocator::TPageAllocator**> Guard(DeferTo, bDeferDrain ? &Pending : nullptr);
+ 	Trim();
+ }
+
+ FMapPageTrimExperiment::~FMapPageTrimExperiment()
+ {
++	if (bTrackWeight)
++	{
++		CloseReserve(TEXT("load-failed"));
++		WeightFrame = EWeightFrame::Idle;
++	}
+ 	if (Pending)
+ 	{
+ 		TRACE_CPUPROFILER_EVENT_SCOPE(MemStack_EndOfLoadMapDrain);
+@@ -286,7 +420,8 @@ void *FPageAllocator::Alloc(int32 Alignment)
+ #else
+ 	LLM_SCOPE_BY_BOOTSTRAP_TAG(MemStack);
+ #if !UE_BUILD_SHIPPING
+-	if (UE::MemStack::bCountPages.load(std::memory_order_relaxed))
++	const bool bTrace = UE::MemStack::bCountPages.load(std::memory_order_relaxed);
++	if (bTrace || UE::MemStack::ReserveOpen.load(std::memory_order_acquire))
+ 	{
+ 		bool bFromHeap = false;
+ 		void* Result;
+@@ -294,6 +429,11 @@ void *FPageAllocator::Alloc(int32 Alignment)
+ 			TGuardValue<bool*> Observe(UE::MemStack::AuditedHeapMiss, &bFromHeap);
+ 			Result = TheAllocator.Allocate(Alignment);
+ 		}
++		if (!bTrace)
++		{
++			STAT(UpdateStats());
++			return Result;
++		}
+ 		if (bFromHeap)
+ 		{
+ 			TRACE_CPUPROFILER_EVENT_SCOPE(MemStack_RequestHeap);
+@@ -348,11 +488,24 @@ void FPageAllocator::LatchProtectedMode()
+ {
+ #if !UE_BUILD_SHIPPING
+ 	UE::MemStack::bCountPages = FParse::Param(FCommandLine::Get(), TEXT("AuditMapPages"));
++	using namespace UE::MemStack;
++	bMeasureReserve = FParse::Value(FCommandLine::Get(), TEXT("MapPageReserve="), ReserveLimit);
++	if (bMeasureReserve)
++	{
++		ReserveLimit = FMath::Clamp(ReserveLimit, 0, MaxReservePages);
++		bTestTrim = FParse::Param(FCommandLine::Get(), TEXT("TestMapReserveTrim"));
++		FCoreDelegates::OnBeginFrame.AddStatic(&BeginWeightFrame);
++		FCoreDelegates::OnEndFrame.AddStatic(&EndWeightFrame);
++		FCoreDelegates::OnEnginePreExit.AddLambda([] { CloseReserve(TEXT("exit")); });
++		FCoreDelegates::GetLowLevelAllocatorMemoryTrimDelegate().AddLambda([] { CloseReserve(TEXT("pressure")); });
++		UE_LOG(LogTemp, Display, TEXT("MapPageReserve configured=%d"), ReserveLimit);
++	}
+ 	UE::MemStack::bDeferDrain = FParse::Param(FCommandLine::Get(), TEXT("DeferMapPageDrain"));
+ #endif
+ 	FCoreDelegates::GetMemoryTrimDelegate().AddLambda([]()
+ 	{
+ #if !UE_BUILD_SHIPPING
++		if (!UE::MemStack::bTravelTrim) { UE::MemStack::CloseReserve(TEXT("trim")); }
+ 		if (UE::MemStack::DeferTo)
+ 		{
+ 			*UE::MemStack::DeferTo = &Get().TheAllocator;
+diff --git a/Engine/Source/Runtime/Core/Public/Misc/MapPageTrimExperiment.h b/Engine/Source/Runtime/Core/Public/Misc/MapPageTrimExperiment.h
+index 1275aa1..3312acd 100644
+--- a/Engine/Source/Runtime/Core/Public/Misc/MapPageTrimExperiment.h
++++ b/Engine/Source/Runtime/Core/Public/Misc/MapPageTrimExperiment.h
+@@ -9,9 +9,12 @@ namespace UE::MemStack
+ class FMapPageTrimExperiment
+ {
+ public:
++	CORE_API void StartMap(bool bWeight);
++	CORE_API void Loaded();
+ 	CORE_API void DuringWorldTrim(TFunctionRef<void()> Trim);
+ 	CORE_API ~FMapPageTrimExperiment();
+ private:
++	bool bTrackWeight = false;
+ 	FPageAllocator::TPageAllocator* Pending = nullptr;
+ };
+ }
+diff --git a/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp b/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp
+index 01f5932..f28ebcd 100644
+--- a/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp
++++ b/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp
+@@ -15710,6 +15710,8 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
+ #if !UE_BUILD_SHIPPING
+ 	TRACE_CPUPROFILER_EVENT_SCOPE(LoadMap_PageWindow);
+ 	UE::MemStack::FMapPageTrimExperiment PageTrim;
++	PageTrim.StartMap(WorldContext.WorldType == EWorldType::Game && URL.Map == TEXT("/Engine/Maps/Entry") &&
++		FCString::Stricmp(URL.GetOption(TEXT("Chamber="), TEXT("")), TEXT("Weight")) == 0);
+ #endif
+ 	TRACE_LOADTIME_REQUEST_GROUP_SCOPE(TEXT("LoadMap - %s"), *URL.Map);
+ 	STAT_ADD_CUSTOMMESSAGE_NAME( STAT_NamedMarker, *(FString( TEXT( "LoadMap - " ) + URL.Map )) );
+@@ -16343,6 +16345,9 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
+ 		}
+ 	}
+
++	#if !UE_BUILD_SHIPPING
++	PageTrim.Loaded();
++#endif
+ 	// Successfully started local level.
+ 	UE_LOGSTATUS(Log, TEXT("Load map complete %s"), *URL.Map);
+ 	return true;
