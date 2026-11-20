@@ -6,11 +6,15 @@ param(
     [switch]$TraceTravel,
     [switch]$TraceDeferredGCTail,
     [switch]$DisableRenderThreadLag,
+    [switch]$DisableSmallGCPolicy,
+    [switch]$TraceTravelTasks,
     [ValidateRange(2, 20)][int]$WeightVisits = 2
 )
 $ErrorActionPreference = 'Stop'
 if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
 if ($DisableRenderThreadLag -and !$TraceTravel) { throw 'DisableRenderThreadLag requires TraceTravel' }
+if ($DisableSmallGCPolicy -and !$TraceTravel) { throw 'DisableSmallGCPolicy requires TraceTravel' }
+if ($TraceTravelTasks -and !$TraceTravel) { throw 'TraceTravelTasks requires TraceTravel' }
 if (($TraceTravel -or $PSBoundParameters.ContainsKey('WeightVisits')) -and $Scenario -ne 'Travel') {
     throw 'TraceTravel and WeightVisits require the Travel scenario'
 }
@@ -45,13 +49,16 @@ $start.RedirectStandardOutput = $true
 $profileCommand = if ($frameCount) { "CsvProfile FRAMES=$frameCount" } else { 'CsvProfile START' }
 if ($map) { $start.ArgumentList.Add($map) }
 $syncControl = if ($DisableRenderThreadLag) { 'r.OneFrameThreadLag 0,r.OneFrameThreadLag,' } else { '' }
+$gcControl = if ($DisableSmallGCPolicy) { 'gc.SmallFullGCSerialSlots 0,gc.SmallFullGCSerialSlots,' } else { '' }
 foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1080',
     "-UserDir=$dir", "-abslog=$dir/Game.log", '-ExitAfterCsvProfiling',
-    "-ExecCmds=${syncControl}r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
+    "-ExecCmds=${syncControl}${gcControl}r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
 }
 if ($TraceTravel) {
-    $start.ArgumentList.Add('-trace=cpu,frame,bookmark,loadtime')
+    $channels = 'cpu,frame,bookmark,loadtime'
+    if ($TraceTravelTasks) { $channels += ',task' }
+    $start.ArgumentList.Add("-trace=$channels")
     $start.ArgumentList.Add("-tracefile=$dir/Travel.utrace")
     $start.ArgumentList.Add('-LogCmds=LogGarbage Verbose,LogAudioMixer Verbose')
 }
@@ -106,6 +113,9 @@ if ($Scenario -eq 'Travel') {
     if ($DisableRenderThreadLag -and !($log -match 'r\.OneFrameThreadLag = "0"')) {
         throw 'The render-thread lag control was not applied'
     }
+    if ($DisableSmallGCPolicy -and !($log -match 'gc\.SmallFullGCSerialSlots = "0"')) {
+        throw 'The small full GC control was not applied'
+    }
 } elseif ($Scenario -eq 'Campaign') {
     if (!($log -match 'Vanguard verification passed: passage transit and station resupply')) { throw 'Campaign did not finish' }
 } else {
@@ -125,6 +135,8 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     ExecutableSha256 = (Get-FileHash -LiteralPath $exe).Hash
     TraceDeferredGCTail = [bool]$TraceDeferredGCTail
     DisableRenderThreadLag = [bool]$DisableRenderThreadLag
+    DisableSmallGCPolicy = [bool]$DisableSmallGCPolicy
+    TraceTravelTasks = [bool]$TraceTravelTasks
     CaptureFrames = $frameCount
     Profile = $csv[0].Name
 } | ConvertTo-Json | Set-Content -LiteralPath "$dir/Run.json"
