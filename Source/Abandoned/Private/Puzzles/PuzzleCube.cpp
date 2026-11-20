@@ -36,7 +36,7 @@ void APuzzleCube::Initialize(EPuzzleCubeType Type, UStaticMesh& Mesh)
     Body->SetBoxExtent(FVector(Size * 0.5));
     Body->SetMassOverrideInKg(NAME_None, MassKg, true);
     Visual->SetStaticMesh(&Mesh);
-    Visual->SetRelativeScale3D(FVector(Size / 100.0));
+    Visual->SetRelativeScale3D(FVector(Size / (2.0 * Mesh.GetBounds().BoxExtent.X)));
     Body->SetSimulatePhysics(true);
 }
 
