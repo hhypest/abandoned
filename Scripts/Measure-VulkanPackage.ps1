@@ -5,6 +5,7 @@ param(
     [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
     [switch]$TraceTravel,
     [switch]$DisableChamberMeshReuse,
+    [switch]$RedrawOutgoingChamber,
     [switch]$TraceDeferredGCTail,
     [switch]$DisableRenderThreadLag,
     [switch]$DisableSmallGCPolicy,
@@ -18,6 +19,7 @@ param(
     [switch]$TestMapReserveTrim
 )
 $ErrorActionPreference = 'Stop'
+if ($RedrawOutgoingChamber -and !$TraceTravel) { throw 'RedrawOutgoingChamber requires TraceTravel' }
 if ($DisableChamberMeshReuse -and !$TraceTravel) { throw 'DisableChamberMeshReuse requires TraceTravel' }
 if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
 if ($DisableRenderThreadLag -and !$TraceTravel) { throw 'DisableRenderThreadLag requires TraceTravel' }
@@ -39,9 +41,10 @@ $entry = '/Engine/Maps/Entry'
 if ($Scenario -eq 'Travel') {
     $map = "${entry}?Chamber=Stairs"
     $expectedRooms = @('Stairs', 'Weight') * $WeightVisits
+    $travelSuffix = if ($RedrawOutgoingChamber) { '' } else { '?quiet' }
     $commands = for ($i = 1; $i -lt $expectedRooms.Length; $i++) {
         $captureFrame = 500 + 550 * ($i - 1)
-        "${captureFrame}:open ${entry}?Chamber=$($expectedRooms[$i])"
+        "${captureFrame}:open ${entry}?Chamber=$($expectedRooms[$i])$travelSuffix"
     }
     $frameCount = $captureFrame + 600
     $flags = @("-csvExecCmds=$($commands -join ',')")
@@ -170,6 +173,7 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     TraceDeferredGCTail = [bool]$TraceDeferredGCTail
     DisableRenderThreadLag = [bool]$DisableRenderThreadLag
     DisableSmallGCPolicy = [bool]$DisableSmallGCPolicy
+    RedrawOutgoingChamber = [bool]$RedrawOutgoingChamber
     DisableChamberMeshReuse = [bool]$DisableChamberMeshReuse
     TraceTravelTasks = [bool]$TraceTravelTasks
     TraceTravelStats = [bool]$TraceTravelStats

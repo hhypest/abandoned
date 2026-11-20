@@ -147,6 +147,7 @@ $scenarios = @{
         Flag = '-VerifyEntryCourse'
         CaptureFlag = '-CaptureVanguard'
         Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
+        QuietChambers = @('Button', 'Weight', 'Balance')
         Success = $courseSuccess
     }
     EntryCourseAlternate = @{
@@ -155,12 +156,14 @@ $scenarios = @{
         ExtraFlag = @('-VerifyEntryAlternatePlate', '-VerifyEntryAlternateWeight')
         CaptureFlag = '-CaptureEntryCourse'
         Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
+        QuietChambers = @('Button', 'Weight', 'Balance')
         Success = $courseSuccess + @('Entry alternate solution: cube snapped to plate B.', 'alternate solution assembled, 10 + 5 + 5 kg.')
     }
     EntryCheckpoint = @{
         Map = $entry
         Flag = '-VerifyEntryCheckpoint'
         SeedCheckpoint = 'Weight'
+        QuietChambers = @('Balance')
         Chambers = @('Weight', 'Balance')
         Success = $entryFinish + @('Loaded campaign checkpoint v2: Weight', 'Saved campaign checkpoint v2: Balance (1 archive records).')
     }
@@ -410,6 +413,18 @@ function Invoke-Scenario($name, $definition, $profile) {
             if ($line -match 'LogTrainingChamber: Display: Training chamber ready\. (\w+),') { $Matches[1] }
         })
     }
+    if ($definition.QuietChambers) {
+        $result.QuietChambers = @(foreach ($line in $lines) {
+            if ($line -match 'LogLoad: LoadMap: (\S+)') {
+                $url = $Matches[1]
+                $options = $url.Split('?')
+                if ($options -contains 'quiet') {
+                    $chamber = $options -like 'Chamber=*'
+                    if ($chamber) { $chamber.Substring(8) } else { $url }
+                }
+            }
+        })
+    }
     if ($definition.ExpectedWorldEvents) {
         $result.WorldEvents = @(Read-WorldLifetimeEvents $lines)
     }
@@ -464,6 +479,8 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = "Missing success markers: $($missing -join ', ')"
     } elseif ($definition.Chambers -and ($result.Chambers -join ',') -cne ($definition.Chambers -join ',')) {
         $result.Reason = "Unexpected chamber sequence: $($result.Chambers -join ', ')"
+    } elseif ($definition.QuietChambers -and ($result.QuietChambers -join ',') -cne ($definition.QuietChambers -join ',')) {
+        $result.Reason = "Unexpected quiet chamber transitions: $($result.QuietChambers -join ', ')"
     } elseif ($definition.ExpectedWorldEvents -and
         ($result.WorldEvents -join '|') -cne ($definition.ExpectedWorldEvents -join '|')) {
         $result.Reason = 'Unexpected world lifetime sequence. Check the loaded modes, live owner counts, teardown and cleanup in Game.log.'

@@ -177,7 +177,8 @@ void ATrainingChamberGameMode::AdvanceCourse(const ATrainingChamberCharacter& Pl
     }
     if (const auto Next = Abandoned::Application::Expedition::NextCourseDestination(Course))
     {
-        Abandoned::Infrastructure::Expedition::TravelToWorld(this, *Next);
+        const bool bNextIsChamber = std::holds_alternative<Abandoned::Application::Expedition::ChamberDestination>(*Next);
+        Abandoned::Infrastructure::Expedition::TravelToWorld(this, *Next, bNextIsChamber);
     }
 }
 

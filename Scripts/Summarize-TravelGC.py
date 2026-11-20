@@ -28,8 +28,10 @@ IO = "IoDispatcher_TrimAllocators"
 OS_PAGES = "Binned2_ReleaseCachedOSPages"
 STAT_DELEGATES = "STAT_FMemory_Trim_Broadcast"
 STAT_ALLOCATOR = "STAT_FMemory_Trim_GMalloc"
+DRAW = "FViewport_Draw"
+SUBMIT = "BeginRenderingViewFamily"
 TRAVERSALS = {"parallel": "GC_ParallelReferenceTraversal", "serial": "GC_SerialReferenceTraversal"}
-TIMERS = {GC, UNLOAD, PRELOAD, ACTORS, PURGE, FINISH, DEFERRED, DELETE, LOCK, REACH, HASH, TRIM, BROADCAST,
+TIMERS = {DRAW, SUBMIT, GC, UNLOAD, PRELOAD, ACTORS, PURGE, FINISH, DEFERRED, DELETE, LOCK, REACH, HASH, TRIM, BROADCAST,
           DELEGATES, PAGES, IO, OS_PAGES, STAT_DELEGATES, STAT_ALLOCATOR, *TRAVERSALS.values()}
 
 
@@ -108,7 +110,7 @@ def memory_tail_phases(events, gc, purge, mode, allocator):
     return result
 
 
-def summarize(log, trace, expect_traversal=None, memory_tail=None):
+def summarize(log, trace, expect_traversal=None, memory_tail=None, outgoing_redraw=None):
     # Pair the log and the trace by the actor timer on each visit, as in the OpenLevel report.
     text = log.read_text(encoding="utf-8-sig")
     allocator = None
@@ -158,6 +160,21 @@ def summarize(log, trace, expect_traversal=None, memory_tail=None):
                          FullGCMs=gc.ms, AcquireLockMs=sum(s.ms for s in locks), ReachabilityMs=reach.ms, PurgeMs=purge.ms,
                          FinishFirstPassMs=finish.ms, DeferredFinishMs=deferred.ms, DeleteMs=delete.ms,
                          InitiallyPending=pending, LastReadyClass=last_class))
+        if outgoing_redraw:
+            if ("quiet" in url) != (outgoing_redraw == "quiet"):
+                raise ValueError(f"Expected {outgoing_redraw} in the travel URL at arrival {index}")
+            draws = [s for s in events[DRAW] if unload.contains(s)]
+            submissions = [s for s in events[SUBMIT] if unload.contains(s)]
+            expected = int(outgoing_redraw == "redraw")
+            if len(draws) != expected or len(submissions) != expected or (draws and not draws[0].contains(submissions[0])):
+                raise ValueError(f"Expected {outgoing_redraw} during world teardown at arrival {index}")
+            # Both modes must still submit the incoming world. This also rejects an export missing both timers.
+            until = events[UNLOAD][index + 1].start if index + 1 < len(parts) else math.inf
+            first = next((s for s in events[DRAW] if actor.end <= s.start < until), None)
+            if first is None or not any(first.contains(s) for s in events[SUBMIT]):
+                raise ValueError(f"Missing incoming world view submission at arrival {index}")
+            rows[-1].update(OutgoingDraws=len(draws), SubmittedViewFamilies=len(submissions),
+                            OutgoingDrawMs=sum(s.ms for s in draws))
         if memory_tail:
             rows[-1].update(memory_tail_phases(events, gc, purge, memory_tail, allocator))
         if expect_traversal:
@@ -177,9 +194,11 @@ def main():
                         help="Require the matching UE SmallFullGC marker on every transition")
     parser.add_argument("--memory-tail", nargs="?", const="phases", choices=("phases", "stats", "owners"),
                         help="Measure final Binned2/3 trim, optionally with verbose UE stats or MemoryTrimScopes")
+    parser.add_argument("--outgoing-redraw", choices=("redraw", "quiet"),
+                        help="Verify outgoing and incoming world view submissions during chamber travel")
     args = parser.parse_args()
     try:
-        rows = summarize(args.log, args.trace_csv, args.expect_traversal, args.memory_tail)
+        rows = summarize(args.log, args.trace_csv, args.expect_traversal, args.memory_tail, args.outgoing_redraw)
     except (OSError, ValueError, csv.Error) as error:
         parser.exit(1, f"{error}\n")
     writer = csv.DictWriter(sys.stdout, fieldnames=rows[0], lineterminator="\n")
