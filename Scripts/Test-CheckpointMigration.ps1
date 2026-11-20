@@ -1,13 +1,20 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName='Editor')]
 param(
-    [Parameter(Mandatory)][string]$EngineRoot,
+    [Parameter(Mandatory, ParameterSetName='Editor')][string]$EngineRoot,
+    [Parameter(Mandatory, ParameterSetName='Package')][string]$PackageRoot,
     [Parameter(Mandatory)][string]$LegacyProfiles
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$editor = Join-Path (Resolve-Path -LiteralPath $EngineRoot).Path 'Engine/Binaries/Win64/UnrealEditor.exe'
-$project = Join-Path $repo 'Abandoned.uproject'
+if ($PSCmdlet.ParameterSetName -eq 'Package') {
+    $executable = (Get-Item -LiteralPath (Join-Path $PackageRoot 'Abandoned/Binaries/Win64/Abandoned.exe')).FullName
+    $launchPrefix = ''
+} else {
+    $executable = (Get-Item -LiteralPath (Join-Path $EngineRoot 'Engine/Binaries/Win64/UnrealEditor.exe')).FullName
+    $project = Join-Path $repo 'Abandoned.uproject'
+    $launchPrefix = '"{0}" ' -f $project
+}
 $fixtures = (Resolve-Path -LiteralPath $LegacyProfiles).Path
 $root = Join-Path $repo "Saved/CheckpointMigration/$([guid]::NewGuid().ToString('N'))"
 $legacy = 'Saved/SaveGames/AbandonedEntryCourse.sav'
@@ -22,22 +29,29 @@ function New-Profile($Name, $LegacyId) {
     return $profile
 }
 
-function Invoke-Game($Profile, $Name, $Map, $Markers, $Flag = '') {
+function Invoke-Game($Profile, $Name, $Map, $Markers, $Flag = '', [switch]$RequireNormalExit) {
     $log = Join-Path $Profile "$Name.log"
-    $launch = '"{0}" "{1}" {2} -game -vulkan -unattended -windowed -ResX=1280 -ResY=720 -benchmark -fps=60 -forcelogflush -UserDir="{3}" -abslog="{4}"' -f $project,$Map,$Flag,$Profile,$log
-    $game = Start-Process -FilePath $editor -ArgumentList $launch -WindowStyle Hidden -PassThru
+    $launch = '{0}"{1}" {2} -game -vulkan -unattended -windowed -ResX=1280 -ResY=720 -benchmark -fps=60 -forcelogflush -UserDir="{3}" -abslog="{4}"' -f $launchPrefix,$Map,$Flag,$Profile,$log
+    $game = Start-Process -FilePath $executable -ArgumentList $launch -WindowStyle Hidden -PassThru
     $watch = [Diagnostics.Stopwatch]::StartNew()
     $expected = @('Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6') + $Markers
     try {
         while ($watch.Elapsed.TotalSeconds -lt 90) {
+            $exited = $game.HasExited
             if (Test-Path -LiteralPath $log) {
                 $text = Get-Content -LiteralPath $log -Raw
                 if ($text) {
                     if ($text -match ': Error:|Fatal error:') { throw "Unexpected error in $log" }
-                    if (!($expected | Where-Object { !$text.Contains($_) })) { return }
+                    if (!($expected | Where-Object { !$text.Contains($_) })) {
+                        if (!$RequireNormalExit) { return }
+                        if ($exited) {
+                            if ($game.ExitCode -ne 0) { throw "Unexpected exit code $($game.ExitCode) in $log" }
+                            return
+                        }
+                    }
                 }
             }
-            if ($game.HasExited) { break }
+            if ($exited) { break }
             Start-Sleep -Milliseconds 300
         }
         throw "Missing required markers in $log"
@@ -105,3 +119,19 @@ if ($save.checkpoint -cne 'Balance' -or $save.archive.Count -ne 1 -or $save.arch
     throw 'Wrong persisted campaign resupply record.'
 }
 Write-Host 'Campaign resupply record persisted.'
+
+if ($PSCmdlet.ParameterSetName -eq 'Package') {
+    # Use the archived Balance slot. Check order and persistence across rapid travel and an immediate quit.
+    $commands = "60:open ${entry}?Chamber=Button,64:open ${entry}?Chamber=Stairs,68:open ${entry}?Chamber=Weight,70:quit"
+    $flags = '-ExecCmds="CsvProfile START" "-csvExecCmds={0}"' -f $commands
+    Invoke-Game $balance 'TravelQuit' $entry @('Training chamber ready. Weight', 'LogExit: Exiting.') $flags -RequireNormalExit
+    $log = Get-Content -LiteralPath (Join-Path $balance 'TravelQuit.log') -Raw
+    $rooms = [regex]::Matches($log, 'Training chamber ready\. (\w+),') | ForEach-Object { $_.Groups[1].Value }
+    if (($rooms -join ',') -cne 'Balance,Button,Stairs,Weight') { throw "Unexpected travel order: $rooms" }
+    $save = Get-Content -LiteralPath (Join-Path $balance $campaign) -Raw | ConvertFrom-Json
+    if ($save.version -ne 2 -or $save.checkpoint -cne 'Weight' -or ($save.archive -join ',') -cne 'oxygen-restored') {
+        throw 'A rapid travel or shutdown lost the last arrival or a previously persisted archive record.'
+    }
+    Invoke-Game $balance 'AfterQuit' $entry @('Loaded campaign checkpoint v2: Weight', 'Training chamber ready. Weight')
+    Write-Host 'Rapid travel and normal shutdown preserved the last checkpoint and the archive.'
+}

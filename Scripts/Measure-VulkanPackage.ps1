@@ -3,10 +3,13 @@
 param(
     [Parameter(Mandatory)][string]$PackageRoot,
     [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
-    [switch]$TraceTravel
+    [switch]$TraceTravel,
+    [ValidateRange(2, 20)][int]$WeightVisits = 2
 )
 $ErrorActionPreference = 'Stop'
-if ($TraceTravel -and $Scenario -ne 'Travel') { throw 'TraceTravel requires the Travel scenario' }
+if (($TraceTravel -or $PSBoundParameters.ContainsKey('WeightVisits')) -and $Scenario -ne 'Travel') {
+    throw 'TraceTravel and WeightVisits require the Travel scenario'
+}
 $root = (Resolve-Path -LiteralPath $PackageRoot).Path
 $exe = Join-Path $root 'Abandoned/Binaries/Win64/Abandoned.exe'
 $runDir = Join-Path $PSScriptRoot "../Saved/Performance/$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))-$Scenario-$([Guid]::NewGuid().ToString('N'))"
@@ -14,8 +17,13 @@ $dir = (New-Item -ItemType Directory -Path $runDir).FullName
 $entry = '/Engine/Maps/Entry'
 if ($Scenario -eq 'Travel') {
     $map = "${entry}?Chamber=Stairs"
-    $frameCount = 2200
-    $flags = @("-csvExecCmds=500:open ${entry}?Chamber=Weight,1050:open ${entry}?Chamber=Stairs,1600:open ${entry}?Chamber=Weight")
+    $expectedRooms = @('Stairs', 'Weight') * $WeightVisits
+    $commands = for ($i = 1; $i -lt $expectedRooms.Length; $i++) {
+        $captureFrame = 500 + 550 * ($i - 1)
+        "${captureFrame}:open ${entry}?Chamber=$($expectedRooms[$i])"
+    }
+    $frameCount = $captureFrame + 600
+    $flags = @("-csvExecCmds=$($commands -join ',')")
 } elseif ($Scenario -eq 'Campaign') {
     $map = $null
     $frameCount = $null
@@ -88,7 +96,7 @@ if ($Scenario -eq 'Travel') {
     $rooms = @(foreach ($line in $log) {
         if ($line -match 'Training chamber ready\. (\w+),') { $Matches[1] }
     })
-    if (($rooms -join ',') -ne 'Stairs,Weight,Stairs,Weight') { throw "Unexpected route: $rooms" }
+    if (($rooms -join ',') -ne ($expectedRooms -join ',')) { throw "Unexpected route: $rooms" }
 } elseif ($Scenario -eq 'Campaign') {
     if (!($log -match 'Vanguard verification passed: passage transit and station resupply')) { throw 'Campaign did not finish' }
 } else {
