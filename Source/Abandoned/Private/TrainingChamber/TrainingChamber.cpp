@@ -1,4 +1,6 @@
 #include "TrainingChamber.h"
+#include "TrainingChamber/ChamberMeshLibrary.h"
+#include "Engine/GameInstance.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "TrainingChamberLayout.h"
 #include "Verification/DoorClampVerification.h"
@@ -209,10 +211,11 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         return;
     }
 
-    UStaticMesh* SmallCube = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Abandoned/FosTech/SM_Cube55.SM_Cube55"));
-    UStaticMesh* LargeCube = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Abandoned/FosTech/SM_Cube80.SM_Cube80"));
-    UStaticMesh* PlateBase = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Abandoned/FosTech/SM_PlateBase.SM_PlateBase"));
-    UStaticMesh* PlateTop = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Abandoned/FosTech/SM_PlateTop.SM_PlateTop"));
+    auto* MeshLibrary = GetGameInstance()->GetSubsystem<UChamberMeshLibrary>();
+    UStaticMesh* SmallCube = MeshLibrary->LoadForChamber(*GetWorld(), TEXT("/Game/Abandoned/FosTech/SM_Cube55.SM_Cube55"));
+    UStaticMesh* LargeCube = MeshLibrary->LoadForChamber(*GetWorld(), TEXT("/Game/Abandoned/FosTech/SM_Cube80.SM_Cube80"));
+    UStaticMesh* PlateBase = MeshLibrary->LoadForChamber(*GetWorld(), TEXT("/Game/Abandoned/FosTech/SM_PlateBase.SM_PlateBase"));
+    UStaticMesh* PlateTop = MeshLibrary->LoadForChamber(*GetWorld(), TEXT("/Game/Abandoned/FosTech/SM_PlateTop.SM_PlateTop"));
     if (!SmallCube || !LargeCube || !PlateBase || !PlateTop)
     {
         ErrorMessage = TEXT("Training chamber requires the FosTech cube and plate meshes.");

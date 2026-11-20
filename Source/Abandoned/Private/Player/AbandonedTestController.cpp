@@ -1,5 +1,6 @@
 #include "Player/AbandonedTestController.h"
 
+#include "Algo/Find.h"
 #include "Components/InputComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
@@ -12,6 +13,7 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/SWindow.h"
@@ -19,6 +21,8 @@
 
 namespace
 {
+constexpr int32 FrameRateLimits[] = {30, 60, 120, 180};
+
 class STestMenu final : public SCompoundWidget
 {
 public:
@@ -59,6 +63,22 @@ private:
 };
 }
 
+void AAbandonedTestController::BeginPlay()
+{
+    Super::BeginPlay();
+    if (CanChangeDisplaySettings())
+    {
+        UGameUserSettings* Settings = UGameUserSettings::GetGameUserSettings();
+        if (!Algo::Find(FrameRateLimits, Settings->GetFrameRateLimit()))
+        {
+            // Older profiles can contain the former unlimited cap.
+            Settings->SetFrameRateLimit(60);
+            Settings->ApplyNonResolutionSettings();
+            Settings->SaveSettings();
+        }
+    }
+}
+
 void AAbandonedTestController::SetupInputComponent()
 {
     Super::SetupInputComponent();
@@ -94,8 +114,8 @@ void AAbandonedTestController::ToggleMenu()
                 SNew(SBox)
                 .WidthOverride(320.0f)
                 [
-                    SNew(SBorder)
-                    .Padding(20.0f)
+                    SNew(SScrollBox)
+                    + SScrollBox::Slot().Padding(20.0f)
                     [
                         SNew(SVerticalBox)
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 16.0f)
@@ -109,6 +129,20 @@ void AAbandonedTestController::ToggleMenu()
                             SAssignNew(ResumeButton, SButton)
                             .Text(NSLOCTEXT("TestMenu", "Resume", "Resume"))
                             .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Resume)
+                        ]
+                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                        [
+                            SNew(SButton)
+                            .Text_UObject(this, &AAbandonedTestController::GetVSyncLabel)
+                            .IsEnabled_UObject(this, &AAbandonedTestController::CanChangeDisplaySettings)
+                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::VSync)
+                        ]
+                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                        [
+                            SNew(SButton)
+                            .Text_UObject(this, &AAbandonedTestController::GetFrameLimitLabel)
+                            .IsEnabled_UObject(this, &AAbandonedTestController::CanChangeDisplaySettings)
+                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::FrameRate)
                         ]
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
                         [
@@ -162,7 +196,7 @@ void AAbandonedTestController::ToggleMenu()
                         [
                             SNew(SButton)
                             .Text_UObject(this, &AAbandonedTestController::GetFullscreenLabel)
-                            .IsEnabled_UObject(this, &AAbandonedTestController::CanToggleFullscreen)
+                            .IsEnabled_UObject(this, &AAbandonedTestController::CanChangeDisplaySettings)
                             .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Fullscreen)
                         ]
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
@@ -210,7 +244,7 @@ void AAbandonedTestController::EndPlay(const EEndPlayReason::Type Reason)
     Super::EndPlay(Reason);
 }
 
-bool AAbandonedTestController::CanToggleFullscreen() const
+bool AAbandonedTestController::CanChangeDisplaySettings() const
 {
     const ULocalPlayer* LocalPlayer = GetLocalPlayer();
     return LocalPlayer && LocalPlayer->ViewportClient && LocalPlayer->ViewportClient->GetWindow().IsValid() &&
@@ -219,7 +253,7 @@ bool AAbandonedTestController::CanToggleFullscreen() const
 
 FText AAbandonedTestController::GetFullscreenLabel() const
 {
-    if (!CanToggleFullscreen())
+    if (!CanChangeDisplaySettings())
     {
         return NSLOCTEXT("TestMenu", "FullscreenStandalone", "Fullscreen available in standalone");
     }
@@ -228,9 +262,50 @@ FText AAbandonedTestController::GetFullscreenLabel() const
         : NSLOCTEXT("TestMenu", "ExitFullscreen", "Windowed (F11)");
 }
 
+FText AAbandonedTestController::GetVSyncLabel() const
+{
+    const UGameUserSettings* Settings = UGameUserSettings::GetGameUserSettings();
+    return Settings && Settings->IsVSyncEnabled()
+        ? NSLOCTEXT("TestMenu", "VSyncOn", "Vertical sync: On")
+        : NSLOCTEXT("TestMenu", "VSyncOff", "Vertical sync: Off");
+}
+
+FText AAbandonedTestController::GetFrameLimitLabel() const
+{
+    const UGameUserSettings* Settings = UGameUserSettings::GetGameUserSettings();
+    return FText::Format(NSLOCTEXT("TestMenu", "FrameLimit", "Frame limit: {0} FPS"),
+        FText::AsNumber(Settings ? Settings->GetFrameRateLimit() : 60.0f));
+}
+
+void AAbandonedTestController::AbandonedToggleVSync()
+{
+    if (CanChangeDisplaySettings())
+    {
+        UGameUserSettings* Settings = UGameUserSettings::GetGameUserSettings();
+        Settings->SetVSyncEnabled(!Settings->IsVSyncEnabled());
+        Settings->ApplyNonResolutionSettings();
+        Settings->SaveSettings();
+    }
+}
+
+void AAbandonedTestController::AbandonedCycleFrameLimit()
+{
+    if (CanChangeDisplaySettings())
+    {
+        UGameUserSettings* Settings = UGameUserSettings::GetGameUserSettings();
+        const int32* Next = Algo::FindByPredicate(FrameRateLimits, [Settings](int32 Limit)
+        {
+            return Limit > Settings->GetFrameRateLimit();
+        });
+        Settings->SetFrameRateLimit(Next ? *Next : FrameRateLimits[0]);
+        Settings->ApplyNonResolutionSettings();
+        Settings->SaveSettings();
+    }
+}
+
 void AAbandonedTestController::ToggleFullscreen()
 {
-    if (!CanToggleFullscreen())
+    if (!CanChangeDisplaySettings())
     {
         return;
     }
@@ -288,6 +363,12 @@ FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
         break;
     case EMenuAction::Fullscreen:
         ToggleFullscreen();
+        break;
+    case EMenuAction::VSync:
+        AbandonedToggleVSync();
+        break;
+    case EMenuAction::FrameRate:
+        AbandonedCycleFrameLimit();
         break;
     case EMenuAction::Quit:
         CloseMenu();
