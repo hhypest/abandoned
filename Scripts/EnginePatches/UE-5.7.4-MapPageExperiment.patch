@@ -1,0 +1,217 @@
+diff --git a/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp b/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp
+index b83ef85..53db6e3 100644
+--- a/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp
++++ b/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp
+@@ -672,8 +672,22 @@ void FUseSystemMallocForNew::operator delete[](void* Ptr)
+ 	FMemory::SystemFree(Ptr);
+ }
+
++#if !UE_BUILD_SHIPPING
++namespace UE::MemStack
++{
++extern thread_local bool* AuditedHeapMiss;
++extern thread_local int32* AuditedPageFrees;
++}
++#endif
++
+ void* FMemory::Malloc(SIZE_T Count, uint32 Alignment)
+ {
++#if !UE_BUILD_SHIPPING
++	if (Count == 65536 && UE::MemStack::AuditedHeapMiss)
++	{
++		*UE::MemStack::AuditedHeapMiss = true;
++	}
++#endif
+ 	return FMemory_MallocInline(Count, Alignment);
+ }
+
+@@ -684,6 +698,14 @@ void* FMemory::Realloc(void* Original, SIZE_T Count, uint32 Alignment)
+
+ void FMemory::Free(void* Original)
+ {
++#if !UE_BUILD_SHIPPING
++	if (Original && UE::MemStack::AuditedPageFrees)
++	{
++		++*UE::MemStack::AuditedPageFrees;
++		TGuardValue<int32*> Guard(UE::MemStack::AuditedPageFrees, nullptr);
++		return FMemory_FreeInline(Original);
++	}
++#endif
+ 	return FMemory_FreeInline(Original);
+ }
+
+diff --git a/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp b/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp
+index 9fce516..2873172 100644
+--- a/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp
++++ b/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp
+@@ -1,6 +1,8 @@
+ // Copyright Epic Games, Inc. All Rights Reserved.
+
+ #include "Misc/MemStack.h"
++#include "Misc/MapPageTrimExperiment.h"
++#include "ProfilingDebugging/CpuProfilerTrace.h"
+ #include "Misc/Parse.h"
+ #include "Misc/CommandLine.h"
+ #include "Stats/Stats.h"
+@@ -15,6 +17,50 @@ DECLARE_MEMORY_STAT(TEXT("MemStack Large Block"), STAT_MemStackLargeBLock,STATGR
+ DECLARE_MEMORY_STAT(TEXT("PageAllocator Free"), STAT_PageAllocatorFree, STATGROUP_Memory);
+ DECLARE_MEMORY_STAT(TEXT("PageAllocator Used"), STAT_PageAllocatorUsed, STATGROUP_Memory);
+
++#if !UE_BUILD_SHIPPING
++namespace UE::MemStack
++{
++thread_local bool* AuditedHeapMiss = nullptr;
++thread_local int32* AuditedPageFrees = nullptr;
++static thread_local FPageAllocator::TPageAllocator** DeferTo = nullptr;
++static std::atomic<bool> bCountPages{false};
++static bool bDeferDrain = false;
++
++static void Drain(FPageAllocator::TPageAllocator& Pool)
++{
++	TRACE_CPUPROFILER_EVENT_SCOPE(MemStack_TrimFreePages);
++	if (!bCountPages.load(std::memory_order_relaxed))
++	{
++		Pool.Trim();
++		return;
++	}
++	int32 Released = 0;
++	{
++		TGuardValue<int32*> Observe(AuditedPageFrees, &Released);
++		Pool.Trim();
++	}
++	TCHAR Label[48];
++	FCString::Snprintf(Label, UE_ARRAY_COUNT(Label), TEXT("MemStackDrain/%d"), Released);
++	TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(Label);
++}
++
++void FMapPageTrimExperiment::DuringWorldTrim(TFunctionRef<void()> Trim)
++{
++	TGuardValue<FPageAllocator::TPageAllocator**> Guard(DeferTo, bDeferDrain ? &Pending : nullptr);
++	Trim();
++}
++
++FMapPageTrimExperiment::~FMapPageTrimExperiment()
++{
++	if (Pending)
++	{
++		TRACE_CPUPROFILER_EVENT_SCOPE(MemStack_EndOfLoadMapDrain);
++		Drain(*Pending);
++	}
++}
++}
++#endif
++
+ FPageAllocator* FPageAllocator::Instance = nullptr;
+
+ FPageAllocator::FPageAllocator()
+@@ -239,6 +285,27 @@ void *FPageAllocator::Alloc(int32 Alignment)
+ 	return FMemory::Malloc(FPageAllocator::PageSize, Alignment);
+ #else
+ 	LLM_SCOPE_BY_BOOTSTRAP_TAG(MemStack);
++#if !UE_BUILD_SHIPPING
++	if (UE::MemStack::bCountPages.load(std::memory_order_relaxed))
++	{
++		bool bFromHeap = false;
++		void* Result;
++		{
++			TGuardValue<bool*> Observe(UE::MemStack::AuditedHeapMiss, &bFromHeap);
++			Result = TheAllocator.Allocate(Alignment);
++		}
++		if (bFromHeap)
++		{
++			TRACE_CPUPROFILER_EVENT_SCOPE(MemStack_RequestHeap);
++		}
++		else
++		{
++			TRACE_CPUPROFILER_EVENT_SCOPE(MemStack_RequestReuse);
++		}
++		STAT(UpdateStats());
++		return Result;
++	}
++#endif
+ 	void *Result = TheAllocator.Allocate(Alignment);
+ 	STAT(UpdateStats());
+ 	return Result;
+@@ -279,9 +346,24 @@ uint64 FPageAllocator::BytesFree()
+
+ void FPageAllocator::LatchProtectedMode()
+ {
++#if !UE_BUILD_SHIPPING
++	UE::MemStack::bCountPages = FParse::Param(FCommandLine::Get(), TEXT("AuditMapPages"));
++	UE::MemStack::bDeferDrain = FParse::Param(FCommandLine::Get(), TEXT("DeferMapPageDrain"));
++#endif
+ 	FCoreDelegates::GetMemoryTrimDelegate().AddLambda([]()
+ 	{
++#if !UE_BUILD_SHIPPING
++		if (UE::MemStack::DeferTo)
++		{
++			*UE::MemStack::DeferTo = &Get().TheAllocator;
++		}
++		else
++		{
++			UE::MemStack::Drain(Get().TheAllocator);
++		}
++#else
+ 		Get().TheAllocator.Trim();
++#endif
+ 	});
+
+ #if MEMSTACK_PURGATORY_COMPILED_IN
+diff --git a/Engine/Source/Runtime/Core/Public/Misc/MapPageTrimExperiment.h b/Engine/Source/Runtime/Core/Public/Misc/MapPageTrimExperiment.h
+new file mode 100644
+index 0000000..1275aa1
+--- /dev/null
++++ b/Engine/Source/Runtime/Core/Public/Misc/MapPageTrimExperiment.h
+@@ -0,0 +1,17 @@
++#pragma once
++
++#include "Misc/MemStack.h"
++#include "Templates/Function.h"
++
++namespace UE::MemStack
++{
++// Development capture only. Drain the original pool even if LoadMap returns early.
++class FMapPageTrimExperiment
++{
++public:
++	CORE_API void DuringWorldTrim(TFunctionRef<void()> Trim);
++	CORE_API ~FMapPageTrimExperiment();
++private:
++	FPageAllocator::TPageAllocator* Pending = nullptr;
++};
++}
+diff --git a/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp b/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp
+index ff5832b..01f5932 100644
+--- a/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp
++++ b/Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp
+@@ -5,6 +5,7 @@ UnrealEngine.cpp: Implements the UEngine class and helpers.
+ =============================================================================*/
+
+ #include "UnrealEngine.h"
++#include "Misc/MapPageTrimExperiment.h"
+ #include "Algo/Find.h"
+ #include "Engine/Blueprint.h"
+ #include "Async/AsyncFileHandle.h"
+@@ -15706,6 +15707,10 @@ void UEngine::TickWorldTravel(FWorldContext& Context, float DeltaSeconds)
+ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetGame* Pending, FString& Error )
+ {
+ 	UE_SCOPED_ENGINE_ACTIVITY(TEXT("Loading Map %s"), *URL.Map);
++#if !UE_BUILD_SHIPPING
++	TRACE_CPUPROFILER_EVENT_SCOPE(LoadMap_PageWindow);
++	UE::MemStack::FMapPageTrimExperiment PageTrim;
++#endif
+ 	TRACE_LOADTIME_REQUEST_GROUP_SCOPE(TEXT("LoadMap - %s"), *URL.Map);
+ 	STAT_ADD_CUSTOMMESSAGE_NAME( STAT_NamedMarker, *(FString( TEXT( "LoadMap - " ) + URL.Map )) );
+ 	TRACE_BOOKMARK(TEXT("LoadMap - %s"), *URL.Map);
+@@ -15936,7 +15941,11 @@ bool UEngine::LoadMap( FWorldContext& WorldContext, FURL URL, class UPendingNetG
+ 	// trim memory to clear up allocations from the previous level (also flushes rendering)
+ 	if (GDelayTrimMemoryDuringMapLoadMode == 0)
+ 	{
++#if !UE_BUILD_SHIPPING
++		PageTrim.DuringWorldTrim([this]() { TrimMemory(); });
++#else
+ 		TrimMemory();
++#endif
+ 	}
+
+ 	// Cancels the Forced StreamType for textures using a timer.
