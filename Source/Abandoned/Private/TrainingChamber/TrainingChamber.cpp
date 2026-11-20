@@ -209,6 +209,16 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         return;
     }
 
+    UStaticMesh* SmallCube = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Abandoned/FosTech/SM_Cube55.SM_Cube55"));
+    UStaticMesh* LargeCube = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Abandoned/FosTech/SM_Cube80.SM_Cube80"));
+    UStaticMesh* PlateBase = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Abandoned/FosTech/SM_PlateBase.SM_PlateBase"));
+    UStaticMesh* PlateTop = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Abandoned/FosTech/SM_PlateTop.SM_PlateTop"));
+    if (!SmallCube || !LargeCube || !PlateBase || !PlateTop)
+    {
+        ErrorMessage = TEXT("Training chamber requires the FosTech cube and plate meshes.");
+        return;
+    }
+
     UWorld& World = *GetWorld();
     Abandoned::Blockout::ApplyGravity(World);
     const auto Finishes = Abandoned::Scene::MakeFinishes(*this, SurfaceMaterial, Layout->Finishes);
@@ -226,12 +236,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
             ErrorMessage = TEXT("Could not create a training chamber cube.");
             return;
         }
-        Cube->Initialize(CubeSpawn.Type, *Mesh);
-        const FName CubeFinish(CubeSpawn.Type == EPuzzleCubeType::Large ? TEXT("Heavy") : TEXT("Light"));
-        if (UMaterialInterface* const* Material = Finishes.Find(CubeFinish))
-        {
-            Cube->SetVisualMaterial(**Material);
-        }
+        Cube->Initialize(CubeSpawn.Type, CubeSpawn.Type == EPuzzleCubeType::Small ? *SmallCube : *LargeCube);
         Cubes.Add(Cube);
     }
     const auto DoorParts = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center, Layout->Door.Size,
@@ -241,19 +246,29 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     for (int32 Index = 0; Index < Layout->GetPlateCount(); ++Index)
     {
         const FSceneBlock& Block = Layout->GetPlateAt(Index);
-        const auto Parts = Abandoned::Blockout::SpawnBox(World, *Mesh, Block.Center, Block.Size, EComponentMobility::Movable);
+        const auto Parts = Abandoned::Blockout::SpawnBox(World, *PlateTop, Block.Center, Block.Size, EComponentMobility::Movable);
         if (!Parts.Collision || !Parts.Visual)
         {
             ErrorMessage = TEXT("Could not create the pressure plates.");
             return;
         }
-        Abandoned::Scene::SetFinish(Parts, Block, Finishes);
+        // Both mesh pivots share the centre of the unpressed 110 x 110 x 20 cm assembly.
+        const FVector PlateScale = Block.Size / FVector(110.0, 110.0, 20.0);
+        Parts.Visual->SetRelativeScale3D(PlateScale);
+        AActor* PlateActor = Parts.Collision->GetOwner();
+        auto* Base = NewObject<UStaticMeshComponent>(PlateActor);
+        PlateActor->AddInstanceComponent(Base);
+        Base->SetupAttachment(Parts.Collision);
+        Base->SetMobility(EComponentMobility::Movable);
+        Base->SetCollisionProfileName(TEXT("NoCollision"));
+        Base->SetStaticMesh(PlateBase);
+        Base->SetRelativeScale3D(PlateScale);
+        Base->RegisterComponent();
         FSceneLight Light = Layout->PlateLight;
         Light.Position += Block.Center - Layout->Plate.Center;
         PlateCircuit->AddPlate(*Parts.Collision, *Parts.Visual, Abandoned::Scene::AddLight(World, Light));
         if (Layout->UsesPlateBalance() || Layout->UsesParallelPlates())
         {
-            AActor* PlateActor = Parts.Collision->GetOwner();
             auto* Sign = NewObject<UTextRenderComponent>(PlateActor);
             PlateActor->AddInstanceComponent(Sign);
             Sign->SetupAttachment(Parts.Collision);
