@@ -1,0 +1,13 @@
+Run,WeightVisit,ReserveKept,ReserveServed,ReserveReleased,GCReleased,PostGCReleased,EndReleased,PostGCHeap,PostGCReuse,BuildHeap,BuildReuse,ReturnTailHeap,ReturnTailReuse,FirstTickHeap,FirstTickReuse,LaterTicksHeap,LaterTicksReuse
+CountA,1,0,0,0,135,1,0,0,0,6,6,7,8,119,120,0,889
+CountA,2,0,0,0,132,0,0,0,0,12,4,2,14,115,127,0,885
+CountA,3,0,0,0,133,0,0,0,0,7,5,5,7,121,122,0,888
+CountA,4,0,0,0,134,2,0,0,0,9,5,4,9,121,120,0,888
+CountA,5,0,0,0,131,0,0,0,0,7,5,6,7,111,133,0,883
+CountB,1,128,128,0,0,3,0,0,0,0,19,0,11,8,232,0,886
+CountB,2,128,125,3,0,1,0,0,0,0,12,0,15,0,234,0,892
+CountB,3,128,128,0,1,4,0,0,0,0,10,0,17,8,233,0,895
+CountB,4,126,126,0,0,0,0,0,0,0,16,0,13,8,230,0,884
+CountB,5,125,125,0,0,0,0,0,0,0,10,0,15,8,235,0,886
+Pressure,1,128,14,114,0,5,0,0,0,0,12,0,14,120,117,0,886
+Pressure,2,128,8,120,0,7,0,0,0,0,12,0,4,126,128,0,884

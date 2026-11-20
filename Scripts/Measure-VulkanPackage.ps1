@@ -12,12 +12,17 @@ param(
     [switch]$TraceMapPages,
     [switch]$DeferMapPageDrain,
     [ValidateSet('Default', 'Binned2', 'Binned3')][string]$Allocator = 'Default',
-    [ValidateRange(2, 20)][int]$WeightVisits = 2
+    [ValidateRange(2, 20)][int]$WeightVisits = 2,
+    [ValidateRange(0, 128)][int]$MapPageReserve,
+    [switch]$TestMapReserveTrim
 )
 $ErrorActionPreference = 'Stop'
 if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
 if ($DisableRenderThreadLag -and !$TraceTravel) { throw 'DisableRenderThreadLag requires TraceTravel' }
 if ($DisableSmallGCPolicy -and !$TraceTravel) { throw 'DisableSmallGCPolicy requires TraceTravel' }
+$measureReserve = $PSBoundParameters.ContainsKey('MapPageReserve')
+if ($measureReserve -and (!$TraceTravel -or $DeferMapPageDrain)) { throw 'MapPageReserve requires normal traced travel' }
+if ($TestMapReserveTrim -and !($measureReserve -and $MapPageReserve -gt 0)) { throw 'TestMapReserveTrim requires a positive reserve' }
 if (($TraceMapPages -or $DeferMapPageDrain) -and !$TraceTravel) { throw 'The MemStack experiment requires TraceTravel' }
 if ($TraceTravelStats -and !$TraceTravel) { throw 'TraceTravelStats requires TraceTravel' }
 if ($TraceTravelTasks -and !$TraceTravel) { throw 'TraceTravelTasks requires TraceTravel' }
@@ -61,6 +66,8 @@ foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1
     "-ExecCmds=${syncControl}${gcControl}r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
 }
+if ($measureReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
+if ($TestMapReserveTrim) { $start.ArgumentList.Add('-TestMapReserveTrim') }
 if ($TraceMapPages) { $start.ArgumentList.Add('-AuditMapPages') }
 if ($DeferMapPageDrain) { $start.ArgumentList.Add('-DeferMapPageDrain') }
 if ($TraceTravelStats) { $start.ArgumentList.Add('-verbosenamedevents') }
@@ -117,6 +124,9 @@ $actualAllocator = $allocatorLine[0].Matches[0].Groups[1].Value
 if ($Allocator -ne 'Default' -and $Allocator -ne $actualAllocator) {
     throw "Requested $Allocator but the package used $actualAllocator"
 }
+if ($measureReserve -and !($log -match "MapPageReserve configured=$MapPageReserve\s*$")) {
+    throw 'The package did not confirm the requested page reserve'
+}
 foreach ($setting in @('r\.VSync = "0"', 't\.MaxFPS = "0"', 'r\.ScreenPercentage = "100"', 'sg\.ShadowQuality = "2"')) {
     if (!($log -match $setting)) { throw "Unexpected profile in $dir/Game.log ($setting)" }
 }
@@ -158,6 +168,8 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     DisableSmallGCPolicy = [bool]$DisableSmallGCPolicy
     TraceTravelTasks = [bool]$TraceTravelTasks
     TraceTravelStats = [bool]$TraceTravelStats
+    MapPageReserve = if ($measureReserve) { $MapPageReserve } else { $null }
+    TestMapReserveTrim = [bool]$TestMapReserveTrim
     TraceMapPages = [bool]$TraceMapPages
     DeferMapPageDrain = [bool]$DeferMapPageDrain
     Allocator = $actualAllocator
