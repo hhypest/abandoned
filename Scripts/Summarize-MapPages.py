@@ -18,6 +18,7 @@ ACTORS = "UWorld::InitializeActorsForPlay"
 DRAIN = "MemStack_TrimFreePages"
 LATE = "MemStack_EndOfLoadMapDrain"
 FRAME = "FEngineLoop::Tick"
+RESERVE_END = "MemStack_FirstFullFrameEnd"
 RELEASE = "MemStackDrain/"
 REQUESTS = ("MemStack_RequestHeap", "MemStack_RequestReuse")
 
@@ -58,7 +59,7 @@ def read_events(path):
                 continue
             if row["ThreadName"] != "GameThread":
                 continue
-            if name not in (LOAD, GC, PRELOAD, ACTORS, DRAIN, LATE, FRAME) and not name.startswith(RELEASE):
+            if name not in (LOAD, GC, PRELOAD, ACTORS, DRAIN, LATE, FRAME, RESERVE_END) and not name.startswith(RELEASE):
                 continue
             span = Span(float(row["StartTime"]), float(row["EndTime"]), int(row["Depth"]))
             if not (math.isfinite(span.end) and 0 <= span.start <= span.end and span.depth >= 0):
@@ -100,6 +101,9 @@ def summarize(folder, trace):
     config = json.loads((folder / "Run.json").read_text(encoding="utf-8-sig"))
     if config["Scenario"] != "Travel" or config["Allocator"] != "Binned2":
         raise ValueError("Expected Binned2 packaged travel")
+    limit = config.get("MapPageReserve")
+    if limit is not None and (type(limit) is not int or not 0 <= limit <= 128 or config["DeferMapPageDrain"]):
+        raise ValueError("Invalid map page reserve configuration")
     count_pages = config["TraceMapPages"]
     deferred = config["DeferMapPageDrain"]
     events, threads, releases = read_events(trace)
@@ -143,13 +147,37 @@ def summarize(folder, trace):
         row = dict(Arrival=i, Chamber=chamber, FullMapMs=world.ms, FullGCMs=gc.ms,
                    GCDrainMs=sum(s.ms for s in early), PostGCDrainMs=sum(s.ms for s in second),
                    EndDrainMs=sum(s.ms for s in tail))
+        if count_pages or limit is not None:
+            frames = events[FRAME][bisect_left(ticks, world.end):][:12]
+            if len(frames) != 12 or (i + 1 < len(loads) and frames[-1].end > events[LOAD][i + 1].start):
+                raise ValueError(f"Incomplete recovery window at arrival {i}")
+        if limit is not None:
+            endings = [s for s in events[RESERVE_END] if world.start <= s.start < frames[-1].end]
+            closes = re.findall(r"MapPageReserve close=(\S+) admitted=(\d+) served=(\d+) released=(\d+)", part)
+            if chamber == "Weight":
+                ending = only(endings, RESERVE_END)
+                if not frames[0].contains(ending):
+                    raise ValueError(f"Reserve marker outside first full tick at arrival {i}")
+                row.update(FirstFullTickMs=frames[0].ms, EndCallbackMs=ending.ms)
+            else:
+                if endings:
+                    raise ValueError(f"Unexpected reserve marker in {chamber}")
+                row.update(FirstFullTickMs=frames[0].ms, EndCallbackMs="")
+            if limit and chamber == "Weight":
+                reason, kept, served, released = only(closes, "reserve close")
+                kept, served, released = int(kept), int(served), int(released)
+                expected = "trim" if config["TestMapReserveTrim"] else "frame"
+                if reason != expected or kept > limit or kept != served + released:
+                    raise ValueError(f"Invalid reserve accounting at arrival {i}")
+            else:
+                if closes:
+                    raise ValueError(f"Unexpected reserve at arrival {i}")
+                kept = served = released = 0
+            row.update(ReserveKept=kept, ReserveServed=served, ReserveReleased=released)
         if count_pages:
             counts = {s: only([count for marker, count in releases if s.contains(marker)], RELEASE) for s in drains}
             row.update(GCReleased=sum(counts[s] for s in early), PostGCReleased=sum(counts[s] for s in second),
                        EndReleased=counts[drains[0]] if deferred else 0)
-            frames = events[FRAME][bisect_left(ticks, world.end):][:12]
-            if len(frames) != 12 or (i + 1 < len(loads) and frames[-1].end > events[LOAD][i + 1].start):
-                raise ValueError(f"Incomplete recovery window at arrival {i}")
             for phase, start, end in (("PostGC", gc.end, preload.start),
                                       ("Build", preload.start, world.end),
                                       ("ReturnTail", world.end, frames[0].start),

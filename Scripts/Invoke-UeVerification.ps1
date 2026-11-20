@@ -19,10 +19,14 @@ param(
     [switch]$Capture,
 
     [ValidateRange(1, 3600)]
-    [int]$TimeoutSeconds = 180
+    [int]$TimeoutSeconds = 180,
+
+    [Parameter(ParameterSetName = 'Package')]
+    [ValidateRange(0, 128)][int]$MapPageReserve
 )
 
 $ErrorActionPreference = 'Stop'
+$testReserve = $PSBoundParameters.ContainsKey('MapPageReserve')
 $repo = Split-Path -Parent $PSScriptRoot
 $target = $PSCmdlet.ParameterSetName
 if ($target -eq 'Package') {
@@ -321,6 +325,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     # Exercise the configured startup map for the packaged campaign, including checkpoint restore.
     if ($target -eq 'Editor' -or $definition.Map -ne $entry) { $start.ArgumentList.Add($definition.Map) }
     if ($target -eq 'Editor') { $start.ArgumentList.Add('-game') }
+    if ($testReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
     foreach ($arg in @($definition.Flag, '-vulkan', '-unattended',
                        '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])",
                        "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$execCommands")) {
@@ -359,6 +364,10 @@ function Invoke-Scenario($name, $definition, $profile) {
     }
 
     $lines = Get-Content -LiteralPath $log
+    if ($testReserve -and !($lines -match "MapPageReserve configured=$MapPageReserve\s*$")) {
+        $result.Reason = 'Packaged executable did not confirm requested page reserve.'
+        return $result
+    }
     $versionLine = $lines -match '^LogInit: Engine Version:' | Select-Object -First 1
     $result.Unreal = if ($versionLine -match 'Engine Version: (\d+\.\d+\.\d+)') { $Matches[1] }
     $result.DevelopmentBuild = [bool]($lines -match 'LogInit: Build Configuration: Development\s*$')
