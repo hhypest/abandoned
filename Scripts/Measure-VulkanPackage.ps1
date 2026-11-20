@@ -161,6 +161,7 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     throw "Missing CPU trace in $dir"
 }
 [ordered]@{
+    VisiblePhysicalMemoryKiB = (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize
     Scenario = $Scenario
     ExecutableSha256 = (Get-FileHash -LiteralPath $exe).Hash
     TraceDeferredGCTail = [bool]$TraceDeferredGCTail
