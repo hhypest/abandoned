@@ -81,6 +81,8 @@ def summarize(folder):
     with (folder / "Memory.csv").open(encoding="utf-8-sig", newline="") as source:
         memory = list(csv.DictReader(source))
     result["peakWorkingSetMiB"] = max(int(row["PeakWorkingSetBytes"]) for row in memory) / 2**20
+    if "PrivateBytes" in memory[0]:
+        result["peakPrivateMiB"] = max(int(row["PrivateBytes"]) for row in memory) / 2**20
     result["peakDedicatedMiB"] = max(int(row["DedicatedBytes"] or 0) for row in memory) / 2**20
     result["memorySamples"] = len(memory)
     result["exeSha256"] = run["ExecutableSha256"]

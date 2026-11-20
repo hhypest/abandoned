@@ -1,0 +1,72 @@
+diff --git a/Engine/Source/Runtime/Core/Private/HAL/MallocBinned2.cpp b/Engine/Source/Runtime/Core/Private/HAL/MallocBinned2.cpp
+index 883ce1c4c..4e28d95e6 100644
+--- a/Engine/Source/Runtime/Core/Private/HAL/MallocBinned2.cpp
++++ b/Engine/Source/Runtime/Core/Private/HAL/MallocBinned2.cpp
+@@ -1,6 +1,7 @@
+ // Copyright Epic Games, Inc. All Rights Reserved.
+
+ #include "HAL/MallocBinned2.h"
++#include "ProfilingDebugging/CpuProfilerTrace.h"
+ #include "Templates/Function.h"
+ #include "GenericPlatform/GenericPlatformProcess.h"
+ #include "Stats/Stats.h"
+@@ -879,6 +880,7 @@ void FMallocBinned2::Trim(bool bTrimThreadCaches)
+ 		FMallocBinnedCommonUtils::Trim(*this);
+
+ #if !UE_USE_VERYLARGEPAGEALLOCATOR
++		TRACE_CPUPROFILER_EVENT_SCOPE(Binned2_ReleaseCachedOSPages);
+ 		UE::TUniqueLock Lock(ExternalAllocMutex);
+ 		// this cache is recycled anyway, if you need to trim it based on being OOM, it's already too late.
+ 		CachedOSPageAllocator.FreeAll(&ExternalAllocMutex);
+diff --git a/Engine/Source/Runtime/Core/Private/IO/IoDispatcher.cpp b/Engine/Source/Runtime/Core/Private/IO/IoDispatcher.cpp
+index 590a4bbb2..f227527f5 100644
+--- a/Engine/Source/Runtime/Core/Private/IO/IoDispatcher.cpp
++++ b/Engine/Source/Runtime/Core/Private/IO/IoDispatcher.cpp
+@@ -1,6 +1,7 @@
+ // Copyright Epic Games, Inc. All Rights Reserved.
+
+ #include "IO/IoDispatcher.h"
++#include "ProfilingDebugging/CpuProfilerTrace.h"
+ #include "Async/Mutex.h"
+ #include "Async/UniqueLock.h"
+ #include "Async/Fundamental/Scheduler.h"
+@@ -356,6 +357,7 @@ public:
+ 		BackendContext->bIsMultiThreaded = bInIsMultithreaded;
+ 		MemoryTrimDelegateHandle = FCoreDelegates::GetMemoryTrimDelegate().AddLambda([this]()
+ 		{
++			TRACE_CPUPROFILER_EVENT_SCOPE(IoDispatcher_TrimAllocators);
+ 			RequestAllocator->Trim();
+ 			BatchAllocator.Trim();
+ 		});
+diff --git a/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp b/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp
+index 9fce51604..cb4445ebe 100644
+--- a/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp
++++ b/Engine/Source/Runtime/Core/Private/Misc/MemStack.cpp
+@@ -1,6 +1,7 @@
+ // Copyright Epic Games, Inc. All Rights Reserved.
+
+ #include "Misc/MemStack.h"
++#include "ProfilingDebugging/CpuProfilerTrace.h"
+ #include "Misc/Parse.h"
+ #include "Misc/CommandLine.h"
+ #include "Stats/Stats.h"
+@@ -281,6 +282,7 @@ void FPageAllocator::LatchProtectedMode()
+ {
+ 	FCoreDelegates::GetMemoryTrimDelegate().AddLambda([]()
+ 	{
++		TRACE_CPUPROFILER_EVENT_SCOPE(MemStack_TrimFreePages);
+ 		Get().TheAllocator.Trim();
+ 	});
+
+diff --git a/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp b/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp
+index b83ef8599..ad52afbcc 100644
+--- a/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp
++++ b/Engine/Source/Runtime/Core/Private/HAL/UnrealMemory.cpp
+@@ -563,6 +563,7 @@ void FMemory::Trim(bool bTrimThreadCaches)
+ 	TRACE_CPUPROFILER_EVENT_SCOPE(FMemory::Trim);
+ 	QUICK_SCOPE_CYCLE_COUNTER(STAT_FMemory_Trim);
+ 	{
++		TRACE_CPUPROFILER_EVENT_SCOPE(Memory_TrimDelegates);
+ 		QUICK_SCOPE_CYCLE_COUNTER(STAT_FMemory_Trim_Broadcast);
+ 		FCoreDelegates::GetMemoryTrimDelegate().Broadcast();
+ 	}

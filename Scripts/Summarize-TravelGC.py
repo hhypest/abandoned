@@ -19,8 +19,18 @@ DEFERRED = "ConditionalFinishDestroyDeferred"
 DELETE = "DestroyObjects"
 LOCK = "AcquireGCLock"
 REACH = "FRealtimeGC_PerformReachabilityAnalysis"
+HASH = "ShrinkUObjectHashTables"
+TRIM = "FMemory::Trim"
+BROADCAST = "FTaskGraphInterface_BroadcastSlow"
+DELEGATES = "Memory_TrimDelegates"
+PAGES = "MemStack_TrimFreePages"
+IO = "IoDispatcher_TrimAllocators"
+OS_PAGES = "Binned2_ReleaseCachedOSPages"
+STAT_DELEGATES = "STAT_FMemory_Trim_Broadcast"
+STAT_ALLOCATOR = "STAT_FMemory_Trim_GMalloc"
 TRAVERSALS = {"parallel": "GC_ParallelReferenceTraversal", "serial": "GC_SerialReferenceTraversal"}
-TIMERS = {GC, UNLOAD, PRELOAD, ACTORS, PURGE, FINISH, DEFERRED, DELETE, LOCK, REACH, *TRAVERSALS.values()}
+TIMERS = {GC, UNLOAD, PRELOAD, ACTORS, PURGE, FINISH, DEFERRED, DELETE, LOCK, REACH, HASH, TRIM, BROADCAST,
+          DELEGATES, PAGES, IO, OS_PAGES, STAT_DELEGATES, STAT_ALLOCATOR, *TRAVERSALS.values()}
 
 
 @dataclass(frozen=True, order=True)
@@ -63,9 +73,48 @@ def one(entries, label):
     return entries[0]
 
 
-def summarize(log, trace, expect_traversal=None):
+def memory_tail_phases(events, gc, purge, mode, allocator):
+    def child(parent, timer):
+        return one([s for s in events[timer] if parent.contains(s)], timer)
+
+    # A pending incremental purge can issue its own trim before marking starts.
+    shrink = one([s for s in events[HASH] if gc.contains(s) and s.start >= purge.end], HASH)
+    trim = one([s for s in events[TRIM] if gc.contains(s) and s.start >= shrink.end], TRIM)
+    broadcast = child(trim, BROADCAST)
+    result = dict(HashShrinkMs=shrink.ms, MemoryTrimMs=trim.ms,
+                  BeforeBroadcastMs=(broadcast.start - trim.start) * 1000,
+                  CacheBroadcastMs=broadcast.ms, AfterBroadcastMs=(trim.end - broadcast.end) * 1000)
+    if mode == "stats":
+        delegates, heap = child(trim, STAT_DELEGATES), child(trim, STAT_ALLOCATOR)
+        if delegates.end > heap.start or not heap.contains(broadcast):
+            raise ValueError("Invalid allocator statistics inside trim")
+        result.update(TrimDelegatesMs=delegates.ms, AllocatorTrimMs=heap.ms)
+    elif mode == "owners":
+        delegates = child(trim, DELEGATES)
+        pages, io = child(delegates, PAGES), child(delegates, IO)
+        if delegates.end > broadcast.start or min(pages.end, io.end) > max(pages.start, io.start):
+            raise ValueError("Overlapping memory trim callbacks")
+        os_pages = [s for s in events[OS_PAGES] if trim.contains(s)]
+        result.update(TrimDelegatesMs=delegates.ms, MemStackPagesMs=pages.ms, IoAllocatorsMs=io.ms)
+        if allocator == "Binned2":
+            release = one(os_pages, OS_PAGES)
+            if release.start < broadcast.end:
+                raise ValueError("OS page release overlaps the cache broadcast")
+            result["ReleaseCachedOSPagesMs"] = release.ms
+        elif os_pages:
+            raise ValueError("Unexpected Binned2 page release in Binned3 capture")
+        else:
+            result["ReleaseCachedOSPagesMs"] = ""
+    return result
+
+
+def summarize(log, trace, expect_traversal=None, memory_tail=None):
     # Pair the log and the trace by the actor timer on each visit, as in the OpenLevel report.
-    parts = log.read_text(encoding="utf-8-sig").split("LogLoad: LoadMap: ")[1:]
+    text = log.read_text(encoding="utf-8-sig")
+    allocator = None
+    if memory_tail == "owners":
+        allocator = one(re.findall(r"^LogInit: Allocator: (Binned[23])\s*$", text, re.MULTILINE), "Binned allocator")
+    parts = text.split("LogLoad: LoadMap: ")[1:]
     events = read_trace(trace)
     if len(parts) < 4 or len(parts) % 2 or any(len(events[key]) != len(parts) for key in (UNLOAD, PRELOAD, ACTORS)):
         raise ValueError("Expected a complete alternating run with at least two visits to Weight")
@@ -109,6 +158,8 @@ def summarize(log, trace, expect_traversal=None):
                          FullGCMs=gc.ms, AcquireLockMs=sum(s.ms for s in locks), ReachabilityMs=reach.ms, PurgeMs=purge.ms,
                          FinishFirstPassMs=finish.ms, DeferredFinishMs=deferred.ms, DeleteMs=delete.ms,
                          InitiallyPending=pending, LastReadyClass=last_class))
+        if memory_tail:
+            rows[-1].update(memory_tail_phases(events, gc, purge, memory_tail, allocator))
         if expect_traversal:
             mode, span = one([(mode, s) for mode, name in TRAVERSALS.items()
                               for s in events[name] if reach.contains(s)], "reference traversal")
@@ -124,9 +175,11 @@ def main():
     parser.add_argument("trace_csv", type=Path)
     parser.add_argument("--expect-traversal", choices=TRAVERSALS,
                         help="Require the matching UE SmallFullGC marker on every transition")
+    parser.add_argument("--memory-tail", nargs="?", const="phases", choices=("phases", "stats", "owners"),
+                        help="Measure final Binned2/3 trim, optionally with verbose UE stats or MemoryTrimScopes")
     args = parser.parse_args()
     try:
-        rows = summarize(args.log, args.trace_csv, args.expect_traversal)
+        rows = summarize(args.log, args.trace_csv, args.expect_traversal, args.memory_tail)
     except (OSError, ValueError, csv.Error) as error:
         parser.exit(1, f"{error}\n")
     writer = csv.DictWriter(sys.stdout, fieldnames=rows[0], lineterminator="\n")
