@@ -8,12 +8,15 @@ param(
     [switch]$DisableRenderThreadLag,
     [switch]$DisableSmallGCPolicy,
     [switch]$TraceTravelTasks,
+    [switch]$TraceTravelStats,
+    [ValidateSet('Default', 'Binned2', 'Binned3')][string]$Allocator = 'Default',
     [ValidateRange(2, 20)][int]$WeightVisits = 2
 )
 $ErrorActionPreference = 'Stop'
 if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
 if ($DisableRenderThreadLag -and !$TraceTravel) { throw 'DisableRenderThreadLag requires TraceTravel' }
 if ($DisableSmallGCPolicy -and !$TraceTravel) { throw 'DisableSmallGCPolicy requires TraceTravel' }
+if ($TraceTravelStats -and !$TraceTravel) { throw 'TraceTravelStats requires TraceTravel' }
 if ($TraceTravelTasks -and !$TraceTravel) { throw 'TraceTravelTasks requires TraceTravel' }
 if (($TraceTravel -or $PSBoundParameters.ContainsKey('WeightVisits')) -and $Scenario -ne 'Travel') {
     throw 'TraceTravel and WeightVisits require the Travel scenario'
@@ -55,6 +58,11 @@ foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1
     "-ExecCmds=${syncControl}${gcControl}r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
 }
+if ($TraceTravelStats) { $start.ArgumentList.Add('-verbosenamedevents') }
+if ($Allocator -ne 'Default') {
+    $allocatorFlags = @{ Binned2 = '-binnedmalloc2'; Binned3 = '-binnedmalloc3' }
+    $start.ArgumentList.Add($allocatorFlags[$Allocator])
+}
 if ($TraceTravel) {
     $channels = 'cpu,frame,bookmark,loadtime'
     if ($TraceTravelTasks) { $channels += ',task' }
@@ -84,6 +92,7 @@ try {
         $vram = if ($counters) { ($counters | ForEach-Object RawValue | Measure-Object -Sum).Sum }
         $samples.Add([pscustomobject]@{
             ElapsedMs = $timer.ElapsedMilliseconds
+            PrivateBytes = $process.PrivateMemorySize64
             PeakWorkingSetBytes = $process.PeakWorkingSet64
             DedicatedBytes = $vram
         })
@@ -97,6 +106,12 @@ try {
     $samples | Export-Csv -NoTypeInformation -LiteralPath "$dir/Memory.csv"
 }
 $log = Get-Content -LiteralPath "$dir/Game.log"
+$allocatorLine = @($log | Select-String -Pattern '^.*LogInit: Allocator: (.+?)\s*$')
+if ($allocatorLine.Count -ne 1) { throw "Expected one allocator in $dir/Game.log" }
+$actualAllocator = $allocatorLine[0].Matches[0].Groups[1].Value
+if ($Allocator -ne 'Default' -and $Allocator -ne $actualAllocator) {
+    throw "Requested $Allocator but the package used $actualAllocator"
+}
 foreach ($setting in @('r\.VSync = "0"', 't\.MaxFPS = "0"', 'r\.ScreenPercentage = "100"', 'sg\.ShadowQuality = "2"')) {
     if (!($log -match $setting)) { throw "Unexpected profile in $dir/Game.log ($setting)" }
 }
@@ -137,6 +152,8 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     DisableRenderThreadLag = [bool]$DisableRenderThreadLag
     DisableSmallGCPolicy = [bool]$DisableSmallGCPolicy
     TraceTravelTasks = [bool]$TraceTravelTasks
+    TraceTravelStats = [bool]$TraceTravelStats
+    Allocator = $actualAllocator
     CaptureFrames = $frameCount
     Profile = $csv[0].Name
 } | ConvertTo-Json | Set-Content -LiteralPath "$dir/Run.json"
