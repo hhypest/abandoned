@@ -30,8 +30,14 @@ STAT_DELEGATES = "STAT_FMemory_Trim_Broadcast"
 STAT_ALLOCATOR = "STAT_FMemory_Trim_GMalloc"
 DRAW = "FViewport_Draw"
 SUBMIT = "BeginRenderingViewFamily"
+CHAMBER_GC_PHASES = {
+    "GC.VerifyAssumptions": "VerifyAssumptionsMs",
+    "GatherUnreachableObjects": "GatherMs",
+    "UnhashUnreachableObjects": "UnhashMs",
+    "ConditionalBeginDestroy": "BeginDestroyMs",
+}
 TRAVERSALS = {"parallel": "GC_ParallelReferenceTraversal", "serial": "GC_SerialReferenceTraversal"}
-TIMERS = {DRAW, SUBMIT, GC, UNLOAD, PRELOAD, ACTORS, PURGE, FINISH, DEFERRED, DELETE, LOCK, REACH, HASH, TRIM, BROADCAST,
+TIMERS = {*CHAMBER_GC_PHASES, DRAW, SUBMIT, GC, UNLOAD, PRELOAD, ACTORS, PURGE, FINISH, DEFERRED, DELETE, LOCK, REACH, HASH, TRIM, BROADCAST,
           DELEGATES, PAGES, IO, OS_PAGES, STAT_DELEGATES, STAT_ALLOCATOR, *TRAVERSALS.values()}
 
 
@@ -173,6 +179,9 @@ def summarize(log, trace, expect_traversal=None, memory_tail=None, outgoing_redr
             first = next((s for s in events[DRAW] if actor.end <= s.start < until), None)
             if first is None or not any(first.contains(s) for s in events[SUBMIT]):
                 raise ValueError(f"Missing incoming world view submission at arrival {index}")
+            for name, column in CHAMBER_GC_PHASES.items():
+                intervals = [s for s in events[name] if gc.contains(s)]
+                rows[-1][column] = sum(s.ms for s in intervals) if intervals else ""
             rows[-1].update(OutgoingDraws=len(draws), SubmittedViewFamilies=len(submissions),
                             OutgoingDrawMs=sum(s.ms for s in draws))
         if memory_tail:
