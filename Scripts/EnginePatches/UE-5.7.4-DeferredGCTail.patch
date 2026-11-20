@@ -1,0 +1,26 @@
+diff --git a/Engine/Source/Runtime/CoreUObject/Private/UObject/GarbageCollection.cpp b/Engine/Source/Runtime/CoreUObject/Private/UObject/GarbageCollection.cpp
+index 722765176..e672ff3d6 100644
+--- a/Engine/Source/Runtime/CoreUObject/Private/UObject/GarbageCollection.cpp
++++ b/Engine/Source/Runtime/CoreUObject/Private/UObject/GarbageCollection.cpp
+@@ -4874,6 +4874,8 @@ bool IncrementalDestroyGarbage(bool bUseTimeLimit, double TimeLimit)
+ 			bool bFinishDestroyTimeExtended = false;
+ 			FString FirstObjectNotReadyWhenTimeExtended;
+ 			int32 StartObjectsPendingDestructionCount = GGCObjectsPendingDestructionCount;
++			static const bool bTraceDeferredTail = FParse::Param(FCommandLine::Get(), TEXT("TraceDeferredGCTail"));
++			const double DeferredStart = bTraceDeferredTail ? FPlatformTime::Seconds() : 0.0;
+
+ 			// We've finished iterating over all unreachable objects, but we need still need to handle
+ 			// objects that were deferred.
+@@ -4912,6 +4914,12 @@ bool IncrementalDestroyGarbage(bool bUseTimeLimit, double TimeLimit)
+ 					// Only proceed with destroying the object if the asynchronous cleanup started by BeginDestroy has finished.
+ 					if( Object->IsReadyForFinishDestroy() )
+ 					{
++						if (bTraceDeferredTail && GGCObjectsPendingDestructionCount == 1)
++						{
++							const double ElapsedMs = (FPlatformTime::Seconds() - DeferredStart) * 1000.0;
++							UE_LOG(LogGarbage, Display, TEXT("Deferred GC tail: %s (%.3f ms, initially %d pending)"),
++								*Object->GetFullName(), ElapsedMs, StartObjectsPendingDestructionCount);
++						}
+ 						UE::GC::GDetailedStats.IncPurgeCount(Object);
+ 						// Send FinishDestroy message.
+ 						Object->ConditionalFinishDestroy();

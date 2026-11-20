@@ -4,9 +4,13 @@ param(
     [Parameter(Mandatory)][string]$PackageRoot,
     [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
     [switch]$TraceTravel,
+    [switch]$TraceDeferredGCTail,
+    [switch]$DisableRenderThreadLag,
     [ValidateRange(2, 20)][int]$WeightVisits = 2
 )
 $ErrorActionPreference = 'Stop'
+if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
+if ($DisableRenderThreadLag -and !$TraceTravel) { throw 'DisableRenderThreadLag requires TraceTravel' }
 if (($TraceTravel -or $PSBoundParameters.ContainsKey('WeightVisits')) -and $Scenario -ne 'Travel') {
     throw 'TraceTravel and WeightVisits require the Travel scenario'
 }
@@ -40,9 +44,10 @@ $start.UseShellExecute = $false
 $start.RedirectStandardOutput = $true
 $profileCommand = if ($frameCount) { "CsvProfile FRAMES=$frameCount" } else { 'CsvProfile START' }
 if ($map) { $start.ArgumentList.Add($map) }
+$syncControl = if ($DisableRenderThreadLag) { 'r.OneFrameThreadLag 0,r.OneFrameThreadLag,' } else { '' }
 foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1080',
     "-UserDir=$dir", "-abslog=$dir/Game.log", '-ExitAfterCsvProfiling',
-    "-ExecCmds=r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
+    "-ExecCmds=${syncControl}r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
 }
 if ($TraceTravel) {
@@ -50,6 +55,7 @@ if ($TraceTravel) {
     $start.ArgumentList.Add("-tracefile=$dir/Travel.utrace")
     $start.ArgumentList.Add('-LogCmds=LogGarbage Verbose,LogAudioMixer Verbose')
 }
+if ($TraceDeferredGCTail) { $start.ArgumentList.Add('-TraceDeferredGCTail') }
 # WDDM Dedicated Usage is attributed to the game PID, including its driver allocations.
 $category = [Diagnostics.PerformanceCounterCategory]::new('GPU Process Memory')
 $counters = @()
@@ -97,6 +103,9 @@ if ($Scenario -eq 'Travel') {
         if ($line -match 'Training chamber ready\. (\w+),') { $Matches[1] }
     })
     if (($rooms -join ',') -ne ($expectedRooms -join ',')) { throw "Unexpected route: $rooms" }
+    if ($DisableRenderThreadLag -and !($log -match 'r\.OneFrameThreadLag = "0"')) {
+        throw 'The render-thread lag control was not applied'
+    }
 } elseif ($Scenario -eq 'Campaign') {
     if (!($log -match 'Vanguard verification passed: passage transit and station resupply')) { throw 'Campaign did not finish' }
 } else {
@@ -114,6 +123,8 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
 [ordered]@{
     Scenario = $Scenario
     ExecutableSha256 = (Get-FileHash -LiteralPath $exe).Hash
+    TraceDeferredGCTail = [bool]$TraceDeferredGCTail
+    DisableRenderThreadLag = [bool]$DisableRenderThreadLag
     CaptureFrames = $frameCount
     Profile = $csv[0].Name
 } | ConvertTo-Json | Set-Content -LiteralPath "$dir/Run.json"
