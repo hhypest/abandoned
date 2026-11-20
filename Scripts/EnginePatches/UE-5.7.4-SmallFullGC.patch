@@ -1,0 +1,40 @@
+diff --git a/Engine/Source/Runtime/CoreUObject/Private/UObject/GarbageCollection.cpp b/Engine/Source/Runtime/CoreUObject/Private/UObject/GarbageCollection.cpp
+index 722765176..0d19301f2 100644
+--- a/Engine/Source/Runtime/CoreUObject/Private/UObject/GarbageCollection.cpp
++++ b/Engine/Source/Runtime/CoreUObject/Private/UObject/GarbageCollection.cpp
+@@ -4072,10 +4072,12 @@ class FRealtimeGC : public FGarbageCollectionTracer
+
+ 		if constexpr (IsParallel(ProcessorType::Options))
+ 		{
++			TRACE_CPUPROFILER_EVENT_SCOPE(GC_ParallelReferenceTraversal);
+ 			ProcessAsync([](void* P, FWorkerContext& C) { FastReferenceCollector(*reinterpret_cast<ProcessorType*>(P)).ProcessObjectArray(C); }, &Processor, Context);
+ 		}
+ 		else
+ 		{
++			TRACE_CPUPROFILER_EVENT_SCOPE(GC_SerialReferenceTraversal);
+ 			if (!GReachabilityState.IsSuspended())
+ 			{
+ 				GReachabilityState.SetupWorkers(1);
+@@ -5529,12 +5531,21 @@ FORCEINLINE void CollectGarbageInternal(EObjectFlags KeepFlags, bool bPerformFul
+ 	CSV_CUSTOM_STAT(GC, Count, 1, ECsvCustomStatOp::Accumulate);
+ }
+
++static TAutoConsoleVariable<int32> CVarSmallFullGCSerialSlots(
++	TEXT("gc.SmallFullGCSerialSlots"), 0,
++	TEXT("Maximum non-permanent UObject slots for serial full reachability. Zero keeps the default policy."));
++
+ EGCOptions GetReferenceCollectorOptions(bool bPerformFullPurge)
+ {
++	const int32 SlotLimit = CVarSmallFullGCSerialSlots.GetValueOnGameThread();
++	// Use the slot range, including holes, as a conservative upper bound. Incremental
++	// collections keep their worker contexts across slices and must keep their mode.
++	const bool bSmallFullGC = bPerformFullPurge && !GExitPurge && SlotLimit > 0 &&
++		GUObjectArray.GetObjectArrayNum() - GUObjectArray.GetFirstGCIndex() <= SlotLimit;
+ 	return
+ 		// Fall back to single threaded GC if processor count is 1 or parallel GC is disabled
+ 		// or detailed per class gc stats are enabled (not thread safe)
+-		(ShouldForceSingleThreadedGC() ? EGCOptions::None : EGCOptions::Parallel) |
++		((bSmallFullGC || ShouldForceSingleThreadedGC()) ? EGCOptions::None : EGCOptions::Parallel) |
+ 		// Toggle between Garbage Eliination enabled or disabled
+ 		(UObjectBaseUtility::IsGarbageEliminationEnabled() ? EGCOptions::EliminateGarbage : EGCOptions::None) |
+ 		// Toggle between Incremental Reachability enabled or disabled

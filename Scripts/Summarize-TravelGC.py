@@ -19,7 +19,8 @@ DEFERRED = "ConditionalFinishDestroyDeferred"
 DELETE = "DestroyObjects"
 LOCK = "AcquireGCLock"
 REACH = "FRealtimeGC_PerformReachabilityAnalysis"
-TIMERS = {GC, UNLOAD, PRELOAD, ACTORS, PURGE, FINISH, DEFERRED, DELETE, LOCK, REACH}
+TRAVERSALS = {"parallel": "GC_ParallelReferenceTraversal", "serial": "GC_SerialReferenceTraversal"}
+TIMERS = {GC, UNLOAD, PRELOAD, ACTORS, PURGE, FINISH, DEFERRED, DELETE, LOCK, REACH, *TRAVERSALS.values()}
 
 
 @dataclass(frozen=True, order=True)
@@ -62,7 +63,7 @@ def one(entries, label):
     return entries[0]
 
 
-def summarize(log, trace):
+def summarize(log, trace, expect_traversal=None):
     # Pair the log and the trace by the actor timer on each visit, as in the OpenLevel report.
     parts = log.read_text(encoding="utf-8-sig").split("LogLoad: LoadMap: ")[1:]
     events = read_trace(trace)
@@ -108,6 +109,12 @@ def summarize(log, trace):
                          FullGCMs=gc.ms, AcquireLockMs=sum(s.ms for s in locks), ReachabilityMs=reach.ms, PurgeMs=purge.ms,
                          FinishFirstPassMs=finish.ms, DeferredFinishMs=deferred.ms, DeleteMs=delete.ms,
                          InitiallyPending=pending, LastReadyClass=last_class))
+        if expect_traversal:
+            mode, span = one([(mode, s) for mode, name in TRAVERSALS.items()
+                              for s in events[name] if reach.contains(s)], "reference traversal")
+            if mode != expect_traversal:
+                raise ValueError(f"Expected {expect_traversal} traversal at arrival {index}, found {mode}")
+            rows[-1].update(Traversal=mode, TraversalMs=span.ms)
     return rows
 
 
@@ -115,9 +122,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("log", type=Path)
     parser.add_argument("trace_csv", type=Path)
+    parser.add_argument("--expect-traversal", choices=TRAVERSALS,
+                        help="Require the matching UE SmallFullGC marker on every transition")
     args = parser.parse_args()
     try:
-        rows = summarize(args.log, args.trace_csv)
+        rows = summarize(args.log, args.trace_csv, args.expect_traversal)
     except (OSError, ValueError, csv.Error) as error:
         parser.exit(1, f"{error}\n")
     writer = csv.DictWriter(sys.stdout, fieldnames=rows[0], lineterminator="\n")

@@ -38,6 +38,18 @@ if ($LASTEXITCODE -ne 0) { throw 'Не удалось применить исп�
 
 Для сравнения фаз загрузки примените диагностический патч `Scripts/EnginePatches/UE-5.7.4-LoadMapScopes.patch` к обеим сравниваемым сборкам до компиляции. Он добавляет именованные интервалы CPU в Unreal Insights. [Методика, контрольная сборка и результаты](Docs/A07OpenLevel.md)
 
+## Обход ссылок в небольших камерах
+
+В исходной сборке UE 5.7.4 примените патч CoreUObject из корня Abandoned, затем пересоберите игру. Он добавляет настройку `gc.SmallFullGCSerialSlots` из `DefaultEngine.ini`. Готовый движок Epic использует штатную политику. [Замеры и контрольные режимы](Docs/A07Reachability.md)
+
+```powershell
+$patch = (Resolve-Path ./Scripts/EnginePatches/UE-5.7.4-SmallFullGC.patch).Path
+git -C $ueRoot apply --check $patch
+if ($LASTEXITCODE -ne 0) { throw 'Проверьте версию CoreUObject и наличие исправления.' }
+git -C $ueRoot apply $patch
+if ($LASTEXITCODE -ne 0) { throw 'Не удалось применить исправление обхода ссылок.' }
+```
+
 ## Проверки перед PR
 
 - GitHub Actions запускает **C++20 and Git LFS** для PR в `main` и изменений в `main`. Проверка сравнивает diff с базой, валидирует указатели и содержимое Git LFS и запускает автономные C++20-тесты под MSVC на Windows.
