@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)][string]$PackageRoot,
     [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
     [switch]$TraceTravel,
+    [switch]$DisableChamberMeshReuse,
     [switch]$TraceDeferredGCTail,
     [switch]$DisableRenderThreadLag,
     [switch]$DisableSmallGCPolicy,
@@ -17,6 +18,7 @@ param(
     [switch]$TestMapReserveTrim
 )
 $ErrorActionPreference = 'Stop'
+if ($DisableChamberMeshReuse -and !$TraceTravel) { throw 'DisableChamberMeshReuse requires TraceTravel' }
 if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
 if ($DisableRenderThreadLag -and !$TraceTravel) { throw 'DisableRenderThreadLag requires TraceTravel' }
 if ($DisableSmallGCPolicy -and !$TraceTravel) { throw 'DisableSmallGCPolicy requires TraceTravel' }
@@ -66,6 +68,7 @@ foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1
     "-ExecCmds=${syncControl}${gcControl}r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
 }
+if ($DisableChamberMeshReuse) { $start.ArgumentList.Add('-NoChamberMeshReuse') }
 if ($measureReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
 if ($TestMapReserveTrim) { $start.ArgumentList.Add('-TestMapReserveTrim') }
 if ($TraceMapPages) { $start.ArgumentList.Add('-AuditMapPages') }
@@ -167,6 +170,7 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     TraceDeferredGCTail = [bool]$TraceDeferredGCTail
     DisableRenderThreadLag = [bool]$DisableRenderThreadLag
     DisableSmallGCPolicy = [bool]$DisableSmallGCPolicy
+    DisableChamberMeshReuse = [bool]$DisableChamberMeshReuse
     TraceTravelTasks = [bool]$TraceTravelTasks
     TraceTravelStats = [bool]$TraceTravelStats
     MapPageReserve = if ($measureReserve) { $MapPageReserve } else { $null }
