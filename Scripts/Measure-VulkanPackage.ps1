@@ -9,6 +9,8 @@ param(
     [switch]$DisableSmallGCPolicy,
     [switch]$TraceTravelTasks,
     [switch]$TraceTravelStats,
+    [switch]$TraceMapPages,
+    [switch]$DeferMapPageDrain,
     [ValidateSet('Default', 'Binned2', 'Binned3')][string]$Allocator = 'Default',
     [ValidateRange(2, 20)][int]$WeightVisits = 2
 )
@@ -16,6 +18,7 @@ $ErrorActionPreference = 'Stop'
 if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
 if ($DisableRenderThreadLag -and !$TraceTravel) { throw 'DisableRenderThreadLag requires TraceTravel' }
 if ($DisableSmallGCPolicy -and !$TraceTravel) { throw 'DisableSmallGCPolicy requires TraceTravel' }
+if (($TraceMapPages -or $DeferMapPageDrain) -and !$TraceTravel) { throw 'The MemStack experiment requires TraceTravel' }
 if ($TraceTravelStats -and !$TraceTravel) { throw 'TraceTravelStats requires TraceTravel' }
 if ($TraceTravelTasks -and !$TraceTravel) { throw 'TraceTravelTasks requires TraceTravel' }
 if (($TraceTravel -or $PSBoundParameters.ContainsKey('WeightVisits')) -and $Scenario -ne 'Travel') {
@@ -58,6 +61,8 @@ foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1
     "-ExecCmds=${syncControl}${gcControl}r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
 }
+if ($TraceMapPages) { $start.ArgumentList.Add('-AuditMapPages') }
+if ($DeferMapPageDrain) { $start.ArgumentList.Add('-DeferMapPageDrain') }
 if ($TraceTravelStats) { $start.ArgumentList.Add('-verbosenamedevents') }
 if ($Allocator -ne 'Default') {
     $allocatorFlags = @{ Binned2 = '-binnedmalloc2'; Binned3 = '-binnedmalloc3' }
@@ -153,6 +158,8 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     DisableSmallGCPolicy = [bool]$DisableSmallGCPolicy
     TraceTravelTasks = [bool]$TraceTravelTasks
     TraceTravelStats = [bool]$TraceTravelStats
+    TraceMapPages = [bool]$TraceMapPages
+    DeferMapPageDrain = [bool]$DeferMapPageDrain
     Allocator = $actualAllocator
     CaptureFrames = $frameCount
     Profile = $csv[0].Name

@@ -1,0 +1,11 @@
+Run,WeightVisit,GCReleased,PostGCReleased,EndReleased,PostGCHeap,PostGCReuse,BuildHeap,BuildReuse,ReturnTailHeap,ReturnTailReuse,FirstTickHeap,FirstTickReuse,LaterTicksHeap,LaterTicksReuse
+CountA,1,131,0,0,0,0,10,6,3,10,120,120,0,884
+CountA,2,136,0,0,0,0,8,5,7,8,121,123,0,888
+CountA,3,134,1,0,0,0,10,5,5,9,117,120,0,889
+CountA,4,131,0,0,0,0,11,4,5,11,117,119,0,890
+CountA,5,132,0,0,0,0,10,4,3,12,119,123,0,884
+CountB,1,0,0,120,0,0,0,25,10,2,115,116,0,884
+CountB,2,0,0,129,0,0,0,17,10,4,119,121,0,881
+CountB,3,0,0,119,0,0,0,28,11,2,109,119,0,884
+CountB,4,0,0,122,0,0,0,25,5,1,117,124,0,888
+CountB,5,0,0,130,0,0,0,16,11,2,120,121,0,882
