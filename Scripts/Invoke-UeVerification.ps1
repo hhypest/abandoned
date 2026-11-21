@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Package')]
     [string]$PackageRoot,
 
-    [ValidateSet('EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
+    [ValidateSet('WeightStreaming', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
                  'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
@@ -147,6 +147,14 @@ $scenarios = @{
         Chambers = @('Balance'); Success = $fallsSuccess + 'Vanguard injury breath decoded in audio mixer.'
         RealTime = $true
     }
+    WeightStreaming = @{
+        Map = $entry; Flag = '-VerifyWeightStreaming'; Chambers = @('Stairs')
+        SeedCheckpoint = 'Stairs'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Stairs'
+        Success = @('Weight streaming cancelled before visibility; site clear.',
+                    'Weight streaming visit 1: player landed on Weight and returned to Stairs.',
+                    'Weight streaming visit 2: player landed on Weight and returned to Stairs.',
+                    'Weight streaming verification passed: two removals, site clear.')
+    }
     EntryCourse = @{
         Map = $entry
         Flag = '-VerifyEntryCourse'
@@ -167,7 +175,7 @@ $scenarios = @{
     EntryCheckpoint = @{
         Map = $entry
         Flag = '-VerifyEntryCheckpoint'
-        SeedCheckpoint = 'Weight'
+        SeedCheckpoint = 'Weight'; SeedArchive = @(); FinalCheckpoint = 'Balance'
         QuietChambers = @('Balance')
         Chambers = @('Weight', 'Balance')
         Success = $entryFinish + @('Loaded campaign checkpoint v2: Weight', 'Saved campaign checkpoint v2: Balance (1 archive records).')
@@ -302,7 +310,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     if ($definition.SeedCheckpoint) {
         $saveFolder = New-Item -ItemType Directory -Path (Join-Path $profile 'Saved/SaveGames') -Force
         $slot = Join-Path $saveFolder.FullName 'AbandonedCampaign.v2.json'
-        @{ version = 2; checkpoint = $definition.SeedCheckpoint; archive = @() } | ConvertTo-Json | Set-Content -LiteralPath $slot -Encoding utf8
+        @{ version = 2; checkpoint = $definition.SeedCheckpoint; archive = $definition.SeedArchive } | ConvertTo-Json | Set-Content -LiteralPath $slot -Encoding utf8
     }
     $log = Join-Path $profile 'Game.log'
     $result = [ordered]@{
@@ -393,7 +401,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         LeakEntries = @($lines -match 'LogVulkanRHI: Warning:\s+\*\* LEAK ').Count
     }
     $checkAllocatorOnExit = $target -eq 'Package' -and $name -in @(
-        'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
+        'WeightStreaming', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
     )
     $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6')
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1
@@ -499,10 +507,10 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = 'Unexpected world lifetime sequence. Check the loaded modes, live owner counts, teardown and cleanup in Game.log.'
     } elseif ($definition.SeedCheckpoint) {
         $saved = Get-Content -LiteralPath $slot -Raw | ConvertFrom-Json
-        if ($saved.version -eq 2 -and $saved.checkpoint -ceq 'Balance' -and $saved.archive.Count -eq 1 -and $saved.archive[0] -ceq 'oxygen-restored') {
+        if ($saved.version -eq 2 -and $saved.checkpoint -ceq $definition.FinalCheckpoint -and $saved.archive.Count -eq 1 -and $saved.archive[0] -ceq 'oxygen-restored') {
             $result.Outcome = 'Passed'
         } else {
-            $result.Reason = 'The resumed route did not persist Balance and the oxygen-restored record.'
+            $result.Reason = "Expected final checkpoint $($definition.FinalCheckpoint) and the oxygen-restored record."
         }
     } else {
         $result.Outcome = 'Passed'
