@@ -17,9 +17,13 @@ protected:
     void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
-    enum class EMenuAction { Resume, TrainingChamber, Balance, MovementLab, PowerLab, GravityLab, PortalLab, Dev20, Radiation, Fullscreen, VSync, FrameRate, Quit };
+    enum class EMenuAction;
 
-    void ToggleMenu();
+    void OpenPauseMenu();
+#if !UE_BUILD_SHIPPING
+    void OpenTestMenu();
+#endif
+    void OpenMenu(const FText& Title, FKey ToggleKey, const TSharedRef<SWidget>& Destinations);
     void CloseMenu();
     void RemoveMenu();
     bool CanChangeDisplaySettings() const;

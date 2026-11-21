@@ -745,8 +745,8 @@ void ATrainingChamberHUD::DrawHUD()
     const UTrainingChamberLayout* Layout = Chamber->GetLayout();
     DrawText(Layout->Title, FLinearColor::White, 24.0f, 24.0f, nullptr, 1.2f);
     const TCHAR* Controls = IsValid(Chamber->GetHintTerminal())
-        ? TEXT("WASD / mouse   Space jump   E interact   LMB throw   R reset   M menu   |   HINTS at entrance")
-        : TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   M test menu");
+        ? TEXT("WASD / mouse   Space jump   E interact   LMB throw   R reset   Esc pause   |   HINTS at entrance")
+        : TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   Esc pause");
     DrawText(Controls, FLinearColor::White, 24.0f, 52.0f);
     const bool bDoorObstructed = Chamber->HasClampedObject() && !Chamber->HasReachedExit();
     const FString Status = Chamber->HasReachedExit()
