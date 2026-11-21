@@ -98,6 +98,7 @@ void UTrainingPlateCircuitComponent::AddPlate(UBoxComponent& Body, UStaticMeshCo
     FTrainingPressurePlate& Plate = Plates.AddDefaulted_GetRef();
     Plate.Body = &Body;
     Plate.Visual = &Visual;
+    Plate.RestLocation = Visual.GetRelativeLocation();
     Plate.Indicator = Indicator;
     UCubePlacementComponent::MarkPressurePlate(Body);
     PlateLoads.Add(0.0f);
@@ -156,7 +157,7 @@ void UTrainingPlateCircuitComponent::SetPlatePressed(int32 Index, bool bPressed)
     Plate.bPressed = bPressed;
     if (IsValid(Plate.Visual))
     {
-        Plate.Visual->SetRelativeLocation(FVector(0.0, 0.0, bPressed ? -4.0 : 0.0));
+        Plate.Visual->SetRelativeLocation(Plate.RestLocation + FVector(0.0, 0.0, bPressed ? -4.0 : 0.0));
     }
     if (IsValid(Plate.Indicator))
     {

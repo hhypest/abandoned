@@ -31,6 +31,7 @@
 #include "Player/MovementProfile.h"
 #include "UObject/ConstructorHelpers.h"
 #include "World/Blockout.h"
+#include "World/FosTech.h"
 #include "World/SceneAssembly.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTrainingChamber, Log, All);
@@ -296,10 +297,10 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     }
 
     auto* MeshLibrary = GetGameInstance()->GetSubsystem<UChamberMeshLibrary>();
-    UStaticMesh* SmallCube = MeshLibrary->LoadForChamber(*GetWorld(), TEXT("/Game/Abandoned/FosTech/SM_Cube55.SM_Cube55"));
-    UStaticMesh* LargeCube = MeshLibrary->LoadForChamber(*GetWorld(), TEXT("/Game/Abandoned/FosTech/SM_Cube80.SM_Cube80"));
-    UStaticMesh* PlateBase = MeshLibrary->LoadForChamber(*GetWorld(), TEXT("/Game/Abandoned/FosTech/SM_PlateBase.SM_PlateBase"));
-    UStaticMesh* PlateTop = MeshLibrary->LoadForChamber(*GetWorld(), TEXT("/Game/Abandoned/FosTech/SM_PlateTop.SM_PlateTop"));
+    UStaticMesh* SmallCube = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::SmallCube);
+    UStaticMesh* LargeCube = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::LargeCube);
+    UStaticMesh* PlateBase = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::PlateBase);
+    UStaticMesh* PlateTop = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::PlateTop);
     if (!SmallCube || !LargeCube || !PlateBase || !PlateTop)
     {
         ErrorMessage = TEXT("Training chamber requires the FosTech cube and plate meshes.");
@@ -387,7 +388,18 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     }
     const auto DoorParts = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center, Layout->Door.Size,
         EComponentMobility::Movable, TEXT("BlockAllDynamic"));
-    Abandoned::Scene::SetFinish(DoorParts, Layout->Door, Finishes);
+    // The leaf is 114.30 cm wide at its original height of 190.25 cm.
+    const double LeafHeight = FMath::Max(Layout->Door.Size.Z, Layout->Door.Size.Y * 190.25 / 114.30);
+    const FVector FrameSize(Layout->Door.Size.X, Layout->Door.Size.Y + 48.0, LeafHeight + 48.0);
+    const auto Frame = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center + FVector(0, 0, (FrameSize.Z - Layout->Door.Size.Z) * 0.5),
+        FrameSize, EComponentMobility::Static, TEXT("NoCollision"));
+    if (!Abandoned::FosTech::SetVisual(DoorParts.Visual, Abandoned::FosTech::Leaf, LeafHeight, 90.0) ||
+        !Abandoned::FosTech::SetVisual(Frame.Visual, Abandoned::FosTech::Frame, FrameSize.Z, 90.0))
+    {
+        ErrorMessage = TEXT("Missing FosTech door assembly.");
+        return;
+    }
+    DoorParts.Visual->AddLocalOffset(FVector(0, 0, (LeafHeight - Layout->Door.Size.Z) * 0.5));
     PlateCircuit->Configure(*Layout, Course.Current != Segment::Sandbox);
     for (int32 Index = 0; Index < Layout->GetPlateCount(); ++Index)
     {
@@ -399,9 +411,13 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
             ErrorMessage = TEXT("Could not create the pressure plates.");
             return;
         }
-        // Both mesh pivots share the centre of the unpressed 110 x 110 x 20 cm assembly.
-        const FVector PlateScale = Block.Size / FVector(110.0, 110.0, 20.0);
-        Parts.Visual->SetRelativeScale3D(PlateScale);
+        // Both parts retain the common GLB origin; align the tread surface with the gameplay box.
+        const auto Bounds = PlateBase->GetBounds();
+        const double PlateScale = FMath::Min(Block.Size.X / (2.0 * Bounds.BoxExtent.X), Block.Size.Y / (2.0 * Bounds.BoxExtent.Y));
+        const FVector PlateOffset(-Bounds.Origin.X * PlateScale, -Bounds.Origin.Y * PlateScale,
+            Block.Size.Z * 0.5 - PlateTop->GetBoundingBox().Max.Z * PlateScale);
+        Parts.Visual->SetRelativeLocation(PlateOffset);
+        Parts.Visual->SetRelativeScale3D(FVector(PlateScale));
         AActor* PlateActor = Parts.Collision->GetOwner();
         auto* Base = NewObject<UStaticMeshComponent>(PlateActor);
         PlateActor->AddInstanceComponent(Base);
@@ -409,7 +425,8 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         Base->SetMobility(EComponentMobility::Movable);
         Base->SetCollisionProfileName(TEXT("NoCollision"));
         Base->SetStaticMesh(PlateBase);
-        Base->SetRelativeScale3D(PlateScale);
+        Base->SetRelativeLocation(PlateOffset);
+        Base->SetRelativeScale3D(FVector(PlateScale));
         Base->RegisterComponent();
         FSceneLight Light = Layout->PlateLight;
         Light.Position += Block.Center - Layout->Plate.Center;
@@ -429,6 +446,17 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
             Sign->RegisterComponent();
         }
     }
+    if (Layout->UsesParallelPlates())
+    {
+        const auto RelayBox = Abandoned::Blockout::SpawnBox(World, *Mesh,
+            Layout->Door.Center + FVector(-40, -Layout->Door.Size.Y * 0.5 - 35, 0), FVector(20, 46, 52),
+            EComponentMobility::Static, TEXT("NoCollision"));
+        if (!Abandoned::FosTech::SetVisual(RelayBox.Visual, Abandoned::FosTech::Relay, 52.0, 90.0))
+        {
+            ErrorMessage = TEXT("Missing FosTech relay box.");
+            return;
+        }
+    }
     if (Layout->UsesParallelPlates() &&
         !SpawnRelayTraces(*Mesh, Finishes.FindRef(FName(TEXT("RelayIdle"))), Finishes.FindRef(FName(TEXT("RelayPowered")))))
     {
@@ -441,7 +469,11 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
             Layout->Button.Size, EComponentMobility::Movable);
         Button = ButtonParts.Collision;
         ButtonVisual = ButtonParts.Visual;
-        Abandoned::Scene::SetFinish(ButtonParts, Layout->Button, Finishes);
+        if (!Abandoned::FosTech::SetVisual(ButtonVisual, Abandoned::FosTech::Button, Layout->Button.Size.Z, 90.0))
+        {
+            ErrorMessage = TEXT("Missing FosTech wall button.");
+            return;
+        }
     }
 
     if (!IsValid(DoorParts.Collision) || (Layout->bRequiresButton && (!Button || !ButtonVisual)))

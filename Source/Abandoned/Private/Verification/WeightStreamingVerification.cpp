@@ -9,7 +9,10 @@ UWeightStreamingVerification::UWeightStreamingVerification()
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
-#include "Components/PrimitiveComponent.h"
+#include "Components/BoxComponent.h"
+#include "Engine/Level.h"
+#include "Puzzles/PuzzleCube.h"
+#include "TrainingChamber/TrainingChamberLayout.h"
 #include "Engine/LevelStreamingDynamic.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -97,6 +100,26 @@ void UWeightStreamingVerification::TickComponent(float Delta, ELevelTick TickTyp
         if (!Level || !Level->IsLevelVisible()) { return; }
         if (!ProbeFloor() || !Hit.GetActor() || Hit.GetActor()->GetLevel() != Level->GetLoadedLevel() ||
             !FMath::IsNearlyZero(Hit.ImpactPoint.Z, 1.0)) { return Fail(TEXT("visible Weight floor missing")); }
+        for (AActor* Actor : Level->GetLoadedLevel()->Actors)
+        {
+            if (APuzzleCube* Cube = Cast<APuzzleCube>(Actor)) { Ballast.Add(Cube); }
+        }
+        {
+            const auto& Spawns = GetDefault<UEntryWeightLayout>()->CubeSpawns;
+            if (Ballast.IsEmpty() || Ballast.Num() != Spawns.Num()) { return Fail(TEXT("streamed ballast count")); }
+            for (const FTrainingCubeSpawn& Spawn : Spawns)
+            {
+                const float Mass = Spawn.Type == EPuzzleCubeType::Small ? 5.0f : 10.0f;
+                const FVector Center = PilotOrigin + Spawn.Center;
+                if (!Ballast.ContainsByPredicate([&](const TWeakObjectPtr<APuzzleCube>& Entry)
+                {
+                    const APuzzleCube* Cube = Entry.Get();
+                    return Cube && Cube->GetLevel() == Level->GetLoadedLevel() && Cube->GetBody()->IsSimulatingPhysics() &&
+                        FMath::IsNearlyEqual(Cube->GetBody()->GetMass(), Mass, 0.1f) &&
+                        FVector::Dist(Cube->GetActorLocation(), Center) < 12.0;
+                })) { return Fail(TEXT("missing physical ballast at configured spawn")); }
+            }
+        }
         if (!Player->TeleportTo(PilotOrigin + FVector(0,0,125), Home.Rotator())) { return Fail(TEXT("arrival obstructed")); }
         Phase = EPhase::Land;
         break;
@@ -116,6 +139,18 @@ void UWeightStreamingVerification::TickComponent(float Delta, ELevelTick TickTyp
     case EPhase::Removal:
         if (Level && (Level->IsLevelLoaded() || World.GetStreamingLevels().Contains(Level))) { return; }
         if (ProbeFloor()) { return Fail(TEXT("orphan collision after removal")); }
+        for (const auto& Entry : Ballast)
+        {
+            if (const APuzzleCube* Cube = Entry.Get(); Cube && Cube->GetBody()->IsRegistered())
+            {
+                return Fail(TEXT("ballast body still registered after unload"));
+            }
+        }
+        if (!Ballast.IsEmpty())
+        {
+            UE_LOG(LogWeightStreaming, Display, TEXT("Weight visit %d: removed %d verified ballast bodies."), CompletedVisits, Ballast.Num());
+            Ballast.Reset();
+        }
         if (!bCancelledFirstRequest)
         {
             bCancelledFirstRequest = true;

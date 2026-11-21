@@ -1,4 +1,5 @@
 #include "Puzzles/PowerLab.h"
+#include "World/FosTech.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Verification/OpticsVerification.h"
@@ -73,8 +74,7 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
     UMaterialInterface* Cyan = Finishes.FindRef(TEXT("Cyan"));
     UMaterialInterface* Amber = Finishes.FindRef(TEXT("Amber"));
     UMaterialInterface* Inactive = Finishes.FindRef(TEXT("Inactive"));
-    UMaterialInterface* Ballast = Finishes.FindRef(TEXT("Ballast"));
-    if (!Cyan || !Amber || !Inactive || !Ballast)
+    if (!Cyan || !Amber || !Inactive)
     {
         Error = TEXT("Missing optical lab light materials.");
         return;
@@ -107,10 +107,23 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
             return;
         }
     }
-    const auto BuildLane = [&](FOpticalLane& Lane, const FOpticalLaneLayout& Data) -> UBoxComponent*
+    const auto BuildLane = [&](FOpticalLane& Lane, const FOpticalLaneLayout& Data, bool bAimable) -> UBoxComponent*
     {
-        Lane.Emitter = Box(Data.Emitter, FVector(48, 44, 50), TEXT("Steel"), true).Collision;
-        Lane.Receiver = Box(Data.Receiver, FVector(65, 68, 68), TEXT("Panel"), true).Collision;
+        const auto Emitter = Box(Data.Emitter, FVector(48, 44, 50), TEXT("Steel"), true);
+        const auto Receiver = Box(Data.Receiver, FVector(65, 68, 68), TEXT("Panel"), true);
+        Lane.EmitterHousing = Emitter.Visual;
+        if (Lane.EmitterHousing && bAimable)
+        {
+            Lane.EmitterHousing->SetMobility(EComponentMobility::Movable);
+        }
+        Lane.Emitter = Emitter.Collision;
+        Lane.Receiver = Receiver.Collision;
+        const double Heading = (Data.Receiver - Data.Emitter).Rotation().Yaw;
+        if (!Abandoned::FosTech::SetVisual(Emitter.Visual, Abandoned::FosTech::Emitter, 25.0, Heading - 90.0) ||
+            !Abandoned::FosTech::SetVisual(Receiver.Visual, Abandoned::FosTech::Receiver, 60.0, Heading + 90.0))
+        {
+            return nullptr;
+        }
         Box(FVector(Data.Emitter.X, Data.Emitter.Y, 19.0), FVector(27, 29, 39), TEXT("Steel"), false);
         Box(FVector(Data.Receiver.X, Data.Receiver.Y, 15.0), FVector(42, 28, 31), TEXT("Steel"), false);
         UBoxComponent* Door = Box(Data.Door, DoorSize, TEXT("Steel"), true, true).Collision;
@@ -121,8 +134,8 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
     };
     FOpticalLane Interruption;
     FOpticalLane Reflection;
-    UBoxComponent* DirectDoor = BuildLane(Interruption, Layout->Interruption);
-    UBoxComponent* ReflectedDoor = BuildLane(Reflection, Layout->Reflection);
+    UBoxComponent* DirectDoor = BuildLane(Interruption, Layout->Interruption, false);
+    UBoxComponent* ReflectedDoor = BuildLane(Reflection, Layout->Reflection, true);
     if (!DirectDoor || !ReflectedDoor)
     {
         Error = TEXT("Could not assemble optical devices.");
@@ -150,13 +163,11 @@ void APowerLabGameMode::InitGame(const FString& Map, const FString& Options, FSt
 
     Cube = World.SpawnActor<APuzzleCube>();
     UMaterialInterface* MirrorBase = Finishes.FindRef(TEXT("Dark"));
-    if (!Button || !ButtonLamp || !Cube || !MirrorBase || !Reflector->Build(Layout->Mirror, Layout->MirrorDock, *BoxMesh, *MirrorBase, *Steel))
+    if (!Button || !ButtonLamp || !Cube || !Cube->Initialize(EPuzzleCubeType::Large) || !MirrorBase || !Reflector->Build(Layout->Mirror, Layout->MirrorDock, *BoxMesh, *MirrorBase, *Steel))
     {
         Error = TEXT("Could not assemble the optical lab controls.");
         return;
     }
-    Cube->Initialize(EPuzzleCubeType::Large, *BoxMesh);
-    Cube->SetVisualMaterial(*Ballast);
     Cube->ResetPosition(Layout->Cube);
     Reflector->RestoreMirror();
     if (!Optics->Build(Interruption, Reflection, *BoxMesh, *ButtonLamp, *Cyan, *Amber, *Inactive))

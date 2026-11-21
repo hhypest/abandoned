@@ -93,9 +93,6 @@ private:
     TObjectPtr<UMaterialInterface> Unlit;
 
     UPROPERTY()
-    TObjectPtr<UMaterialInterface> Ballast;
-
-    UPROPERTY()
     TArray<FPortalMouth> Mouths;
 
     UPROPERTY()

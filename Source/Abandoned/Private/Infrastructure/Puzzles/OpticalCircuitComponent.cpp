@@ -41,6 +41,7 @@ void UOpticalCircuitComponent::Reset()
 {
     Course.Reset();
     Reflection.Direction = FVector::ForwardVector;
+    Reflection.EmitterHousing->SetWorldRotation(FRotationMatrix::MakeFromY(Reflection.Direction).Rotator());
     bDirectSignal = bReflectedSignal = false;
     ButtonLamp->SetMaterial(0, Inactive);
     for (const FOpticalLane* Lane : { &Interruption, &Reflection })
@@ -61,6 +62,7 @@ void UOpticalCircuitComponent::AimEmitter(FVector Point)
     if (!Direction.IsNearlyZero())
     {
         Reflection.Direction = Direction;
+        Reflection.EmitterHousing->SetWorldRotation(FRotationMatrix::MakeFromY(Direction).Rotator());
     }
 }
 

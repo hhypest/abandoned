@@ -6,7 +6,6 @@
 #include "PuzzleCube.generated.h"
 
 class UBoxComponent;
-class UMaterialInterface;
 class UStaticMesh;
 class UStaticMeshComponent;
 
@@ -32,7 +31,7 @@ public:
     double GetHalfSize() const;
     float GetMassKg() const { return MassKg; }
     float GetStackMass() const;
-    void SetVisualMaterial(UMaterialInterface& Material);
+    bool Initialize(EPuzzleCubeType Type);
     UBoxComponent* GetSupport() const { return Support.Get(); }
     bool HasSnapConstraints() const { return Support.IsValid() || StackedCube.IsValid(); }
     ECubeStackBlock GetStackBlock(const APuzzleCube& Upper) const;
@@ -42,9 +41,17 @@ public:
     void ResetPosition(const FVector& Center);
 
 protected:
+    void BeginPlay() override;
     void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
+    // Placed sublevel actors initialize when their level becomes visible.
+    UPROPERTY(EditInstanceOnly, Category="Ballast")
+    bool bPlacedBallast = false;
+
+    UPROPERTY(EditInstanceOnly, Category="Ballast")
+    EPuzzleCubeType PlacedType = EPuzzleCubeType::Small;
+
     void ReleaseSupport();
     void ReleaseStack();
     void SetFreeBody();

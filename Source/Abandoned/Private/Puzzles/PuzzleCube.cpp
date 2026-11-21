@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "World/FosTech.h"
 #include "Infrastructure/Puzzles/UnrealSlidingDoor.h"
 
 APuzzleCube::APuzzleCube()
@@ -36,7 +37,10 @@ void APuzzleCube::Initialize(EPuzzleCubeType Type, UStaticMesh& Mesh)
     Body->SetBoxExtent(FVector(Size * 0.5));
     Body->SetMassOverrideInKg(NAME_None, MassKg, true);
     Visual->SetStaticMesh(&Mesh);
-    Visual->SetRelativeScale3D(FVector(Size / (2.0 * Mesh.GetBounds().BoxExtent.X)));
+    const auto Bounds = Mesh.GetBounds();
+    const double Scale = Size / (2.0 * Bounds.BoxExtent.Z);
+    Visual->SetRelativeScale3D(FVector(Scale));
+    Visual->SetRelativeLocation(-Bounds.Origin * Scale);
     Body->SetSimulatePhysics(true);
 }
 
@@ -55,9 +59,22 @@ float APuzzleCube::GetStackMass() const
     return TotalMass;
 }
 
-void APuzzleCube::SetVisualMaterial(UMaterialInterface& Material)
+bool APuzzleCube::Initialize(EPuzzleCubeType Type)
 {
-    Visual->SetMaterial(0, &Material);
+    const TCHAR* Path = Type == EPuzzleCubeType::Small ? Abandoned::FosTech::SmallCube : Abandoned::FosTech::LargeCube;
+    UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, Path);
+    if (!Mesh || !IsValidType(Type)) { return false; }
+    Initialize(Type, *Mesh);
+    return true;
+}
+
+void APuzzleCube::BeginPlay()
+{
+    Super::BeginPlay();
+    if (bPlacedBallast && !Initialize(PlacedType))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Placed ballast has no matching FosTech mesh."));
+    }
 }
 
 ECubeStackBlock APuzzleCube::GetStackBlock(const APuzzleCube& Upper) const

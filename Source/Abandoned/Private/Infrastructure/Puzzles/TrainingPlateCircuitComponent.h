@@ -27,6 +27,7 @@ struct FTrainingPressurePlate
     UPROPERTY(Transient)
     TObjectPtr<UPointLightComponent> Indicator;
 
+    FVector RestLocation = FVector::ZeroVector;
     bool bPressed = false;
 };
 
