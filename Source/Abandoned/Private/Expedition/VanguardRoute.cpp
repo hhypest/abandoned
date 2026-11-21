@@ -93,36 +93,6 @@ AVanguardSegment::AVanguardSegment()
     BaseMaterial = Material.Object;
 }
 
-#if WITH_EDITOR
-bool AVanguardSegment::BakePassageRoom()
-{
-    UWorld* World = GetWorld();
-    UStaticMesh* Cube = Abandoned::Blockout::LoadCube();
-    if (!World || World->WorldType != EWorldType::Editor || !Cube) { return false; }
-    Modify();
-    for (AStaticMeshActor* Block : PlacedRoom)
-    {
-        if (IsValid(Block)) { World->EditorDestroyActor(Block, true); }
-    }
-    PlacedRoom.Reset();
-    const auto* Settings = GetDefault<UVanguardPassageLayout>();
-    for (const auto& Block : Settings->Room)
-    {
-        FActorSpawnParameters Params;
-        Params.OverrideLevel = GetLevel();
-        auto* Actor = World->SpawnActor<AStaticMeshActor>(Block.Center, FRotator::ZeroRotator, Params);
-        if (!Actor) { return false; }
-        Actor->SetActorLabel(FString::Printf(TEXT("Passage %03d %s"), PlacedRoom.Num(), *Block.Finish.ToString()));
-        auto* Visual = Actor->GetStaticMeshComponent();
-        Visual->SetStaticMesh(Cube);
-        Visual->SetCollisionProfileName(Block.bCollision ? TEXT("BlockAll") : TEXT("NoCollision"));
-        Actor->SetActorScale3D(Block.Size / 100.0);
-        PlacedRoom.Add(Actor);
-    }
-    return !PlacedRoom.IsEmpty();
-}
-#endif
-
 void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
     Super::InitGame(MapName, Options, ErrorMessage);
@@ -170,6 +140,10 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
         for (auto& Block : Placed->Room) { Block.Center += Offset; }
         for (auto& Light : Placed->Lights) { Light.Position += Offset; }
         for (auto& Ledge : Placed->MantleLedges) { Ledge.Center += Offset; }
+        // Optional local artwork can be absent from the public cook. Use the configured fallback in that case.
+        for (auto& Finish : Placed->Finishes) { if (!Finish.Material.IsValid()) { Finish.Material.Reset(); } }
+        if (!Placed->FrameMesh.IsValid()) { Placed->FrameMesh.Reset(); }
+        if (!Placed->LeafMesh.IsValid()) { Placed->LeafMesh.Reset(); }
         Passage = Placed;
         Layout = Placed;
     }
@@ -288,25 +262,6 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
         ErrorMessage = TEXT("Could not spawn the Vanguard route device.");
         return;
     }
-}
-
-FVector AVanguardSegment::PlayerStart() const
-{
-    return Layout->Spawn;
-}
-
-bool AVanguardSegment::HasPassageSupport() const
-{
-    const auto Ready = [this](const UBoxComponent* Body)
-    {
-        return IsValid(Body) && Body->IsRegistered() && Body->IsQueryCollisionEnabled() && Body->GetOwner()->GetLevel() == GetLevel();
-    };
-    const auto* Passage = Cast<UVanguardPassageLayout>(Layout.Get());
-    if (!Passage || !Ready(Door) || Ledges.Num() != Passage->MantleLedges.Num() ||
-        Ledges.ContainsByPredicate([&](const auto& Ledge) { return !Ready(Ledge); })) { return false; }
-    FHitResult Floor;
-    return GetWorld()->LineTraceSingleByChannel(Floor, Passage->Spawn, Passage->Spawn - FVector(0, 0, 150), ECC_Pawn) &&
-        Floor.GetActor() && Floor.GetActor()->GetLevel() == GetLevel();
 }
 
 void AVanguardSegment::Activate()

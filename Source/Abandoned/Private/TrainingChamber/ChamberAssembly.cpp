@@ -266,7 +266,7 @@ void AChamberAssembly::Build(const UTrainingChamberLayout& Settings, UMaterialIn
     auto* LeafMesh = bStreamed ? DoorLeafMesh.Get() : MeshLibrary->LoadForChamber(World, Abandoned::FosTech::Leaf);
     auto* FrameMesh = bStreamed ? DoorFrameMesh.Get() : MeshLibrary->LoadForChamber(World, Abandoned::FosTech::Frame);
     if (!Abandoned::FosTech::FitVisual(DoorParts.Visual, LeafMesh, LeafHeight, -90.0) ||
-        !Abandoned::FosTech::FitVisual(Frame.Visual, FrameMesh, FrameSize.Z, -90.0))
+        !Abandoned::FosTech::FitVisual(Frame.Visual, FrameMesh, FrameSize.Z, 90.0))
     {
         ErrorMessage = TEXT("Missing FosTech door assembly.");
         return;

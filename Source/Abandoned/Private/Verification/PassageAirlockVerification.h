@@ -11,6 +11,6 @@ bool Requested();
 bool SlotIsBalance();
 bool ReturnedToBalance(ATrainingChamberCharacter& Player);
 void RecordDeparture(ATrainingChamberCharacter& Player);
-void CheckPassage(AVanguardSegment const& Segment, AVanguardCharacter& Player);
+void CheckPassage(const AVanguardSegment& Segment, AVanguardCharacter& Player);
 }
 #endif

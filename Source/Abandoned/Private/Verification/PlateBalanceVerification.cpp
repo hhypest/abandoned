@@ -184,7 +184,7 @@ void UPlateBalanceVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
     case EPhase::Empty:
         if (FParse::Param(FCommandLine::Get(), TEXT("CapturePassageDoor")) && PhaseSeconds < 1.0)
         {
-            PlacePlayer(FVector(Layout->Door.Center.X - 395.0, Layout->Door.Center.Y, Layout->Spawn.Z), FRotator::ZeroRotator);
+            PlacePlayer(FVector(Layout->Door.Center.X - 310.0, Layout->Door.Center.Y, Layout->Spawn.Z), FRotator::ZeroRotator);
             if (PhaseSeconds > 0.55 && !bCapturedDoor)
             {
                 FScreenshotRequest::RequestScreenshot(TEXT("Balance-Door-Facing"), false, false);
@@ -300,6 +300,18 @@ void UPlateBalanceVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
             bRevealedPassage = Chamber->RevealChamberForVerification();
             if (bRevealedPassage) { UE_LOG(LogWeightBalanceTest, Display, TEXT("Solved Balance held closed while passage hidden.")); }
         }
+        if (bRevealedPassage && Chamber->HasChamberLoadFailed() && FParse::Param(FCommandLine::Get(), TEXT("VerifyInvalidPassage")))
+        {
+            if (!Chamber->IsExitEnabled() || !Chamber->GetDoor()->GetComponentLocation().Equals(Layout->Door.Center) || !Airlock::SlotIsBalance())
+            {
+                Fail(TEXT("invalid passage changed the Balance gate or checkpoint"));
+                return;
+            }
+            UE_LOG(LogWeightBalanceTest, Display, TEXT("Invalid passage rejected: Balance gate closed, player and checkpoint retained."));
+            SetComponentTickEnabled(false);
+            FPlatformMisc::RequestExitWithStatus(false, 0);
+            return;
+        }
         if (Chamber->IsDoorOpen())
         {
             if (!HasLoads(*Chamber, 10, 10, 10))
@@ -376,6 +388,18 @@ void UPlateBalanceVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
         Step(EPhase::SecondSolution);
         break;
     case EPhase::SecondSolution:
+        if (bRevealedPassage && Chamber->HasChamberLoadFailed() && FParse::Param(FCommandLine::Get(), TEXT("VerifyInvalidPassage")))
+        {
+            if (!Chamber->IsExitEnabled() || !Chamber->GetDoor()->GetComponentLocation().Equals(Layout->Door.Center) || !Airlock::SlotIsBalance())
+            {
+                Fail(TEXT("invalid passage changed the Balance gate or checkpoint"));
+                return;
+            }
+            UE_LOG(LogWeightBalanceTest, Display, TEXT("Invalid passage rejected: Balance gate closed, player and checkpoint retained."));
+            SetComponentTickEnabled(false);
+            FPlatformMisc::RequestExitWithStatus(false, 0);
+            return;
+        }
         if (Chamber->IsDoorOpen())
         {
             if (!HasLoads(*Chamber, 10, 10, 10))

@@ -114,6 +114,7 @@ void ATrainingChamberGameMode::PrepareNextChamber()
         if (Route && Next && Next->Destination == Segment::Passage)
         {
             using namespace Abandoned::Application::Expedition;
+            if (!Route->PollPassageAssets()) { return; }
             Route->Prepare({VanguardStop::Passage, RouteEntry::Campaign, Course.Current}, Error);
             if (Error.IsEmpty() && Route->HasPassageSupport())
             {

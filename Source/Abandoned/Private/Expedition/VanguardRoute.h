@@ -48,6 +48,7 @@ public:
     UFUNCTION(BlueprintCallable, Category="Passage")
     bool BakePassageRoom();
 #endif
+    bool PollPassageAssets();
     void Prepare(Abandoned::Application::Expedition::VanguardDestination Destination, FString& Error);
     bool HasPassageSupport() const;
     FVector PlayerStart() const;
@@ -62,6 +63,8 @@ private:
     friend class AVanguardCharacter;
     UPROPERTY()
     TArray<TObjectPtr<class AStaticMeshActor>> PlacedRoom;
+    TSharedPtr<struct FStreamableHandle> AssetRequest;
+    bool bRequestedAssets = false;
     bool bActive = false;
     UPROPERTY(Transient)
     TArray<TObjectPtr<UBoxComponent>> Ledges;
