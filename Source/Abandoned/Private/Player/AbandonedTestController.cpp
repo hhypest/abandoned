@@ -4,10 +4,13 @@
 #include "Components/InputComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
 #include "GameFramework/GameUserSettings.h"
 #include "InputCoreTypes.h"
+#if !UE_BUILD_SHIPPING
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
+#endif
 #include "Kismet/KismetSystemLibrary.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Input/SButton.h"
@@ -23,17 +26,19 @@ namespace
 {
 constexpr int32 FrameRateLimits[] = {30, 60, 120, 180};
 
-class STestMenu final : public SCompoundWidget
+class SPauseMenu final : public SCompoundWidget
 {
 public:
-    SLATE_BEGIN_ARGS(STestMenu) {}
+    SLATE_BEGIN_ARGS(SPauseMenu) {}
         SLATE_EVENT(FSimpleDelegate, OnClose)
         SLATE_EVENT(FSimpleDelegate, OnFullscreen)
+        SLATE_ARGUMENT(FKey, ToggleKey)
         SLATE_DEFAULT_SLOT(FArguments, Content)
     SLATE_END_ARGS()
 
     void Construct(const FArguments& Args)
     {
+        ToggleKey = Args._ToggleKey;
         OnClose = Args._OnClose;
         OnFullscreen = Args._OnFullscreen;
         ChildSlot[Args._Content.Widget];
@@ -44,7 +49,7 @@ public:
     FReply OnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override
     {
         const FKey Key = Event.GetKey();
-        if (Key == EKeys::Escape || Key == EKeys::M || Key == EKeys::F11)
+        if (Key == EKeys::Escape || Key == ToggleKey || Key == EKeys::F11)
         {
             if (!Event.IsRepeat())
             {
@@ -58,10 +63,19 @@ public:
     }
 
 private:
+    FKey ToggleKey;
     FSimpleDelegate OnClose;
     FSimpleDelegate OnFullscreen;
 };
 }
+
+enum class AAbandonedTestController::EMenuAction
+{
+    Resume, Fullscreen, VSync, FrameRate, Quit,
+#if !UE_BUILD_SHIPPING
+    TrainingChamber, Balance, MovementLab, PowerLab, GravityLab, PortalLab, Dev20, Radiation
+#endif
+};
 
 void AAbandonedTestController::BeginPlay()
 {
@@ -82,12 +96,51 @@ void AAbandonedTestController::BeginPlay()
 void AAbandonedTestController::SetupInputComponent()
 {
     Super::SetupInputComponent();
-    InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AAbandonedTestController::ToggleMenu);
-    InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AAbandonedTestController::ToggleMenu);
+    InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AAbandonedTestController::OpenPauseMenu);
+#if !UE_BUILD_SHIPPING
+    InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AAbandonedTestController::OpenTestMenu);
+#endif
     InputComponent->BindKey(EKeys::F11, IE_Pressed, this, &AAbandonedTestController::ToggleFullscreen);
 }
 
-void AAbandonedTestController::ToggleMenu()
+void AAbandonedTestController::OpenPauseMenu()
+{
+    OpenMenu(NSLOCTEXT("PauseMenu", "Title", "Paused"), EKeys::Escape, SNullWidget::NullWidget);
+}
+
+#if !UE_BUILD_SHIPPING
+void AAbandonedTestController::OpenTestMenu()
+{
+    struct FDestinationButton
+    {
+        EMenuAction Action;
+        FText Label;
+    };
+    const FDestinationButton Destinations[] = {
+        {EMenuAction::TrainingChamber, NSLOCTEXT("TestMenu", "EntryCourse", "Load Entry Course")},
+        {EMenuAction::Balance, NSLOCTEXT("TestMenu", "Balance", "Load Balance Chamber")},
+        {EMenuAction::MovementLab, NSLOCTEXT("TestMenu", "Lab", "Load Movement Lab")},
+        {EMenuAction::PowerLab, NSLOCTEXT("TestMenu", "Optics", "Load Optics Lab")},
+        {EMenuAction::GravityLab, NSLOCTEXT("TestMenu", "Gravity", "Load Gravity Lab")},
+        {EMenuAction::PortalLab, NSLOCTEXT("TestMenu", "PortalLab", "Load Portal Lab")},
+        {EMenuAction::Dev20, NSLOCTEXT("TestMenu", "Dev20", "Load DEV-20 Route")},
+        {EMenuAction::Radiation, NSLOCTEXT("TestMenu", "Radiation", "Load Radiation Passage")}
+    };
+    const TSharedRef<SVerticalBox> Buttons = SNew(SVerticalBox);
+    for (const FDestinationButton& Destination : Destinations)
+    {
+        Buttons->AddSlot().AutoHeight().Padding(0.0f, 3.0f)
+        [
+            SNew(SButton)
+            .Text(Destination.Label)
+            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, Destination.Action)
+        ];
+    }
+    OpenMenu(NSLOCTEXT("TestMenu", "Title", "Test Menu"), EKeys::M, Buttons);
+}
+#endif
+
+void AAbandonedTestController::OpenMenu(const FText& Title, FKey ToggleKey, const TSharedRef<SWidget>& Destinations)
 {
     if (Menu)
     {
@@ -101,7 +154,8 @@ void AAbandonedTestController::ToggleMenu()
     }
 
     TSharedPtr<SButton> ResumeButton;
-    Menu = SNew(STestMenu)
+    Menu = SNew(SPauseMenu)
+        .ToggleKey(ToggleKey)
         .OnClose(FSimpleDelegate::CreateUObject(this, &AAbandonedTestController::CloseMenu))
         .OnFullscreen(FSimpleDelegate::CreateUObject(this, &AAbandonedTestController::ToggleFullscreen))
         [
@@ -121,7 +175,7 @@ void AAbandonedTestController::ToggleMenu()
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 16.0f)
                         [
                             SNew(STextBlock)
-                            .Text(NSLOCTEXT("TestMenu", "Title", "Test Menu"))
+                            .Text(Title)
                             .Font(FCoreStyle::GetDefaultFontStyle("Bold", 20))
                         ]
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
@@ -144,53 +198,9 @@ void AAbandonedTestController::ToggleMenu()
                             .IsEnabled_UObject(this, &AAbandonedTestController::CanChangeDisplaySettings)
                             .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::FrameRate)
                         ]
-                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
+                        + SVerticalBox::Slot().AutoHeight()
                         [
-                            SNew(SButton)
-                            .Text(NSLOCTEXT("TestMenu", "EntryCourse", "Load Entry Course"))
-                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::TrainingChamber)
-                        ]
-                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
-                        [
-                            SNew(SButton)
-                            .Text(NSLOCTEXT("TestMenu", "Balance", "Load Balance Chamber"))
-                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Balance)
-                        ]
-                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
-                        [
-                            SNew(SButton)
-                            .Text(NSLOCTEXT("TestMenu", "Lab", "Load Movement Lab"))
-                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::MovementLab)
-                        ]
-                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
-                        [
-                            SNew(SButton)
-                            .Text(NSLOCTEXT("TestMenu", "Optics", "Load Optics Lab"))
-                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::PowerLab)
-                        ]
-                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
-                        [
-                            SNew(SButton)
-                            .Text(NSLOCTEXT("TestMenu", "Gravity", "Load Gravity Lab"))
-                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::GravityLab)
-                        ]
-                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
-                        [
-                            SNew(SButton)
-                            .Text(NSLOCTEXT("TestMenu", "PortalLab", "Load Portal Lab"))
-                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::PortalLab)
-                        ]
-                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
-                        [
-                            SNew(SButton)
-                            .Text(NSLOCTEXT("TestMenu", "Dev20", "Load DEV-20 Route"))
-                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Dev20)
-                        ]
-                        + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
-                        [
-                            SNew(SButton)
-                            .Text(NSLOCTEXT("TestMenu", "Radiation", "Load Radiation Passage"))
-                            .OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Radiation)
+                            Destinations
                         ]
                         + SVerticalBox::Slot().AutoHeight().Padding(0.0f, 3.0f)
                         [
@@ -321,14 +331,17 @@ void AAbandonedTestController::ToggleFullscreen()
 
 FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
 {
+#if !UE_BUILD_SHIPPING
     using namespace Abandoned::Application::Expedition;
     using Abandoned::Domain::Expedition::Segment;
     using Abandoned::Infrastructure::Expedition::TravelToWorld;
+#endif
     switch (Action)
     {
     case EMenuAction::Resume:
         CloseMenu();
         break;
+#if !UE_BUILD_SHIPPING
     case EMenuAction::TrainingChamber:
         CloseMenu();
         TravelToWorld(this, ChamberDestination{});
@@ -361,6 +374,7 @@ FReply AAbandonedTestController::RunMenuAction(EMenuAction Action)
         CloseMenu();
         TravelToWorld(this, VanguardDestination{VanguardStop::RadiationPassage});
         break;
+#endif
     case EMenuAction::Fullscreen:
         ToggleFullscreen();
         break;
