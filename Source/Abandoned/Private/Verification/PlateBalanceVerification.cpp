@@ -63,7 +63,7 @@ void UPlateBalanceVerification::Attach(ATrainingChamberGameMode& Chamber, const 
     }
     for (const auto& Plate : Plates)
     {
-        Scenario->Displays.Add(FPlateDisplay{Plate.Visual.Get(), Plate.Indicator.Get()});
+        Scenario->Displays.Add(FPlateDisplay{Plate.Visual.Get(), Plate.Indicator.Get(), Plate.RestLocation});
     }
     Chamber.AddInstanceComponent(Scenario);
     Scenario->RegisterComponent();
@@ -101,7 +101,7 @@ bool UPlateBalanceVerification::IsReset(const ATrainingChamberGameMode& Chamber)
     for (int32 Index = 0; Index < Displays.Num(); ++Index)
     {
         const auto& Display = Displays[Index];
-        if (Chamber.IsPlatePressed(Index) || !Display.Visual.IsValid() || !Display.Visual->GetRelativeLocation().IsNearlyZero() ||
+        if (Chamber.IsPlatePressed(Index) || !Display.Visual.IsValid() || !Display.Visual->GetRelativeLocation().Equals(Display.RestLocation, 0.01) ||
             !Display.Indicator.IsValid() || !FMath::IsNearlyEqual(Display.Indicator->Intensity, Layout.PlateLight.Intensity))
         {
             return false;

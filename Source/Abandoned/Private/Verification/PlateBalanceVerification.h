@@ -34,6 +34,7 @@ private:
     {
         TWeakObjectPtr<UStaticMeshComponent> Visual;
         TWeakObjectPtr<UPointLightComponent> Indicator;
+        FVector RestLocation;
     };
     void Step(EPhase Next);
     void Fail(const TCHAR* Reason);

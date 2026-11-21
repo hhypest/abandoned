@@ -390,8 +390,12 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         EComponentMobility::Movable, TEXT("BlockAllDynamic"));
     // The leaf is 114.30 cm wide at its original height of 190.25 cm.
     const double LeafHeight = FMath::Max(Layout->Door.Size.Z, Layout->Door.Size.Y * 190.25 / 114.30);
-    const FVector FrameSize(Layout->Door.Size.X, Layout->Door.Size.Y + 48.0, LeafHeight + 48.0);
-    const auto Frame = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center + FVector(0, 0, (FrameSize.Z - Layout->Door.Size.Z) * 0.5),
+    // Mount the jambs on the chamber side of the wall, around the playable opening.
+    const double FrameWidth = Layout->Door.Size.Y + 32.0;
+    const double FrameHeight = FMath::Max(Layout->Door.Size.Z, FrameWidth * 190.18 / 163.48);
+    const FVector FrameSize(Layout->Door.Size.X, FrameWidth, FrameHeight);
+    const FVector FrameOffset(-Layout->Door.Size.X * 0.5 - 22.0, 0, (FrameHeight - Layout->Door.Size.Z) * 0.5);
+    const auto Frame = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center + FrameOffset,
         FrameSize, EComponentMobility::Static, TEXT("NoCollision"));
     if (!Abandoned::FosTech::SetVisual(DoorParts.Visual, Abandoned::FosTech::Leaf, LeafHeight, 90.0) ||
         !Abandoned::FosTech::SetVisual(Frame.Visual, Abandoned::FosTech::Frame, FrameSize.Z, 90.0))
@@ -449,7 +453,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     if (Layout->UsesParallelPlates())
     {
         const auto RelayBox = Abandoned::Blockout::SpawnBox(World, *Mesh,
-            Layout->Door.Center + FVector(-40, -Layout->Door.Size.Y * 0.5 - 35, 0), FVector(20, 46, 52),
+            Layout->Door.Center + FVector(-40, Layout->Door.Size.Y * 0.5 + 44, 0), FVector(20, 46, 52),
             EComponentMobility::Static, TEXT("NoCollision"));
         if (!Abandoned::FosTech::SetVisual(RelayBox.Visual, Abandoned::FosTech::Relay, 52.0, 90.0))
         {
