@@ -1,0 +1,69 @@
+{
+  "Date": "2026-11-21",
+  "Host": {
+    "Windows": "10.0.26300.0",
+    "Unreal": "5.7.4",
+    "EngineBase": "260bb2e1c5610b31c63a36206eedd289409c5f11",
+    "UBTSha256": "A88C7CB9438B39BB9917C8CAF9C71FA0DEF2418FBE9A866FA20DE1B5EFDA30D2",
+    "DotNet": "8.0.412",
+    "VCTools": "14.44.35207",
+    "Compiler": "14.44.35230.0",
+    "WindowsSDK": "10.0.26100.0"
+  },
+  "Comparison": {
+    "Commit": "56f1008fef0dfd7735237e6cd0b211f151f71007",
+    "Target": "AbandonedEditor Win64 Development",
+    "Artifact": "Binaries/Win64/UnrealEditor-Abandoned.dll",
+    "Builds": [
+      {
+        "Run": "78c6af4f9287",
+        "Bytes": 1795072,
+        "SHA256": "06F191443EB49C327E012A1FFC88BE31564C634FAFE88F0421B0FBC424D47CC9",
+        "Steps": {
+          "Checkout": 0,
+          "Toolchain": 0,
+          "Architecture": 0,
+          "EditorBuild": 0,
+          "Products": 0
+        }
+      },
+      {
+        "Run": "4d3aea101ea4",
+        "Bytes": 1795072,
+        "SHA256": "06F191443EB49C327E012A1FFC88BE31564C634FAFE88F0421B0FBC424D47CC9",
+        "Steps": {
+          "Checkout": 0,
+          "Toolchain": 0,
+          "Architecture": 0,
+          "EditorBuild": 0,
+          "Products": 0
+        }
+      }
+    ],
+    "BinaryCompareExitCode": 0
+  },
+  "NegativeControl": {
+    "Configuration": "Same MSVC deterministic flags, independent absolute project paths, without the stable junction",
+    "Runs": [
+      "8e211cec7328",
+      "3e116d51ff76"
+    ],
+    "SHA256": [
+      "3D01502F13F339223A1CE59921D1DC27C42AAFFC351C8B961686BAC3CAA0CC74",
+      "B2E5E8765BEC22DE6EA200E8DC0AD6461C1B95832CFED7399D592BAD9CFEFAD2"
+    ],
+    "BinaryCompareExitCode": 1
+  },
+  "Smoke": {
+    "Run": "db653e9cd19d",
+    "Commit": "56f1008fef0dfd7735237e6cd0b211f151f71007",
+    "DLLSha256": "06F191443EB49C327E012A1FFC88BE31564C634FAFE88F0421B0FBC424D47CC9",
+    "Rhi": "VULKAN_SM6",
+    "Resolution": "1280x720",
+    "Name": "EntryCourse",
+    "Gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "Outcome": "Passed",
+    "ExitCode": 0,
+    "ShutdownComplete": true
+  }
+}
