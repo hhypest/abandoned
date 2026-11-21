@@ -1,0 +1,10 @@
+ThreadName,TimerName,StartTime,EndTime,Depth,OffsetFromGameFrameMs,DurationMs
+RenderThread 0,ProcessVisibilityTasks,21.525916400,21.529843500,2,0.3069,3.9271
+RenderThread 0,FTaskBase::WaitWithNamedThreadsSupport,21.526264800,21.529775600,4,0.6553,3.5108
+GameThread,GameThreadWaitForTask,21.526930400,21.532307200,2,1.3209,5.3768
+RHIThread,RHI_Translate,21.528000300,21.551774400,0,2.3908,23.7741
+GameThread,GameThreadWaitForTask,21.532314400,21.551895600,2,6.7049,19.5812
+RenderThread 0,ProcessVisibilityTasks,21.532626500,21.553713900,2,7.017,21.0874
+RenderThread 0,WaitForTasks,21.532648600,21.552784800,4,7.0391,20.1362
+RHIThread,Submission_Wait,21.551402000,21.551513800,1,25.7925,0.1118
+RHIThread,VulkanQueuePresent,21.551515800,21.551760700,1,25.9063,0.2449
