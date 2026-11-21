@@ -1,0 +1,85 @@
+{
+  "Date": "2026-11-21",
+  "Commit": "51cd84441f77e3e8937c90e8ccb85760b1f7d310",
+  "TrackedChanges": false,
+  "Target": "Package",
+  "Unreal": "5.7.4",
+  "Rhi": "VULKAN_SM6",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "Resolution": "1280x720",
+  "ExecutableSha256": "C367EBA5DF2AF1D977479AD51A92498B52FE9128485CD53EE664EBB687D7B450",
+  "Scenarios": [
+    {
+      "Scenario": "WeightStreaming",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "Chambers": [
+        "Stairs"
+      ],
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      },
+      "SuccessMarkers": [
+        "Weight streaming cancelled before visibility; site clear.",
+        "Weight streaming visit 1: player landed on Weight and returned to Stairs.",
+        "Weight streaming visit 2: player landed on Weight and returned to Stairs.",
+        "Weight streaming verification passed: two removals, site clear."
+      ],
+      "FinalSave": {
+        "checkpoint": "Stairs",
+        "archive": [
+          "oxygen-restored"
+        ],
+        "version": 2
+      }
+    },
+    {
+      "Scenario": "EntryCourse",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "Chambers": [
+        "Stairs",
+        "Button",
+        "Weight",
+        "Balance"
+      ],
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Scenario": "EntryCheckpoint",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "Chambers": [
+        "Weight",
+        "Balance"
+      ],
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      },
+      "FinalSave": {
+        "version": 2,
+        "checkpoint": "Balance",
+        "archive": [
+          "oxygen-restored"
+        ]
+      }
+    }
+  ]
+}
