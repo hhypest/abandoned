@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)][string]$PackageRoot,
     [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
     [switch]$TraceTravel,
+    [ValidateSet('Separate', 'Instanced')][string]$ChamberDecor,
     [switch]$DisableChamberMeshReuse,
     [switch]$RedrawOutgoingChamber,
     [switch]$TraceDeferredGCTail,
@@ -19,6 +20,7 @@ param(
     [switch]$TestMapReserveTrim
 )
 $ErrorActionPreference = 'Stop'
+if ($ChamberDecor -and !$TraceTravel) { throw 'ChamberDecor requires TraceTravel' }
 if ($RedrawOutgoingChamber -and !$TraceTravel) { throw 'RedrawOutgoingChamber requires TraceTravel' }
 if ($DisableChamberMeshReuse -and !$TraceTravel) { throw 'DisableChamberMeshReuse requires TraceTravel' }
 if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
@@ -72,6 +74,7 @@ foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1
     $start.ArgumentList.Add($arg)
 }
 if ($DisableChamberMeshReuse) { $start.ArgumentList.Add('-NoChamberMeshReuse') }
+if ($ChamberDecor -eq 'Separate') { $start.ArgumentList.Add('-NoInstancedChamberDecor') }
 if ($measureReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
 if ($TestMapReserveTrim) { $start.ArgumentList.Add('-TestMapReserveTrim') }
 if ($TraceMapPages) { $start.ArgumentList.Add('-AuditMapPages') }
@@ -146,6 +149,13 @@ if ($Scenario -eq 'Travel') {
         if ($line -match 'Training chamber ready\. (\w+),') { $Matches[1] }
     })
     if (($rooms -join ',') -ne ($expectedRooms -join ',')) { throw "Unexpected route: $rooms" }
+    if ($ChamberDecor) {
+        $pattern = if ($ChamberDecor -eq 'Separate') { 'mode=separate groups=0$' } else { 'mode=instanced groups=[1-9]\d*$' }
+        $modes = @($log -match 'Room decor mode=')
+        if ($modes.Count -ne $rooms.Count -or @($modes -notmatch $pattern).Count) {
+            throw "Room decor differs from $ChamberDecor on the measured route"
+        }
+    }
     if ($DisableRenderThreadLag -and !($log -match 'r\.OneFrameThreadLag = "0"')) {
         throw 'The render-thread lag control was not applied'
     }
@@ -175,6 +185,7 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     DisableSmallGCPolicy = [bool]$DisableSmallGCPolicy
     RedrawOutgoingChamber = [bool]$RedrawOutgoingChamber
     DisableChamberMeshReuse = [bool]$DisableChamberMeshReuse
+    ChamberDecor = $ChamberDecor
     TraceTravelTasks = [bool]$TraceTravelTasks
     TraceTravelStats = [bool]$TraceTravelStats
     MapPageReserve = if ($measureReserve) { $MapPageReserve } else { $null }

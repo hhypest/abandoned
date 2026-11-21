@@ -12,6 +12,7 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
@@ -26,6 +27,7 @@
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
+#include "Misc/CommandLine.h"
 #include "Puzzles/PuzzleCube.h"
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
@@ -43,6 +45,42 @@ using Abandoned::Domain::Expedition::Dev20MassKg;
 using Dev20Step = Abandoned::Domain::Expedition::Dev20Stage;
 using Abandoned::Infrastructure::Expedition::UnrealCheckpointStore;
 using Abandoned::Infrastructure::Expedition::WriteSegment;
+
+using FDecorGroups = TMap<UMaterialInterface*, TArray<FTransform>>;
+
+bool SpawnRoomDecor(UWorld& World, UStaticMesh& Mesh, const FDecorGroups& Groups)
+{
+    TRACE_CPUPROFILER_EVENT_SCOPE(Training_RegisterDecorInstances);
+    AActor* Owner = World.SpawnActor<AActor>();
+    if (!Owner)
+    {
+        return false;
+    }
+    for (const auto& Group : Groups)
+    {
+        auto* Instances = NewObject<UInstancedStaticMeshComponent>(Owner);
+        Owner->AddInstanceComponent(Instances);
+        if (USceneComponent* Root = Owner->GetRootComponent())
+        {
+            Instances->SetupAttachment(Root);
+        }
+        else
+        {
+            Owner->SetRootComponent(Instances);
+        }
+        Instances->SetMobility(EComponentMobility::Static);
+        Instances->SetStaticMesh(&Mesh);
+        if (Group.Key)
+        {
+            Instances->SetMaterial(0, Group.Key);
+        }
+        Instances->SetCollisionProfileName(TEXT("NoCollision"));
+        Instances->SetCanEverAffectNavigation(false);
+        Instances->AddInstances(Group.Value, false, false, false);
+        Instances->RegisterComponent();
+    }
+    return true;
+}
 }
 
 ATrainingChamberGameMode::ATrainingChamberGameMode()
@@ -226,13 +264,32 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     UWorld& World = *GetWorld();
     Abandoned::Blockout::ApplyGravity(World);
     const auto Finishes = Abandoned::Scene::MakeFinishes(*this, SurfaceMaterial, Layout->Finishes);
+    const bool bDecorLayout = Layout->IsA<UEntryStairsLayout>() || Layout->IsA<UEntryWeightLayout>();
+    const bool bInstanceDecor = bDecorLayout && !FParse::Param(FCommandLine::Get(), TEXT("NoInstancedChamberDecor"));
+    FDecorGroups DecorGroups;
     for (const FSceneBlock& Block : Layout->Room)
     {
         TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_SolidRoomBlock, Block.bCollision);
         TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_DecorativeRoomBlock, !Block.bCollision);
+        if (bInstanceDecor && !Block.bCollision)
+        {
+            DecorGroups.FindOrAdd(Finishes.FindRef(Block.Finish)).Emplace(
+                FQuat::Identity, Block.Center, Block.Size / 100.0);
+            continue;
+        }
         const auto Parts = Abandoned::Blockout::SpawnBox(World, *Mesh, Block.Center, Block.Size,
             EComponentMobility::Static, Block.bCollision ? TEXT("BlockAll") : TEXT("NoCollision"));
         Abandoned::Scene::SetFinish(Parts, Block, Finishes);
+    }
+    if (!DecorGroups.IsEmpty() && !SpawnRoomDecor(World, *Mesh, DecorGroups))
+    {
+        ErrorMessage = TEXT("Could not create the training chamber decor.");
+        return;
+    }
+    if (bDecorLayout)
+    {
+        UE_LOG(LogTrainingChamber, Log, TEXT("Room decor mode=%s groups=%d"),
+            bInstanceDecor ? TEXT("instanced") : TEXT("separate"), DecorGroups.Num());
     }
     for (const FTrainingCubeSpawn& CubeSpawn : Layout->CubeSpawns)
     {

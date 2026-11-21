@@ -17,6 +17,7 @@ param(
     [string]$Resolution = '1920x1080',
 
     [switch]$Capture,
+    [switch]$SeparateChamberDecor,
 
     [ValidateRange(1, 3600)]
     [int]$TimeoutSeconds = 180,
@@ -329,6 +330,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     if ($target -eq 'Editor' -or $definition.Map -ne $entry) { $start.ArgumentList.Add($definition.Map) }
     if ($target -eq 'Editor') { $start.ArgumentList.Add('-game') }
     if ($testReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
+    if ($SeparateChamberDecor) { $start.ArgumentList.Add('-NoInstancedChamberDecor') }
     foreach ($arg in @($definition.Flag, '-vulkan', '-unattended',
                        '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])",
                        "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$execCommands")) {
