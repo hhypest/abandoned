@@ -114,10 +114,11 @@ $process = [Diagnostics.Process]::Start($start)
 $processStartUtc = $process.StartTime.ToUniversalTime()
 $drain = $process.StandardOutput.BaseStream.CopyToAsync([IO.Stream]::Null)
 $timer = [Diagnostics.Stopwatch]::StartNew()
+$timeoutSeconds = if ($StockDisplay -and $frameCount) { [Math]::Max(300, 90 + $frameCount / 40) } else { 300 }
 $samples = [Collections.Generic.List[object]]::new()
 try {
     while (!$process.WaitForExit(100)) {
-        if ($timer.Elapsed.TotalMinutes -gt 5) { throw "$Scenario timed out" }
+        if ($timer.Elapsed.TotalSeconds -gt $timeoutSeconds) { throw "$Scenario timed out" }
         $process.Refresh()
         if ($process.HasExited) { break }
         if (!$counters) {
