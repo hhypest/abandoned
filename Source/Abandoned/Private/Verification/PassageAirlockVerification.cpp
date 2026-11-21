@@ -72,7 +72,7 @@ void CheckPassage(const AVanguardSegment& Segment, AVanguardCharacter& Player)
     Suit = &Player;
     UE_LOG(LogPassageAirlockTest, Display, TEXT("Passage visit %d: suit on streamed floor, same world and controller, Balance slot intact."), ++Visits);
     // Exercise the regular out-of-bounds recovery on the next gameplay tick.
-    Player.PlaceAt(FTransform(FRotator::ZeroRotator, Player.GetActorLocation() - FVector(0, 0, 1000)));
+    Player.SetActorLocation(Player.GetActorLocation() - FVector(0, 0, 1000), false, nullptr, ETeleportType::TeleportPhysics);
 }
 }
 #endif
