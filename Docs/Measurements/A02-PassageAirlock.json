@@ -1,0 +1,283 @@
+{
+  "Commit": "79c3b4258a39a1f4ee0506bfedb28e18acd966dc",
+  "TrackedChanges": false,
+  "Target": "Package",
+  "Unreal": "5.7.4",
+  "Rhi": "VULKAN_SM6",
+  "Resolution": "1280x720",
+  "ExecutableSha256": "4AC98F760C9DCD68AB97D1EFDC4D36AAAD3CA7D933A5C32C13FE6ABBB53A66A1",
+  "Date": "2026-11-22",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "Scenarios": [
+    {
+      "Name": "PassageAirlock",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "Chambers": [
+        "Balance",
+        "Balance",
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "PassageAirlockInvalidDoor",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "Chambers": [
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourse",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "Chambers": [
+        "Stairs",
+        "Button",
+        "Weight",
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourseAlternate",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "Chambers": [
+        "Stairs",
+        "Button",
+        "Weight",
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCheckpoint",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "Chambers": [
+        "Weight",
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "BalanceAirlock",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "Chambers": [
+        "Weight",
+        "Balance",
+        "Weight",
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "PlateBalance",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "DoorClamp",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "VanguardOxygenRecovery",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "Chambers": [
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "VanguardFallsAudio",
+      "Outcome": "Passed",
+      "FixedStepFps": null,
+      "Chambers": [
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "VanguardRoute",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "Radiation",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "WristTerminal",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "Dev20",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "Chambers": [
+        "Button",
+        "Weight"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    }
+  ],
+  "Airlocks": {
+    "PassageAirlock": {
+      "SuccessMarkers": [
+        "Solved Balance held closed while passage hidden.",
+        "Passage visit 1: suit on streamed floor, same world and controller, Balance slot intact.",
+        "Passage return 1: Balance controls, HUD and archive restored.",
+        "Passage visit 2: suit on streamed floor, same world and controller, Balance slot intact.",
+        "Passage return 2: Balance controls, HUD and archive restored.",
+        "Passage checkpoint recovery: Balance (fall)."
+      ],
+      "SavedOnExit": {
+        "version": 2,
+        "archive": [
+          "oxygen-restored"
+        ],
+        "checkpoint": "Balance"
+      },
+      "VerifiedCrossings": 2,
+      "FallRecoveries": 2
+    },
+    "PassageAirlockInvalidDoor": {
+      "SuccessMarkers": [
+        "Solved Balance held closed while passage hidden.",
+        "Invalid passage rejected: Balance gate closed, player and checkpoint retained."
+      ],
+      "SavedOnExit": {
+        "version": 2,
+        "archive": [
+          "oxygen-restored"
+        ],
+        "checkpoint": "Balance"
+      }
+    }
+  }
+}

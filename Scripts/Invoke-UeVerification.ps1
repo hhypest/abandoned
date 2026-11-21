@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Package')]
     [string]$PackageRoot,
 
-    [ValidateSet('BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
+    [ValidateSet('PassageAirlock', 'PassageAirlockInvalidDoor', 'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
                  'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
@@ -163,6 +163,25 @@ $scenarios = @{
         SeedCheckpoint = 'Stairs'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Stairs'
         Success = @('Airlock visit 1: solved circuit held closed during load.',
                     'Incomplete Button circuit rejected: gate closed and Stairs checkpoint preserved.')
+    }
+    PassageAirlock = @{
+        Map = $entry; Flag = '-VerifyPassageAirlock'; CaptureFlag = '-CapturePassageDoor'
+        SeedCheckpoint = 'Balance'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Balance'
+        QuietChambers = @(); Chambers = @('Balance', 'Balance', 'Balance')
+        Success = @('Solved Balance held closed while passage hidden.',
+                    'Passage visit 1: suit on streamed floor, same world and controller, Balance slot intact.',
+                    'Passage return 1: Balance controls, HUD and archive restored.',
+                    'Passage visit 2: suit on streamed floor, same world and controller, Balance slot intact.',
+                    'Passage return 2: Balance controls, HUD and archive restored.',
+                    'Passage checkpoint recovery: Balance (fall).')
+    }
+    PassageAirlockInvalidDoor = @{
+        Map = $entry; Flag = '-VerifyPassageAirlock'
+        ExtraFlag = @('-VerifyInvalidPassage', '-ini:Game:[/Script/Abandoned.VanguardPassageLayout]:Door=(Center=(X=700,Y=0,Z=130),Size=(X=0,Y=198,Z=260),Finish=Panel)')
+        SeedCheckpoint = 'Balance'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Balance'
+        QuietChambers = @(); Chambers = @('Balance')
+        Success = @('Solved Balance held closed while passage hidden.',
+                    'Invalid passage rejected: Balance gate closed, player and checkpoint retained.')
     }
     BalanceAirlock = @{
         Map = $entry; Flag = '-VerifyBalanceAirlock'; Chambers = @('Weight', 'Balance', 'Weight', 'Balance')
@@ -448,7 +467,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         LeakEntries = @($lines -match 'LogVulkanRHI: Warning:\s+\*\* LEAK ').Count
     }
     $checkAllocatorOnExit = $target -eq 'Package' -and $name -in @(
-        'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
+        'PassageAirlock', 'PassageAirlockInvalidDoor', 'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
     )
     $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6')
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1

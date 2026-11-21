@@ -3,6 +3,8 @@
 #include "Components/BoxComponent.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Engine/Level.h"
+#include "Expedition/VanguardRoute.h"
+#include "GameFramework/PlayerController.h"
 #include "Engine/LevelStreamingDynamic.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Misc/CommandLine.h"
@@ -27,7 +29,8 @@ const FStreamedChamber* NextRoom(Segment Current)
     static const FStreamedChamber Rooms[] = {
         {Segment::Button, TEXT("/Game/Abandoned/Chambers/Button"), {0,6000,0}, UEntryButtonLayout::StaticClass(), TEXT("VerifyButtonAirlock")},
         {Segment::Weight, TEXT("/Game/Abandoned/Verification/WeightShellPilot"), {0,12000,0}, UEntryWeightLayout::StaticClass(), TEXT("VerifyWeightAirlock")},
-        {Segment::Balance, TEXT("/Game/Abandoned/Chambers/L_Balance"), {0,18000,0}, UWeightBalanceLayout::StaticClass(), TEXT("VerifyBalanceAirlock")}
+        {Segment::Balance, TEXT("/Game/Abandoned/Chambers/L_Balance"), {0,18000,0}, UWeightBalanceLayout::StaticClass(), TEXT("VerifyBalanceAirlock")},
+        {Segment::Passage, TEXT("/Game/Abandoned/Chambers/L_Passage"), {0,24000,0}, nullptr, TEXT("VerifyPassageAirlock")}
     };
     const auto Next = NextSegment(Current);
     for (const auto& Room : Rooms)
@@ -47,7 +50,7 @@ void UnloadChamber(ULevelStreamingDynamic& Instance)
 
 bool ATrainingChamberGameMode::NeedsAirlock() const
 {
-    return !bDev20Run && NextRoom(Course.Current) != nullptr;
+    return !bDev20Run && !Course.StandaloneBalance && NextRoom(Course.Current) != nullptr;
 }
 
 void ATrainingChamberGameMode::RequestNextChamber()
@@ -79,6 +82,12 @@ void ATrainingChamberGameMode::PrepareNextChamber()
         return;
     }
     if (!IncomingInstance) { return; }
+    if (Passage)
+    {
+        if (IsValid(Passage) && IncomingInstance->IsLevelVisible() && Passage->HasPassageSupport()) { return; }
+        Passage = nullptr;
+        bChamberLoadFailed = true;
+    }
     if (IncomingChamber)
     {
         if (IsValid(IncomingChamber) && IncomingInstance->IsLevelVisible() && IncomingChamber->IsStreamedRoomReady()) { return; }
@@ -94,13 +103,27 @@ void ATrainingChamberGameMode::PrepareNextChamber()
         if (!IncomingInstance->IsLevelVisible()) { return; }
         ULevel* Level = IncomingInstance->GetLoadedLevel();
         AChamberAssembly* Room = nullptr;
+        AVanguardSegment* Route = nullptr;
         for (AActor* Actor : Level->Actors)
         {
             if (auto* Assembly = Cast<AChamberAssembly>(Actor)) { Room = Assembly; break; }
+            if (auto* SegmentActor = Cast<AVanguardSegment>(Actor)) { Route = SegmentActor; break; }
         }
         FString Error;
         const auto* Next = NextRoom(Course.Current);
-        if (Room && Next)
+        if (Route && Next && Next->Destination == Segment::Passage)
+        {
+            using namespace Abandoned::Application::Expedition;
+            if (!Route->PollPassageAssets()) { return; }
+            Route->Prepare({VanguardStop::Passage, RouteEntry::Campaign, Course.Current}, Error);
+            if (Error.IsEmpty() && Route->HasPassageSupport())
+            {
+                Passage = Route;
+                UE_LOG(LogChamberAirlock, Display, TEXT("Passage airlock ready: floor, ledges and door registered."));
+                return;
+            }
+        }
+        else if (Room && Next && Next->LayoutClass)
         {
             Room->BuildStreamed(*Next->LayoutClass->GetDefaultObject<UTrainingChamberLayout>(), SurfaceMaterial, Error);
             FHitResult Floor;
@@ -123,35 +146,65 @@ void ATrainingChamberGameMode::PrepareNextChamber()
 bool ATrainingChamberGameMode::EnterNextChamber(ATrainingChamberCharacter& Player)
 {
     const auto* Next = NextRoom(Course.Current);
-    if (!Next || !IncomingChamber || !IncomingChamber->IsStreamedRoomReady() || !IsDoorOpen() ||
-        !Layout->GetExitBounds().IsInside(Player.GetActorLocation())) { return false; }
-
+    if (!Next || !IsDoorOpen() || !Layout->GetExitBounds().IsInside(Player.GetActorLocation())) { return false; }
+    if (Next->Destination == Segment::Passage)
+    {
+        auto* PC = Cast<APlayerController>(Player.GetController());
+        if (!PC || !IsValid(Passage) || !Passage->HasPassageSupport()) { return false; }
+        FActorSpawnParameters Params;
+        Params.OverrideLevel = Passage->GetLevel();
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::DontSpawnIfColliding;
+        auto* Suit = GetWorld()->SpawnActor<AVanguardCharacter>(Passage->PlayerStart(), FRotator::ZeroRotator, Params);
+        if (!Suit) { return false; }
+        PC->Possess(Suit);
+        if (PC->GetPawn() != Suit) { Suit->Destroy(); return false; }
+        Player.ReleaseHeldObject();
+        Player.Destroy();
+        PC->SetControlRotation(FRotator::ZeroRotator);
+        DefaultPawnClass = AVanguardCharacter::StaticClass();
+        HUDClass = AVanguardHUD::StaticClass();
+        PC->ClientSetHUD(HUDClass);
+        Course.Current = Segment::Passage;
+        RetireOutgoingChamber();
+        Layout = nullptr;
+        bReachedExit = false;
+        Passage->Activate();
+        Passage->Equip(*Suit);
+        UE_LOG(LogChamberAirlock, Display, TEXT("Balance exit crossed: passage controls and suit HUD active in the same world."));
+        return true;
+    }
+    if (!IsValid(IncomingChamber) || !IncomingChamber->IsStreamedRoomReady()) { return false; }
     if (!Player.TeleportTo(IncomingChamber->Layout->Spawn, FRotator::ZeroRotator)) { return false; }
     Player.ReleaseHeldObject();
     Player.GetCharacterMovement()->StopMovementImmediately();
     Player.GetCharacterMovement()->SetMovementMode(MOVE_Falling);
     if (Player.GetController()) { Player.GetController()->SetControlRotation(FRotator::ZeroRotator); }
-    AChamberAssembly* Previous = Devices;
+    RetireOutgoingChamber();
     Devices = IncomingChamber;
     IncomingChamber = nullptr;
     Layout = Devices->Layout;
     Course.Current = Next->Destination;
     HintReader = {};
     bReachedExit = false;
-    if (ActiveInstance)
-    {
-        Previous->DoorDrive->ReleaseClamp();
-        UnloadChamber(*ActiveInstance);
-    }
-    else { Previous->Retire(); }
-    ActiveInstance = IncomingInstance;
-    IncomingInstance = nullptr;
     UE_LOG(LogChamberAirlock, Display, TEXT("%s airlock crossed: same pawn transferred to the prepared chamber."),
         *Abandoned::Infrastructure::Expedition::WriteSegment(Course.Current));
     SaveEntryCheckpoint();
     if (NeedsAirlock()) { RequestNextChamber(); }
     ActivateChamber();
     return true;
+}
+
+void ATrainingChamberGameMode::RetireOutgoingChamber()
+{
+    if (ActiveInstance)
+    {
+        Devices->DoorDrive->ReleaseClamp();
+        UnloadChamber(*ActiveInstance);
+    }
+    else { Devices->Retire(); }
+    ActiveInstance = IncomingInstance;
+    IncomingInstance = nullptr;
+    Devices = nullptr;
 }
 
 #if WITH_DEV_AUTOMATION_TESTS

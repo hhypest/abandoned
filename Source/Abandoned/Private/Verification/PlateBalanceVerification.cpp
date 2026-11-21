@@ -1,4 +1,5 @@
 #include "Verification/PlateBalanceVerification.h"
+#include "Verification/PassageAirlockVerification.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Components/BoxComponent.h"
@@ -123,7 +124,7 @@ void UPlateBalanceVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
     {
         return;
     }
-    const auto* Chamber = Cast<ATrainingChamberGameMode>(GetOwner());
+    auto* Chamber = Cast<ATrainingChamberGameMode>(GetOwner());
     const auto* Layout = Chamber ? Chamber->GetLayout() : nullptr;
     if (!Layout || !IsValid(Chamber->GetDoor()) || !IsValid(Chamber->GetPlate(0)) || !IsValid(Chamber->GetPlate(1)) ||
         !IsValid(Chamber->GetPlate(2)) || Cubes.ContainsByPredicate([](const auto& Cube) { return !Cube.IsValid(); }))
@@ -177,11 +178,23 @@ void UPlateBalanceVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
     auto& A = *Chamber->GetPlate(0);
     auto& B = *Chamber->GetPlate(1);
     auto& C = *Chamber->GetPlate(2);
+    namespace Airlock = Abandoned::Verification::PassageAirlock;
     switch (Phase)
     {
     case EPhase::Empty:
+        if (FParse::Param(FCommandLine::Get(), TEXT("CapturePassageDoor")) && PhaseSeconds < 1.0)
+        {
+            PlacePlayer(FVector(Layout->Door.Center.X - 310.0, Layout->Door.Center.Y, Layout->Spawn.Z), FRotator::ZeroRotator);
+            if (PhaseSeconds > 0.55 && !bCapturedDoor)
+            {
+                FScreenshotRequest::RequestScreenshot(TEXT("Balance-Door-Facing"), false, false);
+                bCapturedDoor = true;
+            }
+            break;
+        }
         if (PhaseSeconds >= 0.35)
         {
+            if (Airlock::Requested() && Airlock::ReturnedToBalance(*Player)) { SetComponentTickEnabled(false); return; }
             if (!IsReset(*Chamber))
             {
                 Fail(TEXT("an empty chamber must stay closed"));
@@ -277,6 +290,28 @@ void UPlateBalanceVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
         Step(EPhase::FirstSolution);
         break;
     case EPhase::FirstSolution:
+        if (Airlock::Requested() && !bRevealedPassage && Chamber->IsExitEnabled() && PhaseSeconds >= 0.5)
+        {
+            if (!Chamber->GetDoor()->GetComponentLocation().Equals(Layout->Door.Center) || !Airlock::SlotIsBalance())
+            {
+                Fail(TEXT("Balance opened or saved before passage readiness"));
+                return;
+            }
+            bRevealedPassage = Chamber->RevealChamberForVerification();
+            if (bRevealedPassage) { UE_LOG(LogWeightBalanceTest, Display, TEXT("Solved Balance held closed while passage hidden.")); }
+        }
+        if (bRevealedPassage && Chamber->HasChamberLoadFailed() && FParse::Param(FCommandLine::Get(), TEXT("VerifyInvalidPassage")))
+        {
+            if (!Chamber->IsExitEnabled() || !Chamber->GetDoor()->GetComponentLocation().Equals(Layout->Door.Center) || !Airlock::SlotIsBalance())
+            {
+                Fail(TEXT("invalid passage changed the Balance gate or checkpoint"));
+                return;
+            }
+            UE_LOG(LogWeightBalanceTest, Display, TEXT("Invalid passage rejected: Balance gate closed, player and checkpoint retained."));
+            SetComponentTickEnabled(false);
+            FPlatformMisc::RequestExitWithStatus(false, 0);
+            return;
+        }
         if (Chamber->IsDoorOpen())
         {
             if (!HasLoads(*Chamber, 10, 10, 10))
@@ -353,6 +388,18 @@ void UPlateBalanceVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
         Step(EPhase::SecondSolution);
         break;
     case EPhase::SecondSolution:
+        if (bRevealedPassage && Chamber->HasChamberLoadFailed() && FParse::Param(FCommandLine::Get(), TEXT("VerifyInvalidPassage")))
+        {
+            if (!Chamber->IsExitEnabled() || !Chamber->GetDoor()->GetComponentLocation().Equals(Layout->Door.Center) || !Airlock::SlotIsBalance())
+            {
+                Fail(TEXT("invalid passage changed the Balance gate or checkpoint"));
+                return;
+            }
+            UE_LOG(LogWeightBalanceTest, Display, TEXT("Invalid passage rejected: Balance gate closed, player and checkpoint retained."));
+            SetComponentTickEnabled(false);
+            FPlatformMisc::RequestExitWithStatus(false, 0);
+            return;
+        }
         if (Chamber->IsDoorOpen())
         {
             if (!HasLoads(*Chamber, 10, 10, 10))
@@ -376,6 +423,11 @@ void UPlateBalanceVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
         }
         break;
     case EPhase::ApproachExit:
+        if (Airlock::Requested())
+        {
+            if (!bRevealedPassage || !Chamber->IsDoorOpen() || !Airlock::SlotIsBalance()) { Fail(TEXT("invalid passage departure")); return; }
+            Airlock::RecordDeparture(*Player);
+        }
         PlacePlayer(FVector(Layout->Door.Center.X - 180.0, Layout->Door.Center.Y, Layout->Spawn.Z), FRotator::ZeroRotator);
         Step(EPhase::WalkToExit);
         break;

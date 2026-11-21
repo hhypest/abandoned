@@ -41,6 +41,8 @@ private:
     bool IsReset(const ATrainingChamberGameMode& Chamber) const;
     EPhase Phase = EPhase::Empty;
     double PhaseSeconds = 0.0;
+    bool bRevealedPassage = false;
+    bool bCapturedDoor = false;
     TArray<TWeakObjectPtr<APuzzleCube>> Cubes;
     TArray<FPlateDisplay> Displays;
     FVerificationKeyPress Input;

@@ -16,6 +16,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -76,10 +77,15 @@ void MovePassageAirlock(UBoxComponent& Door, const UVanguardPassageLayout& Passa
 
 AVanguardRouteGameMode::AVanguardRouteGameMode()
 {
-    RouteState = CreateDefaultSubobject<UVanguardRouteStateComponent>(TEXT("RouteState"));
     DefaultPawnClass = AVanguardCharacter::StaticClass();
     HUDClass = AVanguardHUD::StaticClass();
     PlayerControllerClass = AAbandonedTestController::StaticClass();
+}
+
+AVanguardSegment::AVanguardSegment()
+{
+    SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Origin")));
+    RouteState = CreateDefaultSubobject<UVanguardRouteStateComponent>(TEXT("RouteState"));
     PrimaryActorTick.bCanEverTick = true;
     PrimaryActorTick.TickGroup = TG_PostPhysics;
     static const ConstructorHelpers::FObjectFinder<UMaterialInterface> Material(
@@ -94,11 +100,6 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         return;
     }
-    if (!GetDefault<UVanguardFlashlightSettings>()->IsValid())
-    {
-        ErrorMessage = TEXT("Invalid Vanguard flashlight configuration.");
-        return;
-    }
     using namespace Abandoned::Infrastructure::Expedition;
     const auto Route = ReadWorldDestination(Options, EntryWorld::Vanguard, ErrorMessage);
     if (!Route)
@@ -110,11 +111,42 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         Destination.Entry = RouteEntry::Direct;
     }
+    Segment = GetWorld()->SpawnActor<AVanguardSegment>();
+    if (!Segment) { ErrorMessage = TEXT("Could not create Vanguard segment."); return; }
+    Segment->Prepare(Destination, ErrorMessage);
+    if (ErrorMessage.IsEmpty()) { Segment->Activate(); }
+}
+
+void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMessage)
+{
+    if (!GetDefault<UVanguardFlashlightSettings>()->IsValid())
+    {
+        ErrorMessage = TEXT("Invalid Vanguard flashlight configuration.");
+        return;
+    }
     const bool bAtStation = Destination.Stop == VanguardStop::Station;
     const bool bRadiation = Destination.Stop == VanguardStop::RadiationPassage;
     const UVanguardPassageLayout* Passage = bRadiation ? GetDefault<UVanguardRadiationLayout>() : GetDefault<UVanguardPassageLayout>();
     const auto* Station = GetDefault<UVanguardStationLayout>();
     Layout = bAtStation ? static_cast<const UVanguardRouteLayout*>(Station) : Passage;
+    if (GetLevel() != GetWorld()->PersistentLevel)
+    {
+        auto* Placed = DuplicateObject<UVanguardPassageLayout>(Passage, this);
+        const FVector Offset = GetActorLocation();
+        Placed->Spawn += Offset;
+        Placed->Door.Center += Offset;
+        Placed->FrameFit.Center += Offset;
+        Placed->ExitZone.Center += Offset;
+        for (auto& Block : Placed->Room) { Block.Center += Offset; }
+        for (auto& Light : Placed->Lights) { Light.Position += Offset; }
+        for (auto& Ledge : Placed->MantleLedges) { Ledge.Center += Offset; }
+        // Optional local artwork can be absent from the public cook. Use the configured fallback in that case.
+        for (auto& Finish : Placed->Finishes) { if (!Finish.Material.IsValid()) { Finish.Material.Reset(); } }
+        if (!Placed->FrameMesh.IsValid()) { Placed->FrameMesh.Reset(); }
+        if (!Placed->LeafMesh.IsValid()) { Placed->LeafMesh.Reset(); }
+        Passage = Placed;
+        Layout = Placed;
+    }
     UStaticMesh* Cube = Abandoned::Blockout::LoadCube();
     if (!Cube || Layout->Room.IsEmpty() || Layout->Spawn.ContainsNaN() ||
         Layout->Room.ContainsByPredicate([](const FSceneBlock& Block) { return !Block.IsValid(); }) ||
@@ -145,17 +177,42 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     const auto SpawnBlock = [&](const FSceneBlock& Block, EComponentMobility::Type Mobility)
     {
         const auto Parts = Abandoned::Blockout::SpawnBox(World, *Cube, Block.Center, Block.Size, Mobility,
-            Block.bCollision ? FName(TEXT("BlockAllDynamic")) : FName(TEXT("NoCollision")));
+            Block.bCollision ? FName(TEXT("BlockAllDynamic")) : FName(TEXT("NoCollision")), this);
         Abandoned::Scene::SetFinish(Parts, Block, Finishes);
         return Parts;
     };
-    for (const auto& Block : Layout->Room)
+    const bool bStreamed = GetLevel() != World.PersistentLevel;
+    if (bStreamed && PlacedRoom.Num() != Layout->Room.Num())
     {
-        SpawnBlock(Block, EComponentMobility::Static);
+        ErrorMessage = TEXT("Cooked passage shell does not match the room layout.");
+        return;
+    }
+    for (int32 Index = 0; Index < Layout->Room.Num(); ++Index)
+    {
+        const auto& Block = Layout->Room[Index];
+        if (bStreamed)
+        {
+            auto* Actor = PlacedRoom[Index].Get();
+            auto* Visual = IsValid(Actor) ? Actor->GetStaticMeshComponent() : nullptr;
+            if (!IsValid(Visual) || !Visual->IsRegistered() || Actor->GetLevel() != GetLevel() ||
+                Visual->GetStaticMesh() != Cube || Visual->IsQueryCollisionEnabled() != Block.bCollision ||
+                !Actor->GetActorLocation().Equals(Block.Center, 0.1) ||
+                !(Actor->GetActorScale3D() * 100.0).Equals(Block.Size, 0.1))
+            {
+                ErrorMessage = FString::Printf(TEXT("Passage block %d is missing or misplaced."), Index);
+                return;
+            }
+            Abandoned::Scene::SetFinish({nullptr, Visual}, Block, Finishes);
+        }
+        else if (!SpawnBlock(Block, EComponentMobility::Static).Collision)
+        {
+            ErrorMessage = TEXT("Could not create route geometry.");
+            return;
+        }
     }
     for (const auto& Light : Layout->Lights)
     {
-        Abandoned::Scene::AddLight(World, Light);
+        Abandoned::Scene::AddLight(World, Light, this);
     }
     if (bAtStation)
     {
@@ -173,6 +230,7 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
                     ErrorMessage = TEXT("Could not spawn a passage mantle ledge.");
                     return;
                 }
+                Ledges.Add(Collision);
                 Abandoned::Infrastructure::Expedition::MarkMantleLedge(*Collision);
             }
         }
@@ -204,6 +262,13 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
         ErrorMessage = TEXT("Could not spawn the Vanguard route device.");
         return;
     }
+}
+
+void AVanguardSegment::Activate()
+{
+    bActive = true;
+    const bool bAtStation = RouteState->AtStation();
+    const bool bRadiation = Layout->IsA<UVanguardRadiationLayout>();
     RouteState->EnterSegment();
 #if WITH_DEV_AUTOMATION_TESTS
     if (!bAtStation && !bRadiation && FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguardOxygen")))
@@ -229,45 +294,46 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
 
 void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerController* Player)
 {
-    if (Player && (Door || SupplyCabinet))
+    if (!Player || !Segment) { return; }
+    RestartPlayerAtTransform(Player, FTransform(FRotator::ZeroRotator, Segment->PlayerStart()));
+    Player->SetInputMode(FInputModeGameOnly());
+    if (auto* Pawn = Cast<AVanguardCharacter>(Player->GetPawn())) { Segment->Equip(*Pawn); }
+}
+
+void AVanguardSegment::Equip(AVanguardCharacter& Pawn)
+{
+    Pawn.Segment = this;
+    RouteState->ResetMovement();
+    const UVanguardSession* Session = UVanguardSession::Find(*this);
+    Pawn.ConfigureWristTerminal(BaseMaterial);
+    const UVanguardFlashlightSettings& Settings = *GetDefault<UVanguardFlashlightSettings>();
+    USpotLightComponent& Light = *Pawn.ShoulderLight;
+    Light.SetRelativeLocation(Settings.ShoulderOffset);
+    Light.SetIntensity(Settings.IntensityLumens);
+    Light.SetAttenuationRadius(Settings.RangeCm);
+    Light.SetOuterConeAngle(Settings.OuterConeDegrees);
+    Light.SetInnerConeAngle(Settings.InnerConeDegrees);
+    Light.SetVisibility(Session && Session->Suit.IsFlashlightOn());
+    if (!RouteState->AtStation())
     {
-        RouteState->ResetMovement();
-        RestartPlayerAtTransform(Player, FTransform(FRotator::ZeroRotator, Layout->Spawn));
-        Player->SetInputMode(FInputModeGameOnly());
-        const UVanguardSession* Session = UVanguardSession::Find(*this);
-        if (AVanguardCharacter* Pawn = Cast<AVanguardCharacter>(Player->GetPawn()))
+        if (CastChecked<UVanguardPassageLayout>(Layout.Get())->bEnableMantle)
         {
-            Pawn->ConfigureWristTerminal(BaseMaterial);
-            const UVanguardFlashlightSettings& Settings = *GetDefault<UVanguardFlashlightSettings>();
-            USpotLightComponent& Light = *Pawn->ShoulderLight;
-            Light.SetRelativeLocation(Settings.ShoulderOffset);
-            Light.SetIntensity(Settings.IntensityLumens);
-            Light.SetAttenuationRadius(Settings.RangeCm);
-            Light.SetOuterConeAngle(Settings.OuterConeDegrees);
-            Light.SetInnerConeAngle(Settings.InnerConeDegrees);
-            Light.SetVisibility(Session && Session->Suit.IsFlashlightOn());
-            if (!RouteState->AtStation())
-            {
-                if (CastChecked<UVanguardPassageLayout>(Layout.Get())->bEnableMantle)
-                {
-                    Pawn->LoadMantleVisuals();
-                }
-                const UVanguardInjurySettings& Injury = *GetDefault<UVanguardInjurySettings>();
-                if (USoundBase* Sound = Injury.BreathSound.LoadSynchronous())
-                {
-                    Pawn->InjuryBreath->SetSound(Sound);
-                    Pawn->InjuryBreath->SetVolumeMultiplier(Injury.BreathVolume);
-                }
-                else if (!Injury.BreathSound.IsNull())
-                {
-                    UE_LOG(LogVanguardRoute, Warning, TEXT("Could not load the suit injury breath."));
-                }
-            }
+            Pawn.LoadMantleVisuals();
+        }
+        const UVanguardInjurySettings& Injury = *GetDefault<UVanguardInjurySettings>();
+        if (USoundBase* Sound = Injury.BreathSound.LoadSynchronous())
+        {
+            Pawn.InjuryBreath->SetSound(Sound);
+            Pawn.InjuryBreath->SetVolumeMultiplier(Injury.BreathVolume);
+        }
+        else if (!Injury.BreathSound.IsNull())
+        {
+            UE_LOG(LogVanguardRoute, Warning, TEXT("Could not load the suit injury breath."));
         }
     }
 }
 
-void AVanguardRouteGameMode::Resupply()
+void AVanguardSegment::Resupply()
 {
 #if WITH_DEV_AUTOMATION_TESTS
     RouteState->Resupply(UVanguardRouteVerification::AllowsResupplySave());
@@ -295,9 +361,10 @@ void AVanguardCharacter::UpdatePassageMovement(UVanguardRouteStateComponent& Rou
     }
 }
 
-void AVanguardRouteGameMode::Tick(float DeltaSeconds)
+void AVanguardSegment::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+    if (!bActive) { return; }
     const APlayerController* Controller = GetWorld()->GetFirstPlayerController();
     AVanguardCharacter* Player = Controller ? Cast<AVanguardCharacter>(Controller->GetPawn()) : nullptr;
     if (!Player || RouteState->IsTravelling())
@@ -379,7 +446,7 @@ void AVanguardCharacter::BindAdditionalInput(UEnhancedInputComponent& Input)
 
 void AVanguardCharacter::ResetRadiation()
 {
-    if (AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>())
+    if (AVanguardSegment* Mode = Segment.Get())
     {
         if (const auto Recovery = Mode->RouteState->RestartRadiationPassage())
         {
@@ -407,7 +474,7 @@ void AVanguardCharacter::ToggleFlashlight()
 void AVanguardCharacter::Landed(const FHitResult& Hit)
 {
     Super::Landed(Hit);
-    if (AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>())
+    if (AVanguardSegment* Mode = Segment.Get())
     {
         Mode->RouteState->RecordLanding(Hit.ImpactPoint.Z);
     }
@@ -415,7 +482,7 @@ void AVanguardCharacter::Landed(const FHitResult& Hit)
 
 bool AVanguardCharacter::CanReachSupply() const
 {
-    const AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>();
+    const AVanguardSegment* Mode = Segment.Get();
     if (!Mode || !IsValid(Mode->GetSupplyCabinet()))
     {
         return false;
@@ -431,6 +498,6 @@ void AVanguardCharacter::Interact()
 {
     if (CanReachSupply())
     {
-        GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>()->Resupply();
+        Segment->Resupply();
     }
 }

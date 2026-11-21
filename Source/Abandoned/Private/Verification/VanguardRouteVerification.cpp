@@ -12,6 +12,7 @@
 #include "Player/MovementProfile.h"
 #include "ProfilingDebugging/CsvProfiler.h"
 #include "Verification/VanguardMantleVerification.h"
+#include "Verification/PassageAirlockVerification.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVanguardRouteTest, Log, All);
 
@@ -19,14 +20,14 @@ namespace
 {
 bool WantsRouteVerification()
 {
-    return FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse")) ||
+    return Abandoned::Verification::PassageAirlock::Requested() || FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse")) ||
         FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCheckpoint")) ||
         FParse::Param(FCommandLine::Get(), TEXT("VerifyVanguard"));
 }
 }
 
 UVanguardRouteVerification* UVanguardRouteVerification::AttachIfRequested(
-    AVanguardRouteGameMode& Route, const UVanguardRouteLayout& Layout, UBoxComponent* Door)
+    AVanguardSegment& Route, const UVanguardRouteLayout& Layout, UBoxComponent* Door)
 {
     if (!WantsRouteVerification())
     {
@@ -76,7 +77,7 @@ void UVanguardRouteVerification::Finish(bool bPassed)
     FPlatformMisc::RequestExitWithStatus(false, bPassed ? 0 : 1);
 }
 
-void UVanguardRouteVerification::CheckStep(const AVanguardRouteGameMode& Route, AVanguardCharacter& Player, float DeltaSeconds)
+void UVanguardRouteVerification::CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds)
 {
     if (bFinished)
     {
@@ -87,6 +88,11 @@ void UVanguardRouteVerification::CheckStep(const AVanguardRouteGameMode& Route, 
     {
         UE_LOG(LogVanguardRouteTest, Error, TEXT("Vanguard verification timed out at %s."), *Player.GetActorLocation().ToCompactString());
         Finish(false);
+        return;
+    }
+    if (Abandoned::Verification::PassageAirlock::Requested())
+    {
+        if (Elapsed >= 0.5f) { Abandoned::Verification::PassageAirlock::CheckPassage(Route, Player); }
         return;
     }
     if (bCapture && !bCapturedArrival && Elapsed >= 0.55f)
@@ -172,7 +178,7 @@ void UVanguardRouteVerification::CheckPassage(AVanguardCharacter& Player, float 
     }
 }
 
-void UVanguardRouteVerification::CheckStation(const AVanguardRouteGameMode& Route, AVanguardCharacter& Player)
+void UVanguardRouteVerification::CheckStation(const AVanguardSegment& Route, AVanguardCharacter& Player)
 {
     const UBoxComponent* Supply = Route.GetSupplyCabinet();
     if (!IsValid(Supply))
