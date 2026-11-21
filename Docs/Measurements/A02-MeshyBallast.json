@@ -1,0 +1,249 @@
+{
+  "Commit": "235619fab2c5cd5c0a1213be03c57ec6b07c240c",
+  "TrackedChanges": false,
+  "Unreal": "5.7.4",
+  "Target": "Package",
+  "ExecutableSha256": "5E871113B5E62BC80BE8F26ED03F9E2D3550A193425FD233565B67C6C300B148",
+  "Rhi": "VULKAN_SM6",
+  "Resolution": "1280x720",
+  "FramesPerSecond": 60,
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "Date": "2026-11-22",
+  "Scenarios": [
+    {
+      "Name": "WeightStreaming",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      },
+      "FinalSave": {
+        "version": 2,
+        "archive": [
+          "oxygen-restored"
+        ],
+        "checkpoint": "Stairs"
+      },
+      "SuccessMarkers": [
+        "Weight streaming cancelled before visibility; site clear.",
+        "Weight streaming visit 1: player landed on Weight and returned to Stairs.",
+        "Weight streaming visit 2: player landed on Weight and returned to Stairs.",
+        "Weight visit 1: removed 4 verified ballast bodies.",
+        "Weight visit 2: removed 4 verified ballast bodies.",
+        "Weight streaming verification passed: two removals, site clear."
+      ]
+    },
+    {
+      "Name": "Training",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourse",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      },
+      "SuccessMarkers": [
+        "Entry test: crossed Stairs exit.",
+        "Entry test: crossed Button exit.",
+        "Entry test: reset restored the weight lock",
+        "Entry test: Weight accepted 20 kg",
+        "Entry test: crossed Weight exit.",
+        "First solution opened the door.",
+        "Alternate arrangement opened the door.",
+        "Entry course verification passed: balance released the passage.",
+        "Passage ledge stopped walking, a short Space jump and a crouch jump.",
+        "Passage climb rejected an obstructed landing.",
+        "Passage handhold verified",
+        "Passage climb verified: held Space and landed on top.",
+        "Vanguard shoulder flashlight switched on, off and on with F.",
+        "Verification observed the raised airlock before crossing.",
+        "Verification crossed the moving passage airlock.",
+        "Vanguard segment ready: station.",
+        "Vanguard shoulder flashlight stayed on across world travel.",
+        "Vanguard oxygen supply restored.",
+        "Vanguard verification passed: passage transit and station resupply."
+      ]
+    },
+    {
+      "Name": "EntryCheckpoint",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      },
+      "FinalSave": {
+        "version": 2,
+        "checkpoint": "Balance",
+        "archive": [
+          "oxygen-restored"
+        ]
+      },
+      "SuccessMarkers": [
+        "Entry test: reset restored the weight lock",
+        "Entry test: Weight accepted 20 kg",
+        "Entry test: crossed Weight exit.",
+        "First solution opened the door.",
+        "Alternate arrangement opened the door.",
+        "Entry course verification passed: balance released the passage.",
+        "Passage ledge stopped walking, a short Space jump and a crouch jump.",
+        "Passage climb rejected an obstructed landing.",
+        "Passage handhold verified",
+        "Passage climb verified: held Space and landed on top.",
+        "Vanguard shoulder flashlight switched on, off and on with F.",
+        "Verification observed the raised airlock before crossing.",
+        "Verification crossed the moving passage airlock.",
+        "Vanguard segment ready: station.",
+        "Vanguard shoulder flashlight stayed on across world travel.",
+        "Vanguard oxygen supply restored.",
+        "Vanguard verification passed: passage transit and station resupply.",
+        "Loaded campaign checkpoint v2: Weight",
+        "Saved campaign checkpoint v2: Balance (1 archive records)."
+      ]
+    },
+    {
+      "Name": "EntryCourseAlternate",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      },
+      "SuccessMarkers": [
+        "Entry test: crossed Stairs exit.",
+        "Entry test: crossed Button exit.",
+        "Entry test: reset restored the weight lock",
+        "Entry test: Weight accepted 20 kg",
+        "Entry test: crossed Weight exit.",
+        "First solution opened the door.",
+        "Alternate arrangement opened the door.",
+        "Entry course verification passed: balance released the passage.",
+        "Passage ledge stopped walking, a short Space jump and a crouch jump.",
+        "Passage climb rejected an obstructed landing.",
+        "Passage handhold verified",
+        "Passage climb verified: held Space and landed on top.",
+        "Vanguard shoulder flashlight switched on, off and on with F.",
+        "Verification observed the raised airlock before crossing.",
+        "Verification crossed the moving passage airlock.",
+        "Vanguard segment ready: station.",
+        "Vanguard shoulder flashlight stayed on across world travel.",
+        "Vanguard oxygen supply restored.",
+        "Vanguard verification passed: passage transit and station resupply.",
+        "Entry alternate solution: cube snapped to plate B.",
+        "alternate solution assembled, 10 + 5 + 5 kg."
+      ]
+    },
+    {
+      "Name": "PlateBalance",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "ParallelCircuit",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "DoorClamp",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "Optics",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "Gravity",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "Portals",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    }
+  ],
+  "CommonRhiWarnings": [
+    "Found VULKAN_SDK=",
+    "Dynamic Uniform Buffers are enabled, but they will not be used with Vulkan bindless.",
+    "Memory defrag is enabled, but it will not be used with Vulkan bindless."
+  ]
+}
