@@ -18,6 +18,7 @@ param(
 
     [switch]$Capture,
     [switch]$SeparateChamberDecor,
+    [switch]$CompoundWeightShell,
 
     [ValidateRange(1, 3600)]
     [int]$TimeoutSeconds = 180,
@@ -203,7 +204,8 @@ $scenarios = @{
         Map = $entry
         Flag = '-VerifyDoorClamp'
         CaptureFlag = '-CaptureDoorClamp'
-        Success = @('Door retained the object, rejected pickup and showed both warning signs.',
+        Success = @('Weight shell verified: 11 faces, clear capsule passage and floor edge.',
+                    'Door retained the object, rejected pickup and showed both warning signs.',
                     'Door released the object with its original mass and pickup restored.',
                     'Chamber reset cleared the clamp, restored the cube and hid its signs.',
                     'Door clamp verification passed: capture, release, reset and player checkpoint.')
@@ -331,6 +333,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     if ($target -eq 'Editor') { $start.ArgumentList.Add('-game') }
     if ($testReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
     if ($SeparateChamberDecor) { $start.ArgumentList.Add('-NoInstancedChamberDecor') }
+    if ($CompoundWeightShell) { $start.ArgumentList.Add('-CompoundWeightShell') }
     foreach ($arg in @($definition.Flag, '-vulkan', '-unattended',
                        '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])",
                        "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$execCommands")) {

@@ -22,6 +22,7 @@
 #include "Engine/PointLight.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "Expedition/Dev20Actor.h"
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
@@ -47,6 +48,53 @@ using Abandoned::Infrastructure::Expedition::UnrealCheckpointStore;
 using Abandoned::Infrastructure::Expedition::WriteSegment;
 
 using FDecorGroups = TMap<UMaterialInterface*, TArray<FTransform>>;
+
+UStaticMeshComponent* SpawnWeightShell(UWorld& World, UStaticMesh* Mesh, TConstArrayView<FSceneBlock> Room)
+{
+    TRACE_CPUPROFILER_EVENT_SCOPE(Training_WeightShellBody);
+    const UBodySetup* Body = Mesh ? Mesh->GetBodySetup() : nullptr;
+    if (!Body)
+    {
+        return nullptr;
+    }
+    const auto& Boxes = Body->AggGeom.BoxElems;
+    int32 Index = 0;
+    for (const FSceneBlock& Block : Room)
+    {
+        if (Block.bCollision)
+        {
+            if (!Boxes.IsValidIndex(Index))
+            {
+                return nullptr;
+            }
+            const FKBoxElem& Box = Boxes[Index++];
+            if (!Box.Center.Equals(Block.Center) || !FVector(Box.X, Box.Y, Box.Z).Equals(Block.Size)
+                || !Box.Rotation.IsNearlyZero())
+            {
+                return nullptr;
+            }
+        }
+    }
+    if (Index != Boxes.Num() || Index != Body->AggGeom.GetElementCount())
+    {
+        return nullptr;
+    }
+    AActor* Owner = World.SpawnActor<AActor>();
+    if (!Owner)
+    {
+        return nullptr;
+    }
+    auto* Shell = NewObject<UStaticMeshComponent>(Owner);
+    Owner->SetRootComponent(Shell);
+    Owner->AddInstanceComponent(Shell);
+    Shell->SetMobility(EComponentMobility::Static);
+    Shell->SetStaticMesh(Mesh);
+    Shell->SetVisibility(false);
+    Shell->SetCastShadow(false);
+    Shell->SetCollisionProfileName(TEXT("BlockAll"));
+    Shell->RegisterComponent();
+    return Shell;
+}
 
 bool SpawnRoomDecor(UWorld& World, UStaticMesh& Mesh, const FDecorGroups& Groups)
 {
@@ -267,10 +315,39 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     const bool bDecorLayout = Layout->IsA<UEntryStairsLayout>() || Layout->IsA<UEntryWeightLayout>();
     const bool bInstanceDecor = bDecorLayout && !FParse::Param(FCommandLine::Get(), TEXT("NoInstancedChamberDecor"));
     FDecorGroups DecorGroups;
+    UStaticMeshComponent* Shell = nullptr;
+    if (Layout->IsA<UEntryWeightLayout>())
+    {
+        if (FParse::Param(FCommandLine::Get(), TEXT("CompoundWeightShell")))
+        {
+            UStaticMesh* BodyMesh = MeshLibrary->LoadForChamber(World, TEXT("/Game/Abandoned/Collision/SM_WeightShell.SM_WeightShell"));
+            Shell = SpawnWeightShell(World, BodyMesh, Layout->Room);
+            if (!Shell)
+            {
+                ErrorMessage = TEXT("Cooked Weight shell does not match the chamber layout.");
+                return;
+            }
+        }
+        UE_LOG(LogTrainingChamber, Log, TEXT("Weight shell mode=%s"), Shell ? TEXT("Compound") : TEXT("Separate"));
+    }
     for (const FSceneBlock& Block : Layout->Room)
     {
         TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_SolidRoomBlock, Block.bCollision);
         TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_DecorativeRoomBlock, !Block.bCollision);
+        if (Shell && Block.bCollision)
+        {
+            auto* Visual = NewObject<UStaticMeshComponent>(Shell->GetOwner());
+            Shell->GetOwner()->AddInstanceComponent(Visual);
+            Visual->SetupAttachment(Shell);
+            Visual->SetMobility(EComponentMobility::Static);
+            Visual->SetStaticMesh(Mesh);
+            Visual->SetCollisionProfileName(TEXT("NoCollision"));
+            Visual->SetRelativeLocation(Block.Center);
+            Visual->SetRelativeScale3D(Block.Size / 100.0);
+            Visual->RegisterComponent();
+            Abandoned::Scene::SetFinish({nullptr, Visual}, Block, Finishes);
+            continue;
+        }
         if (bInstanceDecor && !Block.bCollision)
         {
             DecorGroups.FindOrAdd(Finishes.FindRef(Block.Finish)).Emplace(
