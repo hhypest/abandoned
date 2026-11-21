@@ -1,0 +1,246 @@
+{
+  "Commit": "9f748e5a2d554b6fced10f5ab51aaf6184940b9e",
+  "TrackedChanges": false,
+  "Target": "Package",
+  "Unreal": "5.7.4",
+  "Rhi": "VULKAN_SM6",
+  "Resolution": "1280x720",
+  "ExecutableSha256": "04177C3B05BDCEBFB715855696E587274CAD8BB30CBA52391AA59E698AAADE36",
+  "Date": "2026-11-22",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "FixedStepFps": 60,
+  "Scenarios": [
+    {
+      "Name": "BalanceAirlock",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Weight",
+        "Balance",
+        "Weight",
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "BalanceAirlockMissingPlate",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Weight"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourse",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Stairs",
+        "Button",
+        "Weight",
+        "Balance"
+      ],
+      "QuietChambers": [],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCheckpoint",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Weight",
+        "Balance"
+      ],
+      "QuietChambers": [],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourseAlternate",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Stairs",
+        "Button",
+        "Weight",
+        "Balance"
+      ],
+      "QuietChambers": [],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "PlateBalance",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "WeightAirlock",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Button",
+        "Weight",
+        "Button",
+        "Weight"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "ButtonAirlock",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Stairs",
+        "Button",
+        "Stairs",
+        "Button"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryWeightNegative",
+      "Outcome": "ExpectedFailure",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "PlateBalanceNegative",
+      "Outcome": "ExpectedFailure",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "DoorClamp",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "Dev20",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Button",
+        "Weight"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    }
+  ],
+  "Airlocks": {
+    "BalanceAirlock": {
+      "SuccessMarkers": [
+        "Airlock visit 1: solved circuit held closed during load.",
+        "Airlock visit 2: solved circuit held closed during load.",
+        "Airlock visit 1: open gate, checkpoint still Weight.",
+        "Airlock visit 1: reached streamed Balance, checkpoint and archive confirmed.",
+        "Airlock visit 2: open gate, checkpoint still Weight.",
+        "Airlock visit 2: reached streamed Balance, checkpoint and archive confirmed."
+      ],
+      "SavedOnExit": {
+        "version": 2,
+        "checkpoint": "Balance",
+        "archive": [
+          "oxygen-restored"
+        ]
+      }
+    },
+    "BalanceAirlockMissingPlate": {
+      "SuccessMarkers": [
+        "Removed the third Balance plate before solving Weight.",
+        "Missing Balance plate rejected: gate closed and Weight checkpoint preserved."
+      ],
+      "SavedOnExit": {
+        "checkpoint": "Weight",
+        "version": 2,
+        "archive": [
+          "oxygen-restored"
+        ]
+      }
+    }
+  }
+}
