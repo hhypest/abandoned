@@ -17,7 +17,8 @@ ROOM_SCOPES = {
 }
 DECORATION_PHASES = ("SpawnActor", "ConstructObject", "RegisterComponent")
 TIMERS = {"FEngineLoop::Tick", gc["GC"], gc["ACTORS"], "UWorld_Tick", "Training_InitGame",
-          "Training_SaveEntryCheckpoint", "Training_AddLight", *ROOM_SCOPES, *DECORATION_PHASES}
+          "Training_SaveEntryCheckpoint", "Training_AddLight", "Training_RegisterDecorInstances",
+          *ROOM_SCOPES, *DECORATION_PHASES}
 PHASES = ("LoadMapMs", "FullGCMs", "VerifyAssumptionsMs", "ReachabilityMs", "GatherMs", "UnhashMs",
           "BeginDestroyMs", "PurgeMs", "FinishFirstPassMs", "DeferredFinishMs", "DeleteMs", "HashShrinkMs",
           "MemoryTrimMs", "BeforeBroadcastMs", "CacheBroadcastMs", "AfterBroadcastMs")
@@ -63,15 +64,22 @@ def weight_rows(folder, timing_csv):
             row[label + "Count"] = len(spans) if have_room_markers else ""
             row[label + "Ms"] = sum(e.ms for e in spans) if have_room_markers else ""
         blocks = [e for e in events["Training_DecorativeRoomBlock"] if init.contains(e)]
+        batches = [e for e in events["Training_RegisterDecorInstances"] if init.contains(e)]
+        mode = (run.get("ChamberDecor") or "").lower()
+        if len(batches) > 1 or (mode and (mode == "instanced") != bool(batches)):
+            raise ValueError(f"Unexpected decor registration on Weight visit {visit}")
         for timer in DECORATION_PHASES:
             duration = ""
-            if blocks and run["TraceTravelStats"]:
+            if blocks and not batches and run["TraceTravelStats"]:
                 candidates = [e for e in events[timer] if init.contains(e)]
                 direct = [e for e in candidates if any(b.depth + 1 == e.depth and b.contains(e) for b in blocks)]
                 if not direct:
                     raise ValueError(f"Incomplete verbose export: missing {timer} inside decorative blocks")
                 duration = sum(e.ms for e in direct)
             row["Decorative" + timer + "Ms"] = duration
+        row["DecorBatchMs"] = sum(e.ms for e in batches)
+        row["TotalDecorMs"] = row["DecorativeBlocksMs"] + row["DecorBatchMs"] if have_room_markers else ""
+        row["PurgedObjects"] = phase["Objects"]
         yield row
 
 
