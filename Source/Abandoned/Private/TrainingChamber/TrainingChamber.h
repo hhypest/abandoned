@@ -18,7 +18,6 @@ class ADev20Actor;
 class APuzzleCube;
 class UBoxComponent;
 class UMaterialInterface;
-class UPointLightComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
 class UTrainingChamberLayout;

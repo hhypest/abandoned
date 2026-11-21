@@ -269,11 +269,6 @@ Checkpoint UnrealCheckpointStore::Read() const
     return Result;
 }
 
-bool UnrealCheckpointStore::Write(Segment Chamber) const
-{
-    return BeginArrival(Chamber).Get();
-}
-
 TSharedFuture<bool> UnrealCheckpointStore::BeginArrival(Segment Chamber) const
 {
     return Domain::Expedition::IsCheckpoint(Chamber)

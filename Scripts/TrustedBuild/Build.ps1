@@ -89,11 +89,7 @@ try {
     $report.Steps[$step] = 0
 
     $step = 'EditorBuild'
-    $uproject = Join-Path $project 'Abandoned.uproject'
-    $buildArgs = @('AbandonedEditor','Win64','Development', "-Project=$uproject",
-        "-CompilerVersion=$($lock.Compiler)", "-WindowsSdkVersion=$($lock.WindowsSDK)",
-        '-WaitMutex','-NoHotReload','-NoEngineChanges','-NoUBA','-NoXGE','-NoFASTBuild','-NoSNDBS', "-Log=$run/UBT.log")
-    & $dotnet $ubt @buildArgs
+    & "$PSScriptRoot/BuildEditor.ps1" -RunDirectory $run -DotNet $dotnet -UnrealBuildTool $ubt -Toolchain $lock
     $report.Steps[$step] = $LASTEXITCODE
     if ($LASTEXITCODE -ne 0) { throw "UBT failed (exit $LASTEXITCODE)." }
     $step = 'Products'

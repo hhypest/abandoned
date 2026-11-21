@@ -28,22 +28,15 @@ using namespace Abandoned::Application::Expedition;
 
 namespace
 {
-struct MemoryCheckpoint final : CheckpointStore
+struct MemoryCheckpoint final : CheckpointReader
 {
-    mutable Checkpoint Data;
-    mutable int Writes = 0;
+    Checkpoint Data;
     mutable int Reads = 0;
 
     Checkpoint Read() const override
     {
         ++Reads;
         return Data;
-    }
-    bool Write(Segment Value) const override
-    {
-        ++Writes;
-        Data = {Value};
-        return true;
     }
 };
 
@@ -61,30 +54,32 @@ void TestRouteAndCheckpoint()
 
     MemoryCheckpoint Store;
     CHECK(StartCourse({}, &Store).Current == Segment::Stairs);
-    CHECK(RecordArrival({Segment::Weight}, Store));
-    CHECK(RecordArrival({Segment::Passage}, Store));
-    CHECK(RecordArrival({Segment::Vanguard}, Store));
-    CHECK(Store.Writes == 1);
+    CHECK(RequiresArrivalCheckpoint({Segment::Stairs}));
+    CHECK(RequiresArrivalCheckpoint({Segment::Button}));
+    CHECK(RequiresArrivalCheckpoint({Segment::Weight}));
+    CHECK(!RequiresArrivalCheckpoint({Segment::Passage}));
+    CHECK(!RequiresArrivalCheckpoint({Segment::Vanguard}));
+    Store.Data = {Segment::Weight};
     CHECK(StartCourse({}, &Store).Current == Segment::Weight);
     CHECK(StartCourse({Segment::Button}, &Store).Current == Segment::Button);
 
     const CourseStart Standalone = StartCourse({Segment::Balance}, &Store);
     CHECK(Standalone.StandaloneBalance && !NextCourseDestination(Standalone));
-    CHECK(RecordArrival(Standalone, Store) && Store.Writes == 1);
+    CHECK(!RequiresArrivalCheckpoint(Standalone));
     CHECK(StartCourse({}, &Store).Current == Segment::Weight);
 
     const WorldDestination Passage = VanguardDestination{VanguardStop::Passage, RouteEntry::Campaign, Segment::Balance};
     const CourseStart Campaign = StartCourse({Segment::Balance, RouteEntry::Campaign}, &Store);
     CHECK(!Campaign.StandaloneBalance && NextCourseDestination(Campaign) == Passage);
-    CHECK(RecordArrival(Campaign, Store) && Store.Writes == 2);
+    CHECK(RequiresArrivalCheckpoint(Campaign));
+    Store.Data = {Campaign.Current};
     const CourseStart Resumed = StartCourse({}, &Store);
     CHECK(Resumed.Current == Segment::Balance && NextCourseDestination(Resumed) == Passage);
 
     Store.Data = {Segment::Vanguard};
     const CourseStart Recovered = StartCourse({}, &Store);
     CHECK(Recovered.Issue == CheckpointIssue::UnknownCheckpoint && Recovered.Current == Segment::Stairs);
-    CHECK(RecordArrival(Recovered, Store));
-    CHECK(Store.Writes == 2);
+    CHECK(!RequiresArrivalCheckpoint(Recovered));
 }
 
 void TestPassageRecovery()
@@ -100,7 +95,7 @@ void TestPassageRecovery()
     Store.Data = {Segment::Button};
     CHECK(PassageRecovery(Campaign, &Store) == ToBalance);
     CHECK(PassageRecovery(Radiation, &Store) == WorldDestination{Radiation});
-    CHECK(Store.Reads == 0 && Store.Writes == 0);
+    CHECK(Store.Reads == 0);
     CHECK(PassageRecovery(Standard, &Store) == ToButton);
     CHECK((PassageRecovery({VanguardStop::Passage, RouteEntry::Direct, Segment::Sandbox}, &Store) == ToButton));
     CHECK(PassageRecovery(Standard, nullptr) == ToWeight);
