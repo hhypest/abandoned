@@ -18,6 +18,7 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Expedition/Dev20Actor.h"
+#include "Expedition/VanguardRoute.h"
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
@@ -262,6 +263,12 @@ void ATrainingChamberGameMode::ActivateChamber()
 
 void ATrainingChamberGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
 {
+    if (IsValid(NewPlayer) && Course.Current == Segment::Passage && IsValid(Passage))
+    {
+        RestartPlayerAtTransform(NewPlayer, FTransform(FRotator::ZeroRotator, Passage->PlayerStart()));
+        if (auto* Suit = Cast<AVanguardCharacter>(NewPlayer->GetPawn())) { Passage->Equip(*Suit); }
+        return;
+    }
     if (IsValid(NewPlayer) && IsValid(GetDoor()) && IsValid(GetPlate()))
     {
         RestartPlayerAtTransform(NewPlayer, FTransform(FRotator::ZeroRotator, Layout->Spawn));
@@ -348,7 +355,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         Devices->UpdateRelayTraces();
     }
     ObserveHints(*Player, DeltaSeconds);
-    if (Devices->DoorDrive->Move(*Player, Dev20.Get(), IsExitEnabled() && (!NeedsAirlock() || IncomingChamber), Course.Current != Segment::Sandbox, DeltaSeconds) ==
+    if (Devices->DoorDrive->Move(*Player, Dev20.Get(), IsExitEnabled() && !IsWaitingForChamber(), Course.Current != Segment::Sandbox, DeltaSeconds) ==
         ETrainingDoorResult::ResetPlayer)
     {
         ResetChamber(*Player);

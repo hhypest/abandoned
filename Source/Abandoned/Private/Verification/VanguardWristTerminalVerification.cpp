@@ -54,7 +54,7 @@ bool UVanguardWristTerminalVerification::CheckExposure(const AVanguardCharacter&
     return true;
 }
 
-bool UVanguardWristTerminalVerification::CheckStep(const AVanguardRouteGameMode& Route, AVanguardCharacter& Player, float DeltaSeconds)
+bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds)
 {
     using Abandoned::Application::Expedition::SuitPage;
     using Abandoned::Domain::Expedition::SuitRecord;

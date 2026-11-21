@@ -217,13 +217,12 @@ void AVanguardHUD::DrawWristReadout(const AVanguardCharacter& Player)
 void AVanguardHUD::DrawHUD()
 {
     Super::DrawHUD();
-    const AVanguardRouteGameMode* Mode = GetWorld()->GetAuthGameMode<AVanguardRouteGameMode>();
     const AVanguardCharacter* Player = Cast<AVanguardCharacter>(GetOwningPawn());
-    if (!Mode || !Player)
+    if (!Player || !Player->Segment)
     {
         return;
     }
-    const UVanguardRouteStateComponent& Route = Mode->GetRouteState();
+    const UVanguardRouteStateComponent& Route = Player->Segment->GetRouteState();
     const auto Reading = Route.GetSuitTelemetry();
     const auto& Dosimeter = Reading.Forecast;
     const TCHAR* Location = Reading.AtStation ? TEXT("VANGUARD / OUTPOST 01") : TEXT("PASSAGE / VANGUARD OUTPOST 01");

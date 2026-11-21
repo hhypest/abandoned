@@ -19,6 +19,7 @@ class APuzzleCube;
 class UBoxComponent;
 class UMaterialInterface;
 class ULevelStreamingDynamic;
+class AVanguardSegment;
 class UStaticMesh;
 class UStaticMeshComponent;
 class UTrainingChamberLayout;
@@ -56,7 +57,7 @@ public:
     bool RevealChamberForVerification();
 #endif
     bool IsPlatePressed(int32 Index = 0) const { return Devices->PlateCircuit->IsPressed(Index); }
-    bool IsWaitingForChamber() const { return NeedsAirlock() && !IncomingChamber; }
+    bool IsWaitingForChamber() const { return NeedsAirlock() && !IncomingChamber && !Passage; }
     bool HasChamberLoadFailed() const { return bChamberLoadFailed; }
     bool IsDoorOpen() const { return Devices->DoorDrive->IsOpen(); }
     bool HasClampedObject() const { return Devices->DoorDrive->HasClampedObject(); }
@@ -71,6 +72,7 @@ private:
     void ActivateChamber();
     void RequestNextChamber();
     void PrepareNextChamber();
+    void RetireOutgoingChamber();
     bool EnterNextChamber(ATrainingChamberCharacter& Player);
     bool NeedsAirlock() const;
     bool bChamberLoadFailed = false;
@@ -81,6 +83,8 @@ private:
     TObjectPtr<ULevelStreamingDynamic> ActiveInstance;
     UPROPERTY(Transient)
     TObjectPtr<AChamberAssembly> IncomingChamber;
+    UPROPERTY(Transient)
+    TObjectPtr<AVanguardSegment> Passage;
     void SelectLayout(const Abandoned::Application::Expedition::WorldDestination& Destination);
     void SaveEntryCheckpoint();
     TSharedFuture<bool> ArrivalWrite;

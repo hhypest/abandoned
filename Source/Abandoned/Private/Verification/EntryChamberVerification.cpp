@@ -53,7 +53,7 @@ UEntryChamberVerification::UEntryChamberVerification()
 #if WITH_DEV_AUTOMATION_TESTS
 bool UEntryChamberVerification::UsesCheckpoint()
 {
-    return EntryFlag(TEXT("VerifyBalanceAirlock")) || EntryFlag(TEXT("VerifyEntryCheckpoint")) || EntryFlag(TEXT("VerifyButtonAirlock")) || EntryFlag(TEXT("VerifyWeightAirlock"));
+    return EntryFlag(TEXT("VerifyPassageAirlock")) || EntryFlag(TEXT("VerifyBalanceAirlock")) || EntryFlag(TEXT("VerifyEntryCheckpoint")) || EntryFlag(TEXT("VerifyButtonAirlock")) || EntryFlag(TEXT("VerifyWeightAirlock"));
 }
 
 bool UEntryChamberVerification::IsRequested(bool bDev20Route)

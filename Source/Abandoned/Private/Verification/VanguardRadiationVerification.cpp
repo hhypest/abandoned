@@ -17,7 +17,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogRadiationVerification, Log, All);
 
 UVanguardRadiationVerification* UVanguardRadiationVerification::AttachIfRequested(
-    AVanguardRouteGameMode& Route, const UVanguardRouteLayout& Layout)
+    AVanguardSegment& Route, const UVanguardRouteLayout& Layout)
 {
     const auto* Passage = Cast<UVanguardRadiationLayout>(&Layout);
     const bool bCheckWrist = FParse::Param(FCommandLine::Get(), TEXT("VerifyWristTerminal"));
@@ -55,7 +55,7 @@ void UVanguardRadiationVerification::ObserveDoseLimit(UVanguardSession& Session)
     Session.bRecoveredFromRadiation = true;
 }
 
-void UVanguardRadiationVerification::CheckStep(const AVanguardRouteGameMode& Route, AVanguardCharacter& Player, float DeltaSeconds)
+void UVanguardRadiationVerification::CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds)
 {
     if (Phase == EPhase::Finished)
     {

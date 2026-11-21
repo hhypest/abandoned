@@ -4,7 +4,7 @@
 #include "VanguardRadiationVerification.generated.h"
 
 class AVanguardCharacter;
-class AVanguardRouteGameMode;
+class AVanguardSegment;
 class UVanguardRadiationLayout;
 class UVanguardRouteLayout;
 class UVanguardSession;
@@ -17,8 +17,8 @@ class UVanguardRadiationVerification final : public UActorComponent
 
 #if WITH_DEV_AUTOMATION_TESTS
 public:
-    static UVanguardRadiationVerification* AttachIfRequested(AVanguardRouteGameMode& Route, const UVanguardRouteLayout& Layout);
-    void CheckStep(const AVanguardRouteGameMode& Route, AVanguardCharacter& Player, float DeltaSeconds);
+    static UVanguardRadiationVerification* AttachIfRequested(AVanguardSegment& Route, const UVanguardRouteLayout& Layout);
+    void CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds);
     void ObserveDoseLimit(UVanguardSession& Session);
 
 private:

@@ -5,7 +5,7 @@
 #include "VanguardWristTerminalVerification.generated.h"
 
 class AVanguardCharacter;
-class AVanguardRouteGameMode;
+class AVanguardSegment;
 
 UCLASS()
 class UVanguardWristTerminalVerification final : public UActorComponent
@@ -16,7 +16,7 @@ class UVanguardWristTerminalVerification final : public UActorComponent
 public:
     static UVanguardWristTerminalVerification* Attach(AActor& Owner, double SpawnHeight);
     // Let the radiation scenario move the player once the terminal is ready for this segment.
-    bool CheckStep(const AVanguardRouteGameMode& Route, AVanguardCharacter& Player, float DeltaSeconds);
+    bool CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds);
     bool CheckExposure(const AVanguardCharacter& Player, double DosePercent);
     void EndPlay(const EEndPlayReason::Type Reason) override;
 

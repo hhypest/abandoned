@@ -5,7 +5,7 @@
 #include "VanguardRouteVerification.generated.h"
 
 class AVanguardCharacter;
-class AVanguardRouteGameMode;
+class AVanguardSegment;
 class UBoxComponent;
 class UVanguardMantleVerification;
 class UVanguardRouteLayout;
@@ -17,14 +17,14 @@ class UVanguardRouteVerification final : public UActorComponent
 
 #if WITH_DEV_AUTOMATION_TESTS
 public:
-    static UVanguardRouteVerification* AttachIfRequested(AVanguardRouteGameMode& Route, const UVanguardRouteLayout& Layout, UBoxComponent* Door);
+    static UVanguardRouteVerification* AttachIfRequested(AVanguardSegment& Route, const UVanguardRouteLayout& Layout, UBoxComponent* Door);
     static bool AllowsResupplySave();
-    void CheckStep(const AVanguardRouteGameMode& Route, AVanguardCharacter& Player, float DeltaSeconds);
+    void CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds);
     void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
     void CheckPassage(AVanguardCharacter& Player, float DeltaSeconds);
-    void CheckStation(const AVanguardRouteGameMode& Route, AVanguardCharacter& Player);
+    void CheckStation(const AVanguardSegment& Route, AVanguardCharacter& Player);
     void Finish(bool bPassed);
 
     FVerificationKeyPress FlashlightKey;

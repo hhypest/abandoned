@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Application/Expedition/MantleRequest.h"
 #include "Application/Expedition/SuitTerminal.h"
+#include "Application/Expedition/WorldRoute.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
 #include "Infrastructure/Expedition/UnrealMantle.h"
@@ -12,6 +13,7 @@
 #include "VanguardRoute.generated.h"
 
 class AVanguardCharacter;
+class AVanguardSegment;
 class UAudioComponent;
 class UBoxComponent;
 class UMaterialInterface;
@@ -29,6 +31,28 @@ public:
     AVanguardRouteGameMode();
     void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
     void HandleStartingNewPlayer_Implementation(APlayerController* Player) override;
+private:
+    UPROPERTY(Transient)
+    TObjectPtr<AVanguardSegment> Segment;
+};
+
+// The same route rules serve a dedicated Vanguard world and a streamed campaign segment.
+UCLASS()
+class AVanguardSegment final : public AActor
+{
+    GENERATED_BODY()
+
+public:
+    AVanguardSegment();
+#if WITH_EDITOR
+    UFUNCTION(BlueprintCallable, Category="Passage")
+    bool BakePassageRoom();
+#endif
+    void Prepare(Abandoned::Application::Expedition::VanguardDestination Destination, FString& Error);
+    bool HasPassageSupport() const;
+    FVector PlayerStart() const;
+    void Activate();
+    void Equip(AVanguardCharacter& Player);
     void Tick(float DeltaSeconds) override;
     const UVanguardRouteStateComponent& GetRouteState() const { return *RouteState; }
     UBoxComponent* GetSupplyCabinet() const { return SupplyCabinet; }
@@ -36,6 +60,11 @@ public:
 
 private:
     friend class AVanguardCharacter;
+    UPROPERTY()
+    TArray<TObjectPtr<class AStaticMeshActor>> PlacedRoom;
+    bool bActive = false;
+    UPROPERTY(Transient)
+    TArray<TObjectPtr<UBoxComponent>> Ledges;
 #if WITH_DEV_AUTOMATION_TESTS
     friend class UVanguardFallVerification;
     TWeakObjectPtr<class UVanguardFallVerification> FallCheck;
@@ -76,7 +105,9 @@ public:
     void StopJumping() override;
 
 private:
-    friend class AVanguardRouteGameMode;
+    friend class AVanguardSegment;
+    UPROPERTY(Transient)
+    TObjectPtr<AVanguardSegment> Segment;
     friend class AVanguardHUD;
     void ToggleFlashlight();
     void PlayInjuryBreath();

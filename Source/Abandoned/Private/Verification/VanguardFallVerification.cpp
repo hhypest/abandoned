@@ -22,7 +22,7 @@ constexpr double DropHeights[] = {250.0, 300.0, 325.0};
 constexpr double TestPlatformX = 1550.0;
 }
 
-UVanguardFallVerification* UVanguardFallVerification::Attach(AVanguardRouteGameMode& Route)
+UVanguardFallVerification* UVanguardFallVerification::Attach(AVanguardSegment& Route)
 {
     auto* Check = NewObject<UVanguardFallVerification>(&Route);
     Check->bVerifyAudio = FParse::Param(FCommandLine::Get(), TEXT("VerifyInjuryAudio"));
@@ -73,7 +73,7 @@ void UVanguardFallVerification::Fail(const TCHAR* Reason)
     FPlatformMisc::RequestExitWithStatus(false, 1);
 }
 
-void UVanguardFallVerification::CheckStep(AVanguardRouteGameMode& Route, AVanguardCharacter& Player, float DeltaSeconds)
+void UVanguardFallVerification::CheckStep(AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds)
 {
     if (Phase == EPhase::Failed)
     {

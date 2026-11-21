@@ -4,7 +4,7 @@
 #include "VanguardFallVerification.generated.h"
 
 class AVanguardCharacter;
-class AVanguardRouteGameMode;
+class AVanguardSegment;
 class UAudioComponent;
 class USoundWave;
 
@@ -15,8 +15,8 @@ class UVanguardFallVerification final : public UActorComponent
 
 #if WITH_DEV_AUTOMATION_TESTS
 public:
-    static UVanguardFallVerification* Attach(AVanguardRouteGameMode& Route);
-    void CheckStep(AVanguardRouteGameMode& Route, AVanguardCharacter& Player, float DeltaSeconds);
+    static UVanguardFallVerification* Attach(AVanguardSegment& Route);
+    void CheckStep(AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds);
     void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
