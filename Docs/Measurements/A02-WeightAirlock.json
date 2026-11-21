@@ -1,0 +1,189 @@
+{
+  "Commit": "f141eaea46a29cc20388e9811f357192642b29f0",
+  "TrackedChanges": false,
+  "Target": "Package",
+  "Unreal": "5.7.4",
+  "Rhi": "VULKAN_SM6",
+  "Resolution": "1280x720",
+  "ExecutableSha256": "286072B0C827BE6F09A17C916D9241C8D694EBAB966E37D137A8C04C20960A46",
+  "Date": "2026-11-22",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "FixedStepFps": 60,
+  "Scenarios": [
+    {
+      "Name": "WeightAirlock",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "WeightStreaming",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourse",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourseAlternate",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCheckpoint",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "Dev20",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "DoorClamp",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "Training",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "PlateBalance",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "ParallelCircuit",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    }
+  ],
+  "WeightAirlock": {
+    "EventsInOrder": [
+      "Airlock visit 1: solved circuit held closed during load.",
+      "Weight airlock ready: floor, four ballast bodies, plate, switch and drive.",
+      "Airlock visit 1: open gate, checkpoint still Button.",
+      "Weight airlock crossed: same pawn transferred to the prepared chamber.",
+      "Airlock visit 1: reached streamed Weight, checkpoint and archive confirmed.",
+      "Airlock visit 2: solved circuit held closed during load.",
+      "Weight airlock ready: floor, four ballast bodies, plate, switch and drive.",
+      "Airlock visit 2: open gate, checkpoint still Button.",
+      "Weight airlock crossed: same pawn transferred to the prepared chamber.",
+      "Airlock visit 2: reached streamed Weight, checkpoint and archive confirmed."
+    ],
+    "SavedOnExit": {
+      "version": 2,
+      "checkpoint": "Weight",
+      "archive": [
+        "oxygen-restored"
+      ]
+    }
+  },
+  "WeightStreaming": {
+    "EventsInOrder": [
+      "Weight streaming cancelled before visibility; site clear.",
+      "Weight streaming visit 1: player landed on Weight and returned to Stairs.",
+      "Weight visit 1: plate, switch and door drive removed.",
+      "Weight visit 1: removed 4 verified ballast bodies.",
+      "Weight streaming visit 2: player landed on Weight and returned to Stairs.",
+      "Weight visit 2: plate, switch and door drive removed.",
+      "Weight visit 2: removed 4 verified ballast bodies.",
+      "Weight streaming verification passed: two removals, site clear."
+    ],
+    "SavedOnExit": {
+      "checkpoint": "Stairs",
+      "archive": [
+        "oxygen-restored"
+      ],
+      "version": 2
+    }
+  },
+  "RhiWarnings": [
+    "Found VULKAN_SDK=",
+    "Dynamic Uniform Buffers are enabled, but they will not be used with Vulkan bindless.",
+    "Memory defrag is enabled, but it will not be used with Vulkan bindless."
+  ]
+}
