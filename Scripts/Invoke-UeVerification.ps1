@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Package')]
     [string]$PackageRoot,
 
-    [ValidateSet('ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
+    [ValidateSet('BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
                  'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
@@ -164,6 +164,22 @@ $scenarios = @{
         Success = @('Airlock visit 1: solved circuit held closed during load.',
                     'Incomplete Button circuit rejected: gate closed and Stairs checkpoint preserved.')
     }
+    BalanceAirlock = @{
+        Map = $entry; Flag = '-VerifyBalanceAirlock'; Chambers = @('Weight', 'Balance', 'Weight', 'Balance')
+        SeedCheckpoint = 'Weight'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Balance'
+        Success = @('Airlock visit 1: solved circuit held closed during load.',
+                    'Airlock visit 2: solved circuit held closed during load.',
+                    'Airlock visit 1: open gate, checkpoint still Weight.',
+                    'Airlock visit 1: reached streamed Balance, checkpoint and archive confirmed.',
+                    'Airlock visit 2: open gate, checkpoint still Weight.',
+                    'Airlock visit 2: reached streamed Balance, checkpoint and archive confirmed.')
+    }
+    BalanceAirlockMissingPlate = @{
+        Map = $entry; Flag = '-VerifyBalanceAirlock'; ExtraFlag = '-VerifyMissingBalancePlate'
+        Chambers = @('Weight'); SeedCheckpoint = 'Weight'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Weight'
+        Success = @('Removed the third Balance plate before solving Weight.',
+                    'Missing Balance plate rejected: gate closed and Weight checkpoint preserved.')
+    }
     WeightAirlock = @{
         Map = $entry; Flag = '-VerifyWeightAirlock'; Chambers = @('Button', 'Weight', 'Button', 'Weight')
         SeedCheckpoint = 'Button'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Weight'
@@ -191,7 +207,7 @@ $scenarios = @{
         Flag = '-VerifyEntryCourse'
         CaptureFlag = '-CaptureVanguard'
         Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
-        QuietChambers = @('Balance')
+        QuietChambers = @()
         Success = $courseSuccess
     }
     EntryCourseAlternate = @{
@@ -200,14 +216,14 @@ $scenarios = @{
         ExtraFlag = @('-VerifyEntryAlternatePlate', '-VerifyEntryAlternateWeight')
         CaptureFlag = '-CaptureEntryCourse'
         Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
-        QuietChambers = @('Balance')
+        QuietChambers = @()
         Success = $courseSuccess + @('Entry alternate solution: cube snapped to plate B.', 'alternate solution assembled, 10 + 5 + 5 kg.')
     }
     EntryCheckpoint = @{
         Map = $entry
         Flag = '-VerifyEntryCheckpoint'
         SeedCheckpoint = 'Weight'; SeedArchive = @(); FinalCheckpoint = 'Balance'
-        QuietChambers = @('Balance')
+        QuietChambers = @()
         Chambers = @('Weight', 'Balance')
         Success = $entryFinish + @('Loaded campaign checkpoint v2: Weight', 'Saved campaign checkpoint v2: Balance (1 archive records).')
     }
@@ -432,7 +448,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         LeakEntries = @($lines -match 'LogVulkanRHI: Warning:\s+\*\* LEAK ').Count
     }
     $checkAllocatorOnExit = $target -eq 'Package' -and $name -in @(
-        'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
+        'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
     )
     $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6')
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1
@@ -462,7 +478,7 @@ function Invoke-Scenario($name, $definition, $profile) {
             if ($line -match 'LogTrainingChamber: Display: Training chamber ready\. (\w+),') { $Matches[1] }
         })
     }
-    if ($definition.QuietChambers) {
+    if ($definition.ContainsKey('QuietChambers')) {
         $result.QuietChambers = @(foreach ($line in $lines) {
             if ($line -match 'LogLoad: LoadMap: (\S+)') {
                 $url = $Matches[1]
@@ -531,7 +547,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = "Missing success markers: $($missing -join ', ')"
     } elseif ($definition.Chambers -and ($result.Chambers -join ',') -cne ($definition.Chambers -join ',')) {
         $result.Reason = "Unexpected chamber sequence: $($result.Chambers -join ', ')"
-    } elseif ($definition.QuietChambers -and ($result.QuietChambers -join ',') -cne ($definition.QuietChambers -join ',')) {
+    } elseif ($definition.ContainsKey('QuietChambers') -and ($result.QuietChambers -join ',') -cne ($definition.QuietChambers -join ',')) {
         $result.Reason = "Unexpected quiet chamber transitions: $($result.QuietChambers -join ', ')"
     } elseif ($definition.ExpectedWorldEvents -and
         ($result.WorldEvents -join '|') -cne ($definition.ExpectedWorldEvents -join '|')) {

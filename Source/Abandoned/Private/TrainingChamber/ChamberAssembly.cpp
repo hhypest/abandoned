@@ -396,7 +396,7 @@ bool AChamberAssembly::IsStreamedRoomReady() const
         return IsValid(Body) && Body->GetOwner()->GetLevel() == GetLevel() && Body->IsRegistered() &&
             Body->IsQueryCollisionEnabled();
     };
-    if (!Layout || !ReadyBody(Door) || !ReadyBody(Button) || PlateCircuit->GetPlates().Num() != Layout->GetPlateCount())
+    if (!Layout || !ReadyBody(Door) || (Layout->bRequiresButton && !ReadyBody(Button)) || PlateCircuit->GetPlates().Num() != Layout->GetPlateCount())
     {
         return false;
     }
@@ -440,7 +440,12 @@ void AChamberAssembly::Retire()
 void AChamberAssembly::BuildStreamed(const UTrainingChamberLayout& Template, UMaterialInterface* SurfaceMaterial, FString& ErrorMessage)
 {
     auto* Settings = DuplicateObject<UTrainingChamberLayout>(&Template, this);
-    if (!Settings->IsValid() || (Settings->IsA<UEntryButtonLayout>() && !Settings->UsesParallelPlates())) { ErrorMessage = TEXT("Invalid streamed chamber layout."); return; }
+    if (!Settings->IsValid() || (Settings->IsA<UEntryButtonLayout>() && !Settings->UsesParallelPlates()) ||
+        (Settings->IsA<UWeightBalanceLayout>() && (!Settings->UsesPlateBalance() || Settings->GetPlateCount() != 3)))
+    {
+        ErrorMessage = TEXT("Invalid streamed chamber layout.");
+        return;
+    }
     const FVector Origin = GetActorLocation();
     Settings->Spawn += Origin;
     Settings->HintTerminal.Center += Origin;
