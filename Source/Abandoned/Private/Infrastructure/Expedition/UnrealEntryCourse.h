@@ -6,11 +6,10 @@
 
 namespace Abandoned::Infrastructure::Expedition
 {
-class UnrealCheckpointStore final : public Application::Expedition::CheckpointStore
+class UnrealCheckpointStore final : public Application::Expedition::CheckpointReader
 {
 public:
     Application::Expedition::Checkpoint Read() const override;
-    bool Write(Domain::Expedition::Segment Chamber) const override;
     TSharedFuture<bool> BeginArrival(Domain::Expedition::Segment Chamber) const;
     bool RecordResupply() const;
     static void WaitForPublication();

@@ -16,12 +16,11 @@ struct Checkpoint
     Domain::Expedition::SuitArchive Archive;
 };
 
-class CheckpointStore
+class CheckpointReader
 {
 public:
-    virtual ~CheckpointStore() = default;
+    virtual ~CheckpointReader() = default;
     virtual Checkpoint Read() const = 0;
-    virtual bool Write(Segment Chamber) const = 0;
 };
 
 struct CourseStart
@@ -31,7 +30,7 @@ struct CourseStart
     bool StandaloneBalance = false;
 };
 
-inline Checkpoint ReadCourseCheckpoint(const CheckpointStore* Store)
+inline Checkpoint ReadCourseCheckpoint(const CheckpointReader* Store)
 {
     Checkpoint Saved = Store ? Store->Read() : Checkpoint{};
     if (Saved.Issue == CheckpointIssue::None && Saved.Chamber && !Domain::Expedition::IsCheckpoint(*Saved.Chamber))
@@ -45,7 +44,7 @@ inline Checkpoint ReadCourseCheckpoint(const CheckpointStore* Store)
     return Saved;
 }
 
-inline CourseStart StartCourse(ChamberDestination Destination, const CheckpointStore* Store)
+inline CourseStart StartCourse(ChamberDestination Destination, const CheckpointReader* Store)
 {
     if (Destination.Chamber)
     {
@@ -59,11 +58,6 @@ inline CourseStart StartCourse(ChamberDestination Destination, const CheckpointS
 inline bool RequiresArrivalCheckpoint(CourseStart State)
 {
     return State.Issue == CheckpointIssue::None && !State.StandaloneBalance && Domain::Expedition::IsCheckpoint(State.Current);
-}
-
-inline bool RecordArrival(CourseStart State, const CheckpointStore& Store)
-{
-    return !RequiresArrivalCheckpoint(State) || Store.Write(State.Current);
 }
 
 inline std::optional<WorldDestination> NextCourseDestination(CourseStart State)
@@ -80,7 +74,7 @@ inline std::optional<WorldDestination> NextCourseDestination(CourseStart State)
     return ChamberDestination{*Next, RouteEntry::Campaign};
 }
 
-inline WorldDestination PassageRecovery(VanguardDestination Passage, const CheckpointStore* Store)
+inline WorldDestination PassageRecovery(VanguardDestination Passage, const CheckpointReader* Store)
 {
     if (Passage.Stop == VanguardStop::RadiationPassage)
     {
