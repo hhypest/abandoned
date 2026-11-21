@@ -1,12 +1,14 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$EngineRoot, [string]$Commit)
+param([Parameter(Mandatory)][string]$EngineRoot, [string]$Commit, [int]$ReviewedPullRequest)
 $ErrorActionPreference = 'Stop'
 $run = (Get-Location).Path
 $project = Join-Path $run 'Project'
 $lock = Import-PowerShellDataFile (Join-Path $PSScriptRoot 'Toolchain.psd1')
 $report = [ordered]@{
     Result = 'Failed'
+    WorkerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    PullRequest = $ReviewedPullRequest
     RequestedCommit = $Commit
     Commit = $null
     Main = $null
@@ -28,7 +30,15 @@ try {
     Set-Location -LiteralPath $project
     $report.Main = Invoke-Git rev-parse refs/remotes/origin/main
     if (!$Commit) { $Commit = $report.Main }
-    if ($Commit -notmatch '^[a-fA-F0-9]{40}$' -or $Commit -notin (Invoke-Git rev-list --first-parent refs/remotes/origin/main)) {
+    if ($ReviewedPullRequest) {
+        Invoke-Git fetch --no-tags origin "refs/pull/$ReviewedPullRequest/head"
+        $fetched = Invoke-Git rev-parse FETCH_HEAD
+        if ($Commit -ne $fetched) {
+            $report.RejectedRevision = $true
+            throw 'The fetched PR head differs from the approved SHA.'
+        }
+        Invoke-Git merge-base --is-ancestor $report.Main $Commit
+    } elseif ($Commit -notmatch '^[a-fA-F0-9]{40}$' -or $Commit -notin (Invoke-Git rev-list --first-parent refs/remotes/origin/main)) {
         $report.RejectedRevision = $true
         throw 'Revision is outside the first-parent history of origin/main.'
     }
@@ -45,6 +55,10 @@ try {
     $version = Get-Content -Raw -LiteralPath "$EngineRoot/Engine/Build/Build.version" | ConvertFrom-Json
     $report.Unreal = "$($version.MajorVersion).$($version.MinorVersion).$($version.PatchVersion)"
     if ($report.Unreal -ne $lock.EngineVersion) { throw "Unexpected UE version $($report.Unreal)." }
+    # The dedicated UE checkout can be provisioned by a different Windows account.
+    $env:GIT_CONFIG_COUNT = '1'
+    $env:GIT_CONFIG_KEY_0 = 'safe.directory'
+    $env:GIT_CONFIG_VALUE_0 = $EngineRoot.Replace('\','/')
     Invoke-Git -C $EngineRoot merge-base --is-ancestor $lock.EngineBase HEAD
     $changed = @(Invoke-Git -C $EngineRoot diff --name-only $lock.EngineBase --)
     if (@(Compare-Object @($lock.EngineFiles.Keys) $changed).Count) { throw 'Unexpected Unreal source changes.' }

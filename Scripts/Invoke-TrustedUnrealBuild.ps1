@@ -3,13 +3,24 @@
 param(
     [Parameter(Mandatory)][string]$EngineRoot,
     [Parameter(Mandatory)][string]$RunsRoot,
-    [ValidatePattern('^[0-9a-fA-F]{40}$')][string]$Commit
+    [ValidatePattern('^[0-9a-fA-F]{40}$')][string]$Commit,
+    [ValidateRange(1,2147483647)][int]$ReviewedPullRequest,
+    [ValidatePattern('^[a-f0-9]{32}$')][string]$RunId,
+    [string]$ExpectedWorkerSid
 )
 $ErrorActionPreference = 'Stop'
 if (!$IsWindows) { throw 'A Windows x64 build host is required.' }
 $engine = (Resolve-Path -LiteralPath $EngineRoot).Path
 $root = [IO.Directory]::CreateDirectory($RunsRoot).FullName
-$run = (New-Item -ItemType Directory -Path (Join-Path $root ([guid]::NewGuid().ToString('N').Substring(0,12)))).FullName
+if ($ReviewedPullRequest -and !$Commit) { throw 'A reviewed pull request requires its full approved commit.' }
+if ($ExpectedWorkerSid) {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    if ($identity.User.Value -ne $ExpectedWorkerSid -or 'S-1-5-32-544' -in $identity.Groups.Value) {
+        throw 'Expected the dedicated, non-administrative Windows worker.'
+    }
+}
+if (!$RunId) { $RunId = [guid]::NewGuid().ToString('N').Substring(0,12) }
+$run = (New-Item -ItemType Directory -Path (Join-Path $root $RunId)).FullName
 $profileDir = Join-Path $run 'Profile'
 $info = [Diagnostics.ProcessStartInfo]::new((Join-Path $PSHOME 'pwsh.exe'))
 $info.UseShellExecute = $false
@@ -45,6 +56,10 @@ foreach ($arg in @('-NoLogo','-NoProfile','-NonInteractive','-File', (Join-Path 
     $info.ArgumentList.Add($arg)
 }
 if ($Commit) { $info.ArgumentList.Add('-Commit'); $info.ArgumentList.Add($Commit) }
+if ($ReviewedPullRequest) {
+    $info.ArgumentList.Add('-ReviewedPullRequest')
+    $info.ArgumentList.Add($ReviewedPullRequest.ToString())
+}
 Write-Host "Build workspace: $run"
 $child = [Diagnostics.Process]::Start($info)
 try {
