@@ -64,7 +64,7 @@ if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 
 ### Пилот потоковой загрузки Weight
 
-Пакет кампании включает карту Entry и подуровни Button и Weight через `MapsToCook` в `Config/DefaultGame.ini`. Для проверки пилота Stairs и маршрута кампании выполните команды после обычного BuildCookRun.
+Пакет кампании включает карту Entry и подуровни Button, Weight и Balance через `MapsToCook` в `Config/DefaultGame.ini`. Для проверки пилота Stairs и маршрута кампании выполните команды после обычного BuildCookRun.
 
 ```powershell
 ./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Scenario WeightStreaming,EntryCourse,EntryCheckpoint -Resolution 1280x720
@@ -95,7 +95,15 @@ if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 
 `WeightAirlock` дважды проходит штатный выход из Button. Стартовый слот содержит Button и запись `oxygen-restored`. Во время каждого посещения тест задерживает видимость нового уровня и решает головоломку Button. Через полсекунды дверь должна всё ещё находиться в исходной позиции. После показа Weight и открытия двери тест читает слот до пересечения границы и подтверждает, что там по-прежнему Button. После прохода проверяются тот же персонаж, его опора, принадлежность четырёх кубов, плиты и привода одному подуровню, а также опубликованный слот Weight с исходным архивом. Для второго посещения стенд вновь открывает Button. Оба полных сценария кампании отдельно решают саму головоломку Weight и продолжаются до станции.
 
-В координатах постоянного мира начало Button сдвинуто на 60 м по Y, Weight — на 120 м. Перенос происходит за дверью в конце выходного прохода. Следующая граница со сменой мира через `OpenLevel` — Weight → Balance. [Результаты в пакете](Measurements/A02-WeightAirlock.json)
+В координатах постоянного мира начало Button сдвинуто на 60 м по Y, Weight — на 120 м. Перенос происходит за дверью в конце выходного прохода. Подуровень Balance расположен на 180 м по оси Y. Выход из Balance в пролёт использует `OpenLevel`. [Результаты в пакете](Measurements/A02-WeightAirlock.json)
+
+### Шлюз Weight → Balance
+
+```powershell
+./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Scenario BalanceAirlock,BalanceAirlockMissingPlate,EntryCourse,EntryCourseAlternate,EntryCheckpoint -Resolution 1280x720
+```
+
+`BalanceAirlock` дважды решает Weight в одном процессе. При задержанной видимости Balance створка остаётся в закрытой позиции. Сценарий читает слот у открытой двери, затем после прохода проверяет тот же персонаж, пол, три пустые плиты, шесть кубов и точку Balance с прежней записью архива. `BalanceAirlockMissingPlate` снимает с регистрации тело третьей плиты в уже подготовленной камере и решает Weight. Створка должна остаться в исходной позиции, а в слоте — Weight. Сквозные сценарии дополнительно проверяют распределения 5/5/5, 20/10/0 и два решения 10/10/10 кг со сбросом. [Протокол пакета](Measurements/A02-BalanceAirlock.json)
 
 После замены библиотеки устройств ФосТех в том же пакете проверены оба решения кампании, сброс плит, зажим двери и три стенда. Для повторения [приёмки 11 сценариев](Measurements/A02-MeshyBallast.json) выполните команду в PowerShell.
 

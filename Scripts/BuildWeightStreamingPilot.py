@@ -1,12 +1,16 @@
-"""Refresh WeightShellPilot, or the streamed Button room with -BuildButtonRoom."""
+"""Refresh a streamed room. Select -BuildButtonRoom or -BuildBalanceRoom, default Weight."""
 import re
 from pathlib import Path
 
 import unreal
 
-button = "-BuildButtonRoom" in unreal.SystemLibrary.get_command_line().split()
-chamber = "Button" if button else "Weight"
-level_path = "/Game/Abandoned/Chambers/Button" if button else "/Game/Abandoned/Verification/WeightShellPilot"
+flags = unreal.SystemLibrary.get_command_line().split()
+if "-BuildBalanceRoom" in flags:
+    chamber, layout, level_path = "Balance", "WeightBalanceLayout", "/Game/Abandoned/Chambers/L_Balance"
+elif "-BuildButtonRoom" in flags:
+    chamber, layout, level_path = "Button", "EntryButtonLayout", "/Game/Abandoned/Chambers/Button"
+else:
+    chamber, layout, level_path = "Weight", "EntryWeightLayout", "/Game/Abandoned/Verification/WeightShellPilot"
 levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 exists = unreal.EditorAssetLibrary.does_asset_exist(level_path)
@@ -15,7 +19,7 @@ if exists:
         raise RuntimeError(f"Could not open {level_path}")
 elif not levels.new_level(level_path, is_partitioned_world=False):
     raise RuntimeError(f"Could not create {level_path}")
-if not button:
+if chamber == "Weight":
     mesh = unreal.load_asset("/Game/Abandoned/Collision/SM_WeightShell")
     if not mesh:
         raise RuntimeError("Missing Weight shell")
@@ -30,7 +34,7 @@ if not button:
         shell.static_mesh_component.set_collision_profile_name("BlockAll")
 
 config = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_config_dir())) / "DefaultGame.ini"
-section = config.read_text(encoding="utf-8").split(f"[/Script/Abandoned.Entry{chamber}Layout]", 1)[1].split("[", 1)[0]
+section = config.read_text(encoding="utf-8").split(f"[/Script/Abandoned.{layout}]", 1)[1].split("[", 1)[0]
 rows = [line for line in section.splitlines() if line.startswith("+CubeSpawns=")]
 if not rows:
     raise RuntimeError("Missing Weight ballast layout")
@@ -66,9 +70,10 @@ else:
 device_meshes = [
     ("plate_base_mesh", "02", "PlateBase"), ("plate_top_mesh", "02", "PlateTop"),
     ("door_leaf_mesh", "13", "DEV-13"), ("door_frame_mesh", "12", "DEV-12"),
-    ("switch_mesh", "03", "DEV-03"),
 ]
-if button:
+if chamber != "Balance":
+    device_meshes.append(("switch_mesh", "03", "DEV-03"))
+if chamber == "Button":
     device_meshes.append(("relay_mesh", "07", "DEV-07"))
 for prop, code, name in device_meshes:
     asset = unreal.load_asset(f"/Game/Abandoned/Meshy/DEV_{code}/DEV-{code}/StaticMeshes/{name}")

@@ -4,6 +4,7 @@
 #include "Components/BoxComponent.h"
 #include "Domain/Expedition/Dev20.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Expedition/Dev20Actor.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
@@ -52,7 +53,7 @@ UEntryChamberVerification::UEntryChamberVerification()
 #if WITH_DEV_AUTOMATION_TESTS
 bool UEntryChamberVerification::UsesCheckpoint()
 {
-    return EntryFlag(TEXT("VerifyEntryCheckpoint")) || EntryFlag(TEXT("VerifyButtonAirlock")) || EntryFlag(TEXT("VerifyWeightAirlock"));
+    return EntryFlag(TEXT("VerifyBalanceAirlock")) || EntryFlag(TEXT("VerifyEntryCheckpoint")) || EntryFlag(TEXT("VerifyButtonAirlock")) || EntryFlag(TEXT("VerifyWeightAirlock"));
 }
 
 bool UEntryChamberVerification::IsRequested(bool bDev20Route)
@@ -146,7 +147,9 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
     const bool bWeight = Segment == ESegment::Weight;
     const bool bTestButton = EntryFlag(TEXT("VerifyButtonAirlock"));
     const bool bTestWeight = EntryFlag(TEXT("VerifyWeightAirlock"));
-    const bool bTestDeparture = (bStairs && bTestButton) || (Segment == ESegment::Button && bTestWeight);
+    const bool bTestBalance = EntryFlag(TEXT("VerifyBalanceAirlock"));
+    const bool bMissingPlate = bTestBalance && EntryFlag(TEXT("VerifyMissingBalancePlate"));
+    const bool bTestDeparture = (bWeight && bTestBalance) || (bStairs && bTestButton) || (Segment == ESegment::Button && bTestWeight);
     if (bDev20 && Phase != EPhase::Start && !Unit.IsValid())
     {
         Fail(TEXT("DEV-20 disappeared from the chamber"));
@@ -216,14 +219,21 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
             }
             return;
         }
-        if (bTestButton && EntryFlag(TEXT("VerifyIncompleteButton")) && Chamber.HasChamberLoadFailed())
+        if ((bMissingPlate || (bTestButton && EntryFlag(TEXT("VerifyIncompleteButton")))) && Chamber.HasChamberLoadFailed())
         {
             if (!Chamber.GetDoor()->GetComponentLocation().Equals(Layout.Door.Center) || !SavedWithArchive(Segment))
             {
-                Fail(TEXT("incomplete Button circuit advanced the gate or checkpoint"));
+                Fail(TEXT("incomplete chamber advanced the gate or checkpoint"));
                 return;
             }
-            UE_LOG(LogEntryChamberTest, Display, TEXT("Incomplete Button circuit rejected: gate closed and Stairs checkpoint preserved."));
+            if (bMissingPlate)
+            {
+                UE_LOG(LogEntryChamberTest, Display, TEXT("Missing Balance plate rejected: gate closed and Weight checkpoint preserved."));
+            }
+            else
+            {
+                UE_LOG(LogEntryChamberTest, Display, TEXT("Incomplete Button circuit rejected: gate closed and Stairs checkpoint preserved."));
+            }
             SetComponentTickEnabled(false);
             FPlatformMisc::RequestExitWithStatus(false, 0);
             return;
@@ -245,12 +255,42 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
         {
             break;
         }
-        if ((bWeight && bTestWeight) || (Segment == ESegment::Button && bTestButton))
+        if (bWeight && bMissingPlate)
+        {
+            if (!bRevealedRoom)
+            {
+                bRevealedRoom = Chamber.RevealChamberForVerification();
+                return;
+            }
+            if (Chamber.IsWaitingForChamber()) { return; }
+            // Remove an actual registered body while Weight is still unsolved.
+            for (TActorIterator<AChamberAssembly> It(GetWorld()); It; ++It)
+            {
+                if (It->Layout && It->Layout->IsA<UWeightBalanceLayout>() && It->IsStreamedRoomReady())
+                {
+                    It->PlateCircuit->GetPlate(2)->UnregisterComponent();
+                    UE_LOG(LogEntryChamberTest, Display, TEXT("Removed the third Balance plate before solving Weight."));
+                    break;
+                }
+            }
+        }
+        if ((Segment == ESegment::Balance && bTestBalance) || (bWeight && bTestWeight) || (Segment == ESegment::Button && bTestButton))
         {
             const auto* Level = Chamber.GetPlate()->GetOwner()->GetLevel();
+            const int32 ExpectedPlates = bTestBalance ? 3 : Layout.GetPlateCount();
+            for (int32 Index = 0; Index < ExpectedPlates; ++Index)
+            {
+                const auto* Plate = Chamber.GetPlate(Index);
+                if (!IsValid(Plate) || !Plate->IsRegistered() || !Plate->IsQueryCollisionEnabled() ||
+                    Plate->GetOwner()->GetLevel() != Level || Chamber.IsPlatePressed(Index))
+                {
+                    Fail(TEXT("streamed plate unavailable or already pressed on arrival"));
+                    return;
+                }
+            }
             if (AirlockPawn.Get() != &Player || Level == GetWorld()->PersistentLevel ||
-                Chamber.GetDoor()->GetOwner()->GetLevel() != Level || Cubes.Num() != (bTestButton ? 2 : 4) ||
-                (bTestButton && (!Chamber.GetPlate(1) || Chamber.GetPlate(1)->GetOwner()->GetLevel() != Level || Chamber.IsParallelRelayPowered())) ||
+                Chamber.GetDoor()->GetOwner()->GetLevel() != Level || Cubes.Num() != (bTestBalance ? 6 : bTestButton ? 2 : 4) ||
+                (bTestButton && Chamber.IsParallelRelayPowered()) ||
                 Cubes.ContainsByPredicate([Level](const auto& Cube) { return Cube->GetLevel() != Level; }) ||
                 !Player.GetMovementBase() || Player.GetMovementBase()->GetOwner()->GetLevel() != Level ||
                 !SavedWithArchive(Segment))
@@ -264,7 +304,7 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
             else
             {
                 Abandoned::Infrastructure::Expedition::TravelToWorld(this,
-                    Abandoned::Application::Expedition::ChamberDestination{bTestButton ? ESegment::Stairs : ESegment::Button});
+                    Abandoned::Application::Expedition::ChamberDestination{bTestBalance ? ESegment::Weight : bTestButton ? ESegment::Stairs : ESegment::Button});
             }
             return;
         }

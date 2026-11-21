@@ -242,6 +242,10 @@ void ATrainingChamberGameMode::ActivateChamber()
     {
         UParallelCircuitVerification::Attach(*this, Devices->Cubes, Devices->RelayTraces, Devices->RelayIdleMaterial, Devices->RelayPoweredMaterial);
     }
+    else if (Course.Current == Segment::Balance && FParse::Param(FCommandLine::Get(), TEXT("VerifyBalanceAirlock")))
+    {
+        UEntryChamberVerification::Attach(*this, Course.Current, Devices->Cubes);
+    }
     else if (Course.Current == Segment::Balance && (UPlateBalanceVerification::IsStandaloneRequested() || bVerifyCourse))
     {
         UPlateBalanceVerification::Attach(*this, Devices->Cubes, Devices->PlateCircuit->GetPlates());

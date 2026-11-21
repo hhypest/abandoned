@@ -1,6 +1,7 @@
 #include "TrainingChamber/TrainingChamber.h"
 #include "TrainingChamber/TrainingChamberLayout.h"
 #include "Components/BoxComponent.h"
+#include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Engine/Level.h"
 #include "Engine/LevelStreamingDynamic.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -12,8 +13,29 @@ using Abandoned::Domain::Expedition::Segment;
 
 namespace
 {
-const FVector ButtonOrigin(0, 6000, 0);
-const FVector WeightOrigin(0, 12000, 0);
+struct FStreamedChamber
+{
+    Segment Destination;
+    const TCHAR* Map;
+    FVector Origin;
+    UClass* LayoutClass;
+    const TCHAR* VerificationFlag;
+};
+
+const FStreamedChamber* NextRoom(Segment Current)
+{
+    static const FStreamedChamber Rooms[] = {
+        {Segment::Button, TEXT("/Game/Abandoned/Chambers/Button"), {0,6000,0}, UEntryButtonLayout::StaticClass(), TEXT("VerifyButtonAirlock")},
+        {Segment::Weight, TEXT("/Game/Abandoned/Verification/WeightShellPilot"), {0,12000,0}, UEntryWeightLayout::StaticClass(), TEXT("VerifyWeightAirlock")},
+        {Segment::Balance, TEXT("/Game/Abandoned/Chambers/L_Balance"), {0,18000,0}, UWeightBalanceLayout::StaticClass(), TEXT("VerifyBalanceAirlock")}
+    };
+    const auto Next = NextSegment(Current);
+    for (const auto& Room : Rooms)
+    {
+        if (Room.Destination == Next) { return &Room; }
+    }
+    return nullptr;
+}
 
 void UnloadChamber(ULevelStreamingDynamic& Instance)
 {
@@ -25,7 +47,7 @@ void UnloadChamber(ULevelStreamingDynamic& Instance)
 
 bool ATrainingChamberGameMode::NeedsAirlock() const
 {
-    return !bDev20Run && (Course.Current == Segment::Stairs || Course.Current == Segment::Button);
+    return !bDev20Run && NextRoom(Course.Current) != nullptr;
 }
 
 void ATrainingChamberGameMode::RequestNextChamber()
@@ -38,12 +60,11 @@ void ATrainingChamberGameMode::RequestNextChamber()
     }
     bChamberRetryRequested = false;
     bool bAccepted = false;
-    const bool bToButton = Course.Current == Segment::Stairs;
-    ULevelStreamingDynamic::FLoadLevelInstanceParams Request(GetWorld(),
-        bToButton ? TEXT("/Game/Abandoned/Chambers/Button") : TEXT("/Game/Abandoned/Verification/WeightShellPilot"),
-        FTransform(bToButton ? ButtonOrigin : WeightOrigin));
+    const auto* Next = NextRoom(Course.Current);
+    if (!Next) { return; }
+    ULevelStreamingDynamic::FLoadLevelInstanceParams Request(GetWorld(), Next->Map, FTransform(Next->Origin));
 #if WITH_DEV_AUTOMATION_TESTS
-    Request.bInitiallyVisible = !FParse::Param(FCommandLine::Get(), bToButton ? TEXT("VerifyButtonAirlock") : TEXT("VerifyWeightAirlock"));
+    Request.bInitiallyVisible = !FParse::Param(FCommandLine::Get(), Next->VerificationFlag);
 #endif
     IncomingInstance = ULevelStreamingDynamic::LoadLevelInstance(Request, bAccepted);
     bChamberLoadFailed = !bAccepted || !IncomingInstance;
@@ -78,12 +99,10 @@ void ATrainingChamberGameMode::PrepareNextChamber()
             if (auto* Assembly = Cast<AChamberAssembly>(Actor)) { Room = Assembly; break; }
         }
         FString Error;
-        if (Room)
+        const auto* Next = NextRoom(Course.Current);
+        if (Room && Next)
         {
-            const bool bToButton = Course.Current == Segment::Stairs;
-            const UTrainingChamberLayout* Template = bToButton
-                ? static_cast<const UTrainingChamberLayout*>(GetDefault<UEntryButtonLayout>()) : GetDefault<UEntryWeightLayout>();
-            Room->BuildStreamed(*Template, SurfaceMaterial, Error);
+            Room->BuildStreamed(*Next->LayoutClass->GetDefaultObject<UTrainingChamberLayout>(), SurfaceMaterial, Error);
             FHitResult Floor;
             const FVector Spawn = Room->Layout ? Room->Layout->Spawn : FVector::ZeroVector;
             if (Error.IsEmpty() && Room->IsStreamedRoomReady() &&
@@ -91,7 +110,7 @@ void ATrainingChamberGameMode::PrepareNextChamber()
                 Floor.GetActor() && Floor.GetActor()->GetLevel() == Level)
             {
                 IncomingChamber = Room;
-                UE_LOG(LogChamberAirlock, Display, TEXT("%s airlock ready: floor, ballast and circuit registered."), bToButton ? TEXT("Button") : TEXT("Weight"));
+                UE_LOG(LogChamberAirlock, Display, TEXT("%s airlock ready: floor, ballast and circuit registered."), *Abandoned::Infrastructure::Expedition::WriteSegment(Next->Destination));
                 return;
             }
         }
@@ -103,7 +122,8 @@ void ATrainingChamberGameMode::PrepareNextChamber()
 
 bool ATrainingChamberGameMode::EnterNextChamber(ATrainingChamberCharacter& Player)
 {
-    if (!IncomingChamber || !IncomingChamber->IsStreamedRoomReady() || !IsDoorOpen() ||
+    const auto* Next = NextRoom(Course.Current);
+    if (!Next || !IncomingChamber || !IncomingChamber->IsStreamedRoomReady() || !IsDoorOpen() ||
         !Layout->GetExitBounds().IsInside(Player.GetActorLocation())) { return false; }
 
     if (!Player.TeleportTo(IncomingChamber->Layout->Spawn, FRotator::ZeroRotator)) { return false; }
@@ -115,7 +135,7 @@ bool ATrainingChamberGameMode::EnterNextChamber(ATrainingChamberCharacter& Playe
     Devices = IncomingChamber;
     IncomingChamber = nullptr;
     Layout = Devices->Layout;
-    Course.Current = Course.Current == Segment::Stairs ? Segment::Button : Segment::Weight;
+    Course.Current = Next->Destination;
     HintReader = {};
     bReachedExit = false;
     if (ActiveInstance)
@@ -127,7 +147,7 @@ bool ATrainingChamberGameMode::EnterNextChamber(ATrainingChamberCharacter& Playe
     ActiveInstance = IncomingInstance;
     IncomingInstance = nullptr;
     UE_LOG(LogChamberAirlock, Display, TEXT("%s airlock crossed: same pawn transferred to the prepared chamber."),
-        Course.Current == Segment::Button ? TEXT("Button") : TEXT("Weight"));
+        *Abandoned::Infrastructure::Expedition::WriteSegment(Course.Current));
     SaveEntryCheckpoint();
     if (NeedsAirlock()) { RequestNextChamber(); }
     ActivateChamber();
