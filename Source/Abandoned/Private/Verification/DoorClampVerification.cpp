@@ -19,6 +19,40 @@
 #include "UnrealClient.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDoorClampVerification, Log, All);
+
+namespace
+{
+bool CheckWeightShell(UWorld& World)
+{
+    // Probe exposed faces in world coordinates so both assembly modes use the same oracle.
+    const FCollisionObjectQueryParams Walls(ECC_WorldStatic);
+    struct FFace { FVector Point; FVector Normal; };
+    const FFace Faces[] = {
+        {{350, 100, 0}, FVector::UpVector}, {{350, 100, 560}, FVector::DownVector},
+        {{-200, 160, 250}, FVector::ForwardVector}, {{500, 600, 250}, -FVector::RightVector},
+        {{500, -600, 250}, FVector::RightVector}, {{1175, -350, 250}, -FVector::ForwardVector},
+        {{1175, 350, 250}, -FVector::ForwardVector}, {{1175, 0, 550}, -FVector::ForwardVector},
+        {{1460, -100, 250}, FVector::RightVector}, {{1460, 100, 250}, -FVector::RightVector},
+        {{1675, 0, 250}, -FVector::ForwardVector}
+    };
+    for (const auto& Face : Faces)
+    {
+        FHitResult Hit;
+        if (!World.LineTraceSingleByObjectType(Hit, Face.Point + Face.Normal * 16, Face.Point - Face.Normal * 8, Walls)
+            || !Hit.ImpactPoint.Equals(Face.Point, 0.5) || !Hit.ImpactNormal.Equals(Face.Normal, 0.01))
+        {
+            UE_LOG(LogDoorClampVerification, Error, TEXT("Incorrect Weight surface at %s"), *Face.Point.ToString());
+            return false;
+        }
+    }
+    FHitResult Hit;
+    const bool bCorridorBlocked = World.SweepSingleByObjectType(Hit, FVector(1120, 0, 92), FVector(1620, 0, 92),
+        FQuat::Identity, Walls, FCollisionShape::MakeCapsule(30, 90));
+    const bool bBeyondFloorBlocked = World.LineTraceSingleByObjectType(Hit, FVector(1800, 400, 50),
+        FVector(1800, 400, -250), Walls);
+    return !bCorridorBlocked && !bBeyondFloorBlocked;
+}
+}
 #endif
 
 bool Abandoned::Verification::WantsDoorClampVerification()
@@ -45,6 +79,12 @@ void UDoorClampVerification::Attach(ATrainingChamberGameMode& Chamber)
         return;
     }
     auto* Verification = NewObject<UDoorClampVerification>(&Chamber);
+    if (!CheckWeightShell(*Chamber.GetWorld()))
+    {
+        Verification->Fail(TEXT("Weight shell faces, capsule passage or floor edge"));
+        return;
+    }
+    UE_LOG(LogDoorClampVerification, Display, TEXT("Weight shell verified: 11 faces, clear capsule passage and floor edge."));
     const UTrainingChamberLayout* Layout = Chamber.GetLayout();
     if (!Layout || Layout->CubeSpawns.Num() < 3)
     {

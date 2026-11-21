@@ -5,6 +5,7 @@ param(
     [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
     [switch]$TraceTravel,
     [ValidateSet('Separate', 'Instanced')][string]$ChamberDecor,
+    [ValidateSet('Separate', 'Compound')][string]$WeightShell,
     [switch]$DisableChamberMeshReuse,
     [switch]$RedrawOutgoingChamber,
     [switch]$TraceDeferredGCTail,
@@ -21,6 +22,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if ($ChamberDecor -and !$TraceTravel) { throw 'ChamberDecor requires TraceTravel' }
+if ($WeightShell -and !$TraceTravel) { throw 'WeightShell requires TraceTravel' }
 if ($RedrawOutgoingChamber -and !$TraceTravel) { throw 'RedrawOutgoingChamber requires TraceTravel' }
 if ($DisableChamberMeshReuse -and !$TraceTravel) { throw 'DisableChamberMeshReuse requires TraceTravel' }
 if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
@@ -75,6 +77,7 @@ foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1
 }
 if ($DisableChamberMeshReuse) { $start.ArgumentList.Add('-NoChamberMeshReuse') }
 if ($ChamberDecor -eq 'Separate') { $start.ArgumentList.Add('-NoInstancedChamberDecor') }
+if ($WeightShell -eq 'Compound') { $start.ArgumentList.Add('-CompoundWeightShell') }
 if ($measureReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
 if ($TestMapReserveTrim) { $start.ArgumentList.Add('-TestMapReserveTrim') }
 if ($TraceMapPages) { $start.ArgumentList.Add('-AuditMapPages') }
@@ -156,6 +159,12 @@ if ($Scenario -eq 'Travel') {
             throw "Room decor differs from $ChamberDecor on the measured route"
         }
     }
+    if ($WeightShell) {
+        $shells = @($log -match 'Weight shell mode=')
+        if ($shells.Count -ne $WeightVisits -or @($shells -notmatch "mode=$WeightShell$").Count) {
+            throw "Weight shell differs from $WeightShell on the measured route"
+        }
+    }
     if ($DisableRenderThreadLag -and !($log -match 'r\.OneFrameThreadLag = "0"')) {
         throw 'The render-thread lag control was not applied'
     }
@@ -186,6 +195,7 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     RedrawOutgoingChamber = [bool]$RedrawOutgoingChamber
     DisableChamberMeshReuse = [bool]$DisableChamberMeshReuse
     ChamberDecor = $ChamberDecor
+    WeightShell = $WeightShell
     TraceTravelTasks = [bool]$TraceTravelTasks
     TraceTravelStats = [bool]$TraceTravelStats
     MapPageReserve = if ($measureReserve) { $MapPageReserve } else { $null }

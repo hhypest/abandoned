@@ -1,5 +1,7 @@
 # Ассеты и импорт
 
+Скрытое физическое тело для эксперимента Weight генерируется из собственных размеров проекта в `Config/DefaultGame.ini`. В игровом пакете оно содержит 11 простых боксов. Команда для редактора UE 5.7 — `UnrealEditor-Cmd Abandoned.uproject -run=pythonscript -script=<абсолютный путь к BuildWeightCollision.py> -EnablePlugins=PythonScriptPlugin -nullrhi -unattended`. [Генератор](../Scripts/BuildWeightCollision.py) · [Эксперимент и проверка](A07WeightShell.md)
+
 ## ФосТех во входном контуре
 
 Оба физических куба и напольная кнопка используют авторские FBX владельца проекта. 21 ноября 2026 года автор разрешил использовать их в Abandoned и публиковать игровые пакеты в открытом репозитории проекта. В [реестре](AssetInventory.csv) приведены размеры файлов и SHA-256 оригиналов. В Git LFS находятся [игровые пакеты Unreal](../Content/Abandoned/FosTech).
