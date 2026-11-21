@@ -36,6 +36,22 @@ jobs:
         shell: pwsh
         run: ./Scripts/Test-GitLfs.ps1
 
+      - name: Reject an untrusted revision before Unreal setup
+        shell: pwsh
+        run: |
+          $runs = Join-Path $env:RUNNER_TEMP 'untrusted-ue-revision'
+          $rejected = $false
+          try {
+            ./Scripts/Invoke-TrustedUnrealBuild.ps1 -EngineRoot $PWD -RunsRoot $runs -Commit ('0' * 40)
+          } catch {
+            $rejected = $true
+          }
+          $report = Get-Content -LiteralPath (Get-Item "$runs/*/report.json").FullName -Raw | ConvertFrom-Json
+          if (!$rejected -or $report.Result -ne 'Failed' -or !$report.RejectedRevision -or $null -ne $report.Commit -or
+              'Toolchain' -in $report.Steps.PSObject.Properties.Name) {
+            throw 'Expected the revision to be rejected before checkout and Unreal setup.'
+          }
+
       - name: Build and run standalone C++20 tests
         shell: pwsh
         run: |

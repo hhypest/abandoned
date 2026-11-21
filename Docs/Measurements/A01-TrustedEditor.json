@@ -1,0 +1,94 @@
+{
+  "Runs": [
+    {
+      "Id": "d0ace2593875",
+      "Build": {
+        "Result": "Passed",
+        "RequestedCommit": "5daf01e52364101380a3395a86d16ed6a4ead01e",
+        "Commit": "5daf01e52364101380a3395a86d16ed6a4ead01e",
+        "Main": "5daf01e52364101380a3395a86d16ed6a4ead01e",
+        "Target": "AbandonedEditor Win64 Development",
+        "EngineBase": "260bb2e1c5610b31c63a36206eedd289409c5f11",
+        "Windows": "10.0.26300.0",
+        "Steps": {
+          "Checkout": 0,
+          "Toolchain": 0,
+          "Architecture": 0,
+          "EditorBuild": 0,
+          "Products": 0
+        },
+        "Unreal": "5.7.4",
+        "DotNet": "8.0.412",
+        "UBTSha256": "A88C7CB9438B39BB9917C8CAF9C71FA0DEF2418FBE9A866FA20DE1B5EFDA30D2",
+        "VCTools": "14.44.35207",
+        "WindowsSDK": "10.0.26100.0",
+        "Compiler": "14.44.35230.0",
+        "Products": {
+          "Binaries/Win64/AbandonedEditor.target": "D2E74DE4C26AA170D924CF92E2EE5ACA96F2E88EC823B0C41B0C3F13DE4B5280",
+          "Binaries/Win64/UnrealEditor.modules": "DCCE2B266027C18179E74B6743EA068A0A2772240B5B7DDA55737A998289C84E",
+          "Binaries/Win64/UnrealEditor-Abandoned.dll": "A2E3FDF7580F9905C4B04DD980F6ECC76E45B9706B4FE3974283F7297AE4C421"
+        }
+      },
+      "EditorBuildSeconds": 23.24,
+      "EditorModuleTextSectionSha256": "95FA269B64D1B65A2095D11F10D77E815DC56F6B5C043EC45BDA3A6883A817E2"
+    },
+    {
+      "Id": "f084efadc1e7",
+      "Build": {
+        "Result": "Passed",
+        "RequestedCommit": "5daf01e52364101380a3395a86d16ed6a4ead01e",
+        "Commit": "5daf01e52364101380a3395a86d16ed6a4ead01e",
+        "Main": "5daf01e52364101380a3395a86d16ed6a4ead01e",
+        "Target": "AbandonedEditor Win64 Development",
+        "EngineBase": "260bb2e1c5610b31c63a36206eedd289409c5f11",
+        "Windows": "10.0.26300.0",
+        "Steps": {
+          "Checkout": 0,
+          "Toolchain": 0,
+          "Architecture": 0,
+          "EditorBuild": 0,
+          "Products": 0
+        },
+        "Unreal": "5.7.4",
+        "DotNet": "8.0.412",
+        "UBTSha256": "A88C7CB9438B39BB9917C8CAF9C71FA0DEF2418FBE9A866FA20DE1B5EFDA30D2",
+        "VCTools": "14.44.35207",
+        "WindowsSDK": "10.0.26100.0",
+        "Compiler": "14.44.35230.0",
+        "Products": {
+          "Binaries/Win64/AbandonedEditor.target": "D2E74DE4C26AA170D924CF92E2EE5ACA96F2E88EC823B0C41B0C3F13DE4B5280",
+          "Binaries/Win64/UnrealEditor.modules": "DCCE2B266027C18179E74B6743EA068A0A2772240B5B7DDA55737A998289C84E",
+          "Binaries/Win64/UnrealEditor-Abandoned.dll": "45DAA021C3BC7041A715DEAD6ED633A8055BCCF81CF23B7884A7C0B2B1A67827"
+        }
+      },
+      "EditorBuildSeconds": 31.31,
+      "EditorModuleTextSectionSha256": "B0B433D8BE9175EDDC79F3520268C389CDEBB8A6DF4AB83F0188F3D2FD5A8062"
+    }
+  ],
+  "RejectedBranchHead": {
+    "Result": "Failed",
+    "RequestedCommit": "66fc4d906b2ca0441c35b2798035a1aeb3434bd7",
+    "Commit": null,
+    "Main": "5daf01e52364101380a3395a86d16ed6a4ead01e",
+    "Target": "AbandonedEditor Win64 Development",
+    "EngineBase": "260bb2e1c5610b31c63a36206eedd289409c5f11",
+    "Windows": "10.0.26300.0",
+    "Steps": {
+      "Checkout": 1
+    },
+    "RejectedRevision": true,
+    "Error": "Revision is outside the first-parent history of origin/main."
+  },
+  "EditorSmoke": {
+    "BuildId": "d0ace2593875",
+    "Commit": "5daf01e52364101380a3395a86d16ed6a4ead01e",
+    "TrackedChanges": false,
+    "Rhi": "VULKAN_SM6",
+    "Resolution": "1280x720",
+    "Name": "EntryCourse",
+    "Outcome": "Passed",
+    "Gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "ExitCode": 0,
+    "ShutdownComplete": true
+  }
+}
