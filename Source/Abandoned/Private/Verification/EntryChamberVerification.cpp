@@ -22,7 +22,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogEntryChamberTest, Log, All);
 
 namespace
 {
-// Each packaged scenario starts a fresh process; keep continuity across the two Button worlds.
+// Each packaged scenario starts a fresh process; keep continuity across the two visits.
 TWeakObjectPtr<ATrainingChamberCharacter> AirlockPawn;
 int32 AirlockVisits = 0;
 
@@ -52,7 +52,7 @@ UEntryChamberVerification::UEntryChamberVerification()
 #if WITH_DEV_AUTOMATION_TESTS
 bool UEntryChamberVerification::UsesCheckpoint()
 {
-    return EntryFlag(TEXT("VerifyEntryCheckpoint")) || EntryFlag(TEXT("VerifyWeightAirlock"));
+    return EntryFlag(TEXT("VerifyEntryCheckpoint")) || EntryFlag(TEXT("VerifyButtonAirlock")) || EntryFlag(TEXT("VerifyWeightAirlock"));
 }
 
 bool UEntryChamberVerification::IsRequested(bool bDev20Route)
@@ -144,6 +144,9 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
     const auto& Layout = *Chamber.GetLayout();
     const bool bStairs = Segment == ESegment::Stairs;
     const bool bWeight = Segment == ESegment::Weight;
+    const bool bTestButton = EntryFlag(TEXT("VerifyButtonAirlock"));
+    const bool bTestWeight = EntryFlag(TEXT("VerifyWeightAirlock"));
+    const bool bTestDeparture = (bStairs && bTestButton) || (Segment == ESegment::Button && bTestWeight);
     if (bDev20 && Phase != EPhase::Start && !Unit.IsValid())
     {
         Fail(TEXT("DEV-20 disappeared from the chamber"));
@@ -196,6 +199,44 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
         }
     };
 
+    if (bTestDeparture && ((bStairs && Phase == EPhase::RunUp) || Phase == EPhase::WaitDoor))
+    {
+        if (!Chamber.IsExitEnabled()) { return; }
+        if (!bRevealedRoom)
+        {
+            if (!Chamber.GetDoor()->GetComponentLocation().Equals(Layout.Door.Center) || !SavedWithArchive(Segment))
+            {
+                Fail(TEXT("gate moved or checkpoint changed before streamed devices were ready"));
+                return;
+            }
+            if (Elapsed >= 0.5f && Chamber.RevealChamberForVerification())
+            {
+                bRevealedRoom = true;
+                UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: solved circuit held closed during load."), AirlockVisits + 1);
+            }
+            return;
+        }
+        if (bTestButton && EntryFlag(TEXT("VerifyIncompleteButton")) && Chamber.HasChamberLoadFailed())
+        {
+            if (!Chamber.GetDoor()->GetComponentLocation().Equals(Layout.Door.Center) || !SavedWithArchive(Segment))
+            {
+                Fail(TEXT("incomplete Button circuit advanced the gate or checkpoint"));
+                return;
+            }
+            UE_LOG(LogEntryChamberTest, Display, TEXT("Incomplete Button circuit rejected: gate closed and Stairs checkpoint preserved."));
+            SetComponentTickEnabled(false);
+            FPlatformMisc::RequestExitWithStatus(false, 0);
+            return;
+        }
+        if (!Chamber.IsDoorOpen()) { return; }
+        if (AirlockPawn.Get() != &Player)
+        {
+            if (!SavedWithArchive(Segment)) { Fail(TEXT("checkpoint advanced before crossing")); return; }
+            AirlockPawn = &Player;
+            UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: open gate, checkpoint still %s."), AirlockVisits + 1, *WriteSegment(Segment));
+        }
+    }
+
     APuzzleCube& First = *Cubes[0];
     switch (Phase)
     {
@@ -204,25 +245,26 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
         {
             break;
         }
-        if (bWeight && EntryFlag(TEXT("VerifyWeightAirlock")))
+        if ((bWeight && bTestWeight) || (Segment == ESegment::Button && bTestButton))
         {
             const auto* Level = Chamber.GetPlate()->GetOwner()->GetLevel();
             if (AirlockPawn.Get() != &Player || Level == GetWorld()->PersistentLevel ||
-                Chamber.GetDoor()->GetOwner()->GetLevel() != Level || Cubes.Num() != 4 ||
+                Chamber.GetDoor()->GetOwner()->GetLevel() != Level || Cubes.Num() != (bTestButton ? 2 : 4) ||
+                (bTestButton && (!Chamber.GetPlate(1) || Chamber.GetPlate(1)->GetOwner()->GetLevel() != Level || Chamber.IsParallelRelayPowered())) ||
                 Cubes.ContainsByPredicate([Level](const auto& Cube) { return Cube->GetLevel() != Level; }) ||
                 !Player.GetMovementBase() || Player.GetMovementBase()->GetOwner()->GetLevel() != Level ||
-                !SavedWithArchive(ESegment::Weight))
+                !SavedWithArchive(Segment))
             {
-                Fail(TEXT("streamed Weight ownership, pawn, floor or saved arrival mismatch"));
+                Fail(TEXT("streamed chamber ownership, pawn, floor or saved arrival mismatch"));
                 return;
             }
-            UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: reached streamed Weight, checkpoint and archive confirmed."), ++AirlockVisits);
+            UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: reached streamed %s, checkpoint and archive confirmed."), ++AirlockVisits, *WriteSegment(Segment));
             SetComponentTickEnabled(false);
             if (AirlockVisits == 2) { FPlatformMisc::RequestExitWithStatus(false, 0); }
             else
             {
                 Abandoned::Infrastructure::Expedition::TravelToWorld(this,
-                    Abandoned::Application::Expedition::ChamberDestination{ESegment::Button});
+                    Abandoned::Application::Expedition::ChamberDestination{bTestButton ? ESegment::Stairs : ESegment::Button});
             }
             return;
         }
@@ -417,28 +459,8 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
         Advance(EPhase::WaitDoor);
         break;
     case EPhase::WaitDoor:
-        if (Segment == ESegment::Button && EntryFlag(TEXT("VerifyWeightAirlock")) && !bRevealedWeight &&
-            Chamber.IsExitEnabled() && Elapsed >= 0.5f)
-        {
-            if (!Chamber.GetDoor()->GetComponentLocation().Equals(Layout.Door.Center) || !SavedWithArchive(ESegment::Button))
-            {
-                Fail(TEXT("gate moved or checkpoint changed while Weight was hidden"));
-                return;
-            }
-            if (Chamber.RevealWeightForVerification())
-            {
-                bRevealedWeight = true;
-                UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: solved circuit held closed during load."), AirlockVisits + 1);
-            }
-        }
         if (Chamber.IsDoorOpen())
         {
-            if (Segment == ESegment::Button && EntryFlag(TEXT("VerifyWeightAirlock")))
-            {
-                if (!SavedWithArchive(ESegment::Button)) { Fail(TEXT("checkpoint advanced before crossing")); return; }
-                AirlockPawn = &Player;
-                UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: open gate, checkpoint still Button."), AirlockVisits + 1);
-            }
             if (bWeight && !bDev20 && !bVerifiedWeightReset)
             {
                 Input.Press(Controller, EKeys::R);

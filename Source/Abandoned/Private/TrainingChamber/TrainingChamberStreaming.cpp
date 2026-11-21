@@ -6,63 +6,72 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Misc/CommandLine.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogWeightAirlock, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogChamberAirlock, Log, All);
 
 using Abandoned::Domain::Expedition::Segment;
 
 namespace
 {
-// Both chambers have a sealed back wall. Transfer at the far end of Button's exit passage.
+const FVector ButtonOrigin(0, 6000, 0);
 const FVector WeightOrigin(0, 12000, 0);
-}
 
-bool ATrainingChamberGameMode::NeedsWeightAirlock() const
+void UnloadChamber(ULevelStreamingDynamic& Instance)
 {
-    return Course.Current == Segment::Button && !bDev20Run;
+    Instance.SetShouldBeVisible(false);
+    Instance.SetShouldBeLoaded(false);
+    Instance.SetIsRequestingUnloadAndRemoval(true);
+}
 }
 
-void ATrainingChamberGameMode::RequestWeight()
+bool ATrainingChamberGameMode::NeedsAirlock() const
+{
+    return !bDev20Run && (Course.Current == Segment::Stairs || Course.Current == Segment::Button);
+}
+
+void ATrainingChamberGameMode::RequestNextChamber()
 {
     // A reset can arrive while UE is still removing a failed instance at this location.
-    if (WeightInstance && (WeightInstance->IsLevelLoaded() || GetWorld()->GetStreamingLevels().Contains(WeightInstance)))
+    if (IncomingInstance && (IncomingInstance->IsLevelLoaded() || GetWorld()->GetStreamingLevels().Contains(IncomingInstance)))
     {
-        bWeightRetryRequested = true;
+        bChamberRetryRequested = true;
         return;
     }
-    bWeightRetryRequested = false;
+    bChamberRetryRequested = false;
     bool bAccepted = false;
+    const bool bToButton = Course.Current == Segment::Stairs;
     ULevelStreamingDynamic::FLoadLevelInstanceParams Request(GetWorld(),
-        TEXT("/Game/Abandoned/Verification/WeightShellPilot"), FTransform(WeightOrigin));
+        bToButton ? TEXT("/Game/Abandoned/Chambers/Button") : TEXT("/Game/Abandoned/Verification/WeightShellPilot"),
+        FTransform(bToButton ? ButtonOrigin : WeightOrigin));
 #if WITH_DEV_AUTOMATION_TESTS
-    Request.bInitiallyVisible = !FParse::Param(FCommandLine::Get(), TEXT("VerifyWeightAirlock"));
+    Request.bInitiallyVisible = !FParse::Param(FCommandLine::Get(), bToButton ? TEXT("VerifyButtonAirlock") : TEXT("VerifyWeightAirlock"));
 #endif
-    WeightInstance = ULevelStreamingDynamic::LoadLevelInstance(Request, bAccepted);
-    bWeightLoadFailed = !bAccepted || !WeightInstance;
-    if (bWeightLoadFailed) { UE_LOG(LogWeightAirlock, Warning, TEXT("Weight load request failed. Reset to retry.")); }
+    IncomingInstance = ULevelStreamingDynamic::LoadLevelInstance(Request, bAccepted);
+    bChamberLoadFailed = !bAccepted || !IncomingInstance;
+    if (bChamberLoadFailed) { UE_LOG(LogChamberAirlock, Warning, TEXT("Chamber load request failed. Reset to retry.")); }
 }
 
-void ATrainingChamberGameMode::PrepareWeight()
+void ATrainingChamberGameMode::PrepareNextChamber()
 {
-    if (bWeightLoadFailed)
+    if (bChamberLoadFailed)
     {
-        if (bWeightRetryRequested) { RequestWeight(); }
+        if (bChamberRetryRequested) { RequestNextChamber(); }
         return;
     }
-    if (!WeightInstance) { return; }
-    if (IncomingWeight)
+    if (!IncomingInstance) { return; }
+    if (IncomingChamber)
     {
-        if (IsValid(IncomingWeight) && WeightInstance->IsLevelVisible() && IncomingWeight->IsWeightReady()) { return; }
-        IncomingWeight = nullptr;
-        bWeightLoadFailed = true;
+        if (IsValid(IncomingChamber) && IncomingInstance->IsLevelVisible() && IncomingChamber->IsStreamedRoomReady()) { return; }
+        IncomingChamber = nullptr;
+        bChamberLoadFailed = true;
     }
-    if (bWeightLoadFailed || WeightInstance->GetLevelStreamingState() == ELevelStreamingState::FailedToLoad)
+    if (bChamberLoadFailed || IncomingInstance->GetLevelStreamingState() == ELevelStreamingState::FailedToLoad)
     {
-        bWeightLoadFailed = true;
+        bChamberLoadFailed = true;
     }
     else
     {
-        if (!WeightInstance->IsLevelVisible()) { return; }
-        ULevel* Level = WeightInstance->GetLoadedLevel();
+        if (!IncomingInstance->IsLevelVisible()) { return; }
+        ULevel* Level = IncomingInstance->GetLoadedLevel();
         AChamberAssembly* Room = nullptr;
         for (AActor* Actor : Level->Actors)
         {
@@ -71,55 +80,65 @@ void ATrainingChamberGameMode::PrepareWeight()
         FString Error;
         if (Room)
         {
-            Room->BuildStreamedWeight(SurfaceMaterial, Error);
+            const bool bToButton = Course.Current == Segment::Stairs;
+            const UTrainingChamberLayout* Template = bToButton
+                ? static_cast<const UTrainingChamberLayout*>(GetDefault<UEntryButtonLayout>()) : GetDefault<UEntryWeightLayout>();
+            Room->BuildStreamed(*Template, SurfaceMaterial, Error);
             FHitResult Floor;
-            const FVector Spawn = Room->Layout->Spawn;
-            if (Error.IsEmpty() && Room->IsWeightReady() &&
+            const FVector Spawn = Room->Layout ? Room->Layout->Spawn : FVector::ZeroVector;
+            if (Error.IsEmpty() && Room->IsStreamedRoomReady() &&
                 GetWorld()->LineTraceSingleByChannel(Floor, Spawn, Spawn - FVector(0,0,150), ECC_Pawn) &&
                 Floor.GetActor() && Floor.GetActor()->GetLevel() == Level)
             {
-                IncomingWeight = Room;
-                UE_LOG(LogWeightAirlock, Display, TEXT("Weight airlock ready: floor, four ballast bodies, plate, switch and drive."));
+                IncomingChamber = Room;
+                UE_LOG(LogChamberAirlock, Display, TEXT("%s airlock ready: floor, ballast and circuit registered."), bToButton ? TEXT("Button") : TEXT("Weight"));
                 return;
             }
         }
-        UE_LOG(LogWeightAirlock, Warning, TEXT("Weight devices unavailable. Reset to retry. %s"), *Error);
-        bWeightLoadFailed = true;
+        UE_LOG(LogChamberAirlock, Warning, TEXT("Chamber devices unavailable. Reset to retry. %s"), *Error);
+        bChamberLoadFailed = true;
     }
-    WeightInstance->SetShouldBeVisible(false);
-    WeightInstance->SetShouldBeLoaded(false);
-    WeightInstance->SetIsRequestingUnloadAndRemoval(true);
+    UnloadChamber(*IncomingInstance);
 }
 
-bool ATrainingChamberGameMode::EnterWeight(ATrainingChamberCharacter& Player)
+bool ATrainingChamberGameMode::EnterNextChamber(ATrainingChamberCharacter& Player)
 {
-    if (!IncomingWeight || !IncomingWeight->IsWeightReady() || !IsDoorOpen() ||
+    if (!IncomingChamber || !IncomingChamber->IsStreamedRoomReady() || !IsDoorOpen() ||
         !Layout->GetExitBounds().IsInside(Player.GetActorLocation())) { return false; }
 
-    if (!Player.TeleportTo(IncomingWeight->Layout->Spawn, FRotator::ZeroRotator)) { return false; }
+    if (!Player.TeleportTo(IncomingChamber->Layout->Spawn, FRotator::ZeroRotator)) { return false; }
     Player.ReleaseHeldObject();
     Player.GetCharacterMovement()->StopMovementImmediately();
     Player.GetCharacterMovement()->SetMovementMode(MOVE_Falling);
     if (Player.GetController()) { Player.GetController()->SetControlRotation(FRotator::ZeroRotator); }
     AChamberAssembly* Previous = Devices;
-    Devices = IncomingWeight;
-    IncomingWeight = nullptr;
+    Devices = IncomingChamber;
+    IncomingChamber = nullptr;
     Layout = Devices->Layout;
-    Course.Current = Segment::Weight;
+    Course.Current = Course.Current == Segment::Stairs ? Segment::Button : Segment::Weight;
     HintReader = {};
     bReachedExit = false;
-    Previous->Retire();
-    UE_LOG(LogWeightAirlock, Display, TEXT("Weight airlock crossed: same pawn transferred to the prepared chamber."));
+    if (ActiveInstance)
+    {
+        Previous->DoorDrive->ReleaseClamp();
+        UnloadChamber(*ActiveInstance);
+    }
+    else { Previous->Retire(); }
+    ActiveInstance = IncomingInstance;
+    IncomingInstance = nullptr;
+    UE_LOG(LogChamberAirlock, Display, TEXT("%s airlock crossed: same pawn transferred to the prepared chamber."),
+        Course.Current == Segment::Button ? TEXT("Button") : TEXT("Weight"));
     SaveEntryCheckpoint();
+    if (NeedsAirlock()) { RequestNextChamber(); }
     ActivateChamber();
     return true;
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
-bool ATrainingChamberGameMode::RevealWeightForVerification()
+bool ATrainingChamberGameMode::RevealChamberForVerification()
 {
-    if (!WeightInstance || !WeightInstance->IsLevelLoaded() || WeightInstance->IsLevelVisible()) { return false; }
-    WeightInstance->SetShouldBeVisible(true);
+    if (!IncomingInstance || !IncomingInstance->IsLevelLoaded() || IncomingInstance->IsLevelVisible()) { return false; }
+    IncomingInstance->SetShouldBeVisible(true);
     return true;
 }
 #endif

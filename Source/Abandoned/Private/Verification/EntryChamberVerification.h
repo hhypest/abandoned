@@ -48,6 +48,6 @@ private:
     bool bDev20 = false;
     bool bVerifiedWeightReset = false;
     bool bCaptured = false;
-    bool bRevealedWeight = false;
+    bool bRevealedRoom = false;
 #endif
 };

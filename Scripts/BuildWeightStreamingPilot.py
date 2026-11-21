@@ -1,31 +1,36 @@
-"""Create or refresh the four configured ballast placements in the A-02 pilot."""
+"""Refresh WeightShellPilot, or the streamed Button room with -BuildButtonRoom."""
 import re
 from pathlib import Path
 
 import unreal
 
-level_path = "/Game/Abandoned/Verification/WeightShellPilot"
-mesh = unreal.load_asset("/Game/Abandoned/Collision/SM_WeightShell")
-if not mesh:
-    raise RuntimeError("Weight shell mesh is missing")
+button = "-BuildButtonRoom" in unreal.SystemLibrary.get_command_line().split()
+chamber = "Button" if button else "Weight"
+level_path = "/Game/Abandoned/Chambers/Button" if button else "/Game/Abandoned/Verification/WeightShellPilot"
 levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-if unreal.EditorAssetLibrary.does_asset_exist(level_path):
+exists = unreal.EditorAssetLibrary.does_asset_exist(level_path)
+if exists:
     if not levels.load_level(level_path):
-        raise RuntimeError("Could not open pilot level")
-    shells = [a for a in actors.get_all_level_actors() if isinstance(a, unreal.StaticMeshActor)
-              and a.static_mesh_component.static_mesh == mesh]
-    if len(shells) != 1:
-        raise RuntimeError("Expected one Weight shell in the pilot level")
-else:
-    if not levels.new_level(level_path, is_partitioned_world=False):
-        raise RuntimeError("Could not create pilot sublevel")
-    shell = actors.spawn_actor_from_object(mesh, unreal.Vector(0, 0, 0))
-    shell.set_actor_label("Weight shell")
-    shell.static_mesh_component.set_collision_profile_name("BlockAll")
+        raise RuntimeError(f"Could not open {level_path}")
+elif not levels.new_level(level_path, is_partitioned_world=False):
+    raise RuntimeError(f"Could not create {level_path}")
+if not button:
+    mesh = unreal.load_asset("/Game/Abandoned/Collision/SM_WeightShell")
+    if not mesh:
+        raise RuntimeError("Missing Weight shell")
+    if exists:
+        shells = [a for a in actors.get_all_level_actors() if isinstance(a, unreal.StaticMeshActor)
+                  and a.static_mesh_component.static_mesh == mesh]
+        if len(shells) != 1:
+            raise RuntimeError("Expected one Weight shell")
+    else:
+        shell = actors.spawn_actor_from_object(mesh, unreal.Vector(0, 0, 0))
+        shell.set_actor_label("Weight shell")
+        shell.static_mesh_component.set_collision_profile_name("BlockAll")
 
 config = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_config_dir())) / "DefaultGame.ini"
-section = config.read_text(encoding="utf-8").split("[/Script/Abandoned.EntryWeightLayout]", 1)[1].split("[", 1)[0]
+section = config.read_text(encoding="utf-8").split(f"[/Script/Abandoned.Entry{chamber}Layout]", 1)[1].split("[", 1)[0]
 rows = [line for line in section.splitlines() if line.startswith("+CubeSpawns=")]
 if not rows:
     raise RuntimeError("Missing Weight ballast layout")
@@ -35,7 +40,7 @@ for index, line in enumerate(rows):
     if not match:
         raise RuntimeError(f"Unrecognized ballast placement: {line}")
     position = unreal.Vector(*map(float, match.groups()[:3]))
-    label = f"Weight ballast {index + 1}"
+    label = f"{chamber} ballast {index + 1}"
     cube = existing.pop(label, None)
     if cube is None:
         cube = actors.spawn_actor_from_class(unreal.PuzzleCube, position)
@@ -55,18 +60,21 @@ if len(rooms) > 1:
     raise RuntimeError("Expected one Weight device assembly")
 if not rooms:
     room = actors.spawn_actor_from_class(unreal.ChamberAssembly, unreal.Vector(0, 0, 0))
-    room.set_actor_label("Weight devices")
+    room.set_actor_label(f"{chamber} devices")
 else:
     room = rooms[0]
-for prop, code, name in (
+device_meshes = [
     ("plate_base_mesh", "02", "PlateBase"), ("plate_top_mesh", "02", "PlateTop"),
     ("door_leaf_mesh", "13", "DEV-13"), ("door_frame_mesh", "12", "DEV-12"),
     ("switch_mesh", "03", "DEV-03"),
-):
+]
+if button:
+    device_meshes.append(("relay_mesh", "07", "DEV-07"))
+for prop, code, name in device_meshes:
     asset = unreal.load_asset(f"/Game/Abandoned/Meshy/DEV_{code}/DEV-{code}/StaticMeshes/{name}")
     if not asset:
         raise RuntimeError(f"Missing Weight device mesh {name}")
     room.set_editor_property(prop, asset)
 if not levels.save_current_level():
     raise RuntimeError("Could not save pilot sublevel")
-unreal.log(f"Saved WeightShellPilot with {len(rows)} ballast actors")
+unreal.log(f"Saved {level_path} with {len(rows)} ballast actors")
