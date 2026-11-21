@@ -494,7 +494,7 @@ void ATrainingChamberHUD::DrawHUD()
         ? (Layout->UsesPlateBalance() ? TEXT("Balance chamber complete") : TEXT("Entry course complete")) :
         (bDoorObstructed ? TEXT("Door obstructed. Restore power to release.") :
         Chamber->IsDoorOpen() ? TEXT("Exit open") :
-        (Chamber->IsExitEnabled() ? TEXT("Exit opening") : Layout->Objective));
+        (Chamber->IsExitEnabled() ? (Chamber->IsWaitingForWeight() ? TEXT("Preparing Weight chamber") : TEXT("Exit opening")) : Layout->Objective));
     if (bDoorObstructed)
     {
         DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.78f), 16.0f, 71.0f, 300.0f, 24.0f);

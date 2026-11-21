@@ -56,6 +56,7 @@ public:
     bool RevealWeightForVerification();
 #endif
     bool IsPlatePressed(int32 Index = 0) const { return Devices->PlateCircuit->IsPressed(Index); }
+    bool IsWaitingForWeight() const { return NeedsWeightAirlock() && !IncomingWeight; }
     bool HasWeightLoadFailed() const { return bWeightLoadFailed; }
     bool IsDoorOpen() const { return Devices->DoorDrive->IsOpen(); }
     bool HasClampedObject() const { return Devices->DoorDrive->HasClampedObject(); }
@@ -73,6 +74,7 @@ private:
     bool EnterWeight(ATrainingChamberCharacter& Player);
     bool NeedsWeightAirlock() const;
     bool bWeightLoadFailed = false;
+    bool bWeightRetryRequested = false;
     UPROPERTY(Transient)
     TObjectPtr<ULevelStreamingDynamic> WeightInstance;
     UPROPERTY(Transient)

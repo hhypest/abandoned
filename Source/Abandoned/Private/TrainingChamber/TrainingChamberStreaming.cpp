@@ -23,6 +23,13 @@ bool ATrainingChamberGameMode::NeedsWeightAirlock() const
 
 void ATrainingChamberGameMode::RequestWeight()
 {
+    // A reset can arrive while UE is still removing a failed instance at this location.
+    if (WeightInstance && (WeightInstance->IsLevelLoaded() || GetWorld()->GetStreamingLevels().Contains(WeightInstance)))
+    {
+        bWeightRetryRequested = true;
+        return;
+    }
+    bWeightRetryRequested = false;
     bool bAccepted = false;
     ULevelStreamingDynamic::FLoadLevelInstanceParams Request(GetWorld(),
         TEXT("/Game/Abandoned/Verification/WeightShellPilot"), FTransform(WeightOrigin));
@@ -36,7 +43,12 @@ void ATrainingChamberGameMode::RequestWeight()
 
 void ATrainingChamberGameMode::PrepareWeight()
 {
-    if (bWeightLoadFailed || !WeightInstance) { return; }
+    if (bWeightLoadFailed)
+    {
+        if (bWeightRetryRequested) { RequestWeight(); }
+        return;
+    }
+    if (!WeightInstance) { return; }
     if (IncomingWeight)
     {
         if (IsValid(IncomingWeight) && WeightInstance->IsLevelVisible() && IncomingWeight->IsWeightReady()) { return; }
@@ -77,7 +89,6 @@ void ATrainingChamberGameMode::PrepareWeight()
     WeightInstance->SetShouldBeVisible(false);
     WeightInstance->SetShouldBeLoaded(false);
     WeightInstance->SetIsRequestingUnloadAndRemoval(true);
-    WeightInstance = nullptr;
 }
 
 bool ATrainingChamberGameMode::EnterWeight(ATrainingChamberCharacter& Player)
