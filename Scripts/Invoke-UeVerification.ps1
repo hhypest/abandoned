@@ -20,6 +20,7 @@ param(
     [switch]$SeparateChamberDecor,
     [switch]$CompoundWeightShell,
     [switch]$PreloadWeightShell,
+    [switch]$InstanceWeightShellVisuals,
 
     [ValidateRange(1, 3600)]
     [int]$TimeoutSeconds = 180,
@@ -29,6 +30,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($SeparateChamberDecor -and $InstanceWeightShellVisuals) { throw 'Grouped shell visuals require instanced decor' }
 $testReserve = $PSBoundParameters.ContainsKey('MapPageReserve')
 $repo = Split-Path -Parent $PSScriptRoot
 $target = $PSCmdlet.ParameterSetName
@@ -334,7 +336,8 @@ function Invoke-Scenario($name, $definition, $profile) {
     if ($target -eq 'Editor') { $start.ArgumentList.Add('-game') }
     if ($testReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
     if ($SeparateChamberDecor) { $start.ArgumentList.Add('-NoInstancedChamberDecor') }
-    if ($CompoundWeightShell -or $PreloadWeightShell) { $start.ArgumentList.Add('-CompoundWeightShell') }
+    if ($InstanceWeightShellVisuals) { $start.ArgumentList.Add('-InstanceWeightShellVisuals') }
+    if ($CompoundWeightShell -or $PreloadWeightShell -or $InstanceWeightShellVisuals) { $start.ArgumentList.Add('-CompoundWeightShell') }
     if ($PreloadWeightShell) { $start.ArgumentList.Add('-PreloadWeightShell') }
     foreach ($arg in @($definition.Flag, '-vulkan', '-unattended',
                        '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])",
@@ -460,6 +463,9 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = 'Vulkan SM6 was not confirmed in the game log.'
     } elseif ($result.RendererMismatches.Count -gt 0) {
         $result.Reason = "Renderer profile was not confirmed: $($result.RendererMismatches -join ', ')"
+    } elseif ($InstanceWeightShellVisuals -and
+        @($lines -match 'Training chamber ready\. Weight,').Count -ne @($lines -match 'Weight shell grouped visuals=11$').Count) {
+        $result.Reason = 'Grouped visuals were not confirmed on each Weight visit.'
     } elseif ($result.FailureMarkers.Count -gt 0) {
         $result.Reason = $result.FailureMarkers[0]
     } elseif ($result.ExitCode -ne 0) {

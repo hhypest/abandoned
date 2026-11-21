@@ -331,10 +331,20 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         }
         UE_LOG(LogTrainingChamber, Log, TEXT("Weight shell mode=%s"), Shell ? TEXT("Compound") : TEXT("Separate"));
     }
+    const bool bInstanceShellVisuals = Shell && bInstanceDecor &&
+        FParse::Param(FCommandLine::Get(), TEXT("InstanceWeightShellVisuals"));
+    int32 GroupedSolidCount = 0;
     for (const FSceneBlock& Block : Layout->Room)
     {
         TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_SolidRoomBlock, Block.bCollision);
         TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_DecorativeRoomBlock, !Block.bCollision);
+        if (bInstanceDecor && (!Block.bCollision || bInstanceShellVisuals))
+        {
+            DecorGroups.FindOrAdd(Finishes.FindRef(Block.Finish)).Emplace(
+                FQuat::Identity, Block.Center, Block.Size / 100.0);
+            GroupedSolidCount += Block.bCollision ? 1 : 0;
+            continue;
+        }
         if (Shell && Block.bCollision)
         {
             auto* Visual = NewObject<UStaticMeshComponent>(Shell->GetOwner());
@@ -349,12 +359,6 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
             Abandoned::Scene::SetFinish({nullptr, Visual}, Block, Finishes);
             continue;
         }
-        if (bInstanceDecor && !Block.bCollision)
-        {
-            DecorGroups.FindOrAdd(Finishes.FindRef(Block.Finish)).Emplace(
-                FQuat::Identity, Block.Center, Block.Size / 100.0);
-            continue;
-        }
         const auto Parts = Abandoned::Blockout::SpawnBox(World, *Mesh, Block.Center, Block.Size,
             EComponentMobility::Static, Block.bCollision ? TEXT("BlockAll") : TEXT("NoCollision"));
         Abandoned::Scene::SetFinish(Parts, Block, Finishes);
@@ -363,6 +367,10 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     {
         ErrorMessage = TEXT("Could not create the training chamber decor.");
         return;
+    }
+    if (Shell)
+    {
+        UE_LOG(LogTrainingChamber, Log, TEXT("Weight shell grouped visuals=%d"), GroupedSolidCount);
     }
     if (bDecorLayout)
     {

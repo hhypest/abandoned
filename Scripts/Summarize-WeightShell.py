@@ -55,14 +55,22 @@ def preload_windows(frames, commands, enabled):
     return windows
 
 
-def report(run_id, folder, export, preload=False):
+def report(run_id, folder, export, preload=False, visuals=False):
     meta = json.loads((folder / "Run.json").read_text(encoding="utf-8-sig"))
     candidate = run_id.startswith("B")
-    compound = preload or candidate
+    compound = visuals or preload or candidate
+    async_load = visuals or (preload and candidate)
     shell = "Compound" if compound else "Separate"
     mode = ("Async" if candidate else "OnDemand") if preload else shell
+    if visuals:
+        mode = "Grouped" if candidate else "Individual"
+        markers = [line.rsplit("=", 1)[-1] for line in (folder / "Game.log").read_text(encoding="utf-8-sig").splitlines()
+                   if "Weight shell grouped visuals=" in line]
+        if markers != [("11" if candidate else "0")] * 16:
+            raise ValueError(f"Unexpected visual count in {run_id}")
     if (meta["WeightShell"] != shell or meta["ChamberDecor"] != "Instanced"
-            or meta.get("PreloadWeightShell", False) != (preload and candidate)):
+            or meta.get("PreloadWeightShell", False) != async_load
+            or meta.get("InstanceWeightShellVisuals", False) != (visuals and candidate)):
         raise ValueError(f"Wrong configuration in {run_id}")
     mem = profile["summarize"](folder)
     frames = profile["read_frames"](folder / "Saved/Profiling/CSV" / meta["Profile"])
@@ -70,7 +78,12 @@ def report(run_id, folder, export, preload=False):
     visits = list(budget["weight_rows"](folder, export))
     if len(commands) != 16 or len(visits) != 16:
         raise ValueError(f"Expected first visit and 15 repeats in {run_id}")
-    before = preload_windows(frames, commands, candidate) if preload else None
+    before = preload_windows(frames, commands, async_load) if preload or visuals else None
+    if visuals:
+        phases = gc["summarize"](folder / "Game.log", export, memory_tail="phases", outgoing_redraw="quiet")
+        stairs = {p["Arrival"]: p for p in phases if p["Chamber"] == "Stairs"}
+        if set(stairs) != set(range(2, 32, 2)):
+            raise ValueError(f"Incomplete return route in {run_id}")
     events = gc["read_trace"](export, {gc["ACTORS"], UPDATE, CULL, SHELL, LOOKUP, SOLID, "BoxComponent", PHYSICS})
     rows = []
     for pos, visit in zip(commands, visits):
@@ -116,6 +129,13 @@ def report(run_id, folder, export, preload=False):
                          SettledCpuP95Ms=p95([f["CPU"] for f in settled]),
                          SettledGpuP95Ms=p95([f["GPUTime"] for f in settled]),
                          **{k: visit[k] for k in budget["PHASES"] if k != "LoadMapMs"}))
+        if visuals:
+            # Registration includes the shared groups for decor and all grouped solid visuals.
+            previous_return = stairs[2 * (n - 1)] if n > 1 else None
+            rows[-1].update(DecorAndSolidVisualMs=visit["SolidBlocksMs"] + visit["TotalDecorMs"],
+                            GroupRegistrationMs=visit["DecorBatchMs"],
+                            PreviousReturnGCMs=previous_return["FullGCMs"] if previous_return else "",
+                            PreviousReturnPurged=previous_return["Objects"] if previous_return else "")
         if before is not None:
             rows[-1].update(before[n - 1])
             rows[-1].update(CommandToArrivalFrames=arrival - pos,
@@ -139,16 +159,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("captures", type=Path, help="A1.path, B1.path, ... and corresponding *.events.csv")
     parser.add_argument("output", type=Path, help="existing directory for visits and per-process peaks")
-    parser.add_argument("--preload", action="store_true", help="compare on-demand and async compound shell")
+    experiment = parser.add_mutually_exclusive_group()
+    experiment.add_argument("--visuals", action="store_true", help="compare separate and grouped visuals with async compound shell")
+    experiment.add_argument("--preload", action="store_true", help="compare on-demand and async compound shell")
     args = parser.parse_args()
     visits, processes = [], []
     for run in ORDER:
         folder = Path((args.captures / f"{run}.path").read_text(encoding="utf-8-sig").strip())
-        rows, process = report(run, folder, args.captures / f"{run}.events.csv", args.preload)
+        rows, process = report(run, folder, args.captures / f"{run}.events.csv", args.preload, args.visuals)
         visits.extend(rows)
         processes.append(process)
     if len({p["ExecutableSHA256"] for p in processes}) != 1:
         raise ValueError("Executable changed between runs")
     prefix = "A07-WeightShellPreload" if args.preload else "A07-WeightShell"
+    if args.visuals:
+        prefix = "A07-WeightShellVisual"
     write_csv(args.output / f"{prefix}Visits.csv", visits)
     write_csv(args.output / f"{prefix}Processes.csv", processes)
