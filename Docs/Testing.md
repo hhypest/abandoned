@@ -79,6 +79,12 @@ if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 
 Штатная кампания использует `OpenLevel`. Пилот проверяет жизненный цикл геометрии и безопасный момент переноса персонажа. Совместную готовность плиты, балласта и двери Weight, непрерывный проход через шлюз и стоимость полноценного перехода предстоит проверить на следующем этапе.
 
+После замены библиотеки устройств ФосТех в том же пакете проверены оба решения кампании, сброс плит, зажим двери и три стенда. Для повторения [приёмки 11 сценариев](Measurements/A02-MeshyBallast.json) выполните команду в PowerShell.
+
+```powershell
+./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Scenario WeightStreaming,Training,EntryCourse,EntryCheckpoint,EntryCourseAlternate,PlateBalance,ParallelCircuit,DoorClamp,Optics,Gravity,Portals -Resolution 1280x720 -Capture
+```
+
 ### Остальные сценарии и ручной запуск
 
 Для регрессии сквозного маршрута, сохранений и переноса DEV‑20 используйте отдельный процесс Vulkan для каждого сценария.
