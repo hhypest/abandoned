@@ -22,9 +22,9 @@ foreach ($file in 'Invoke-TrustedUnrealBuild.ps1','Invoke-UnrealPullRequestCheck
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination $control
 }
 # Program Files protects code and structural directories from the standard worker.
-# Each published build uses this worker's own UE installation and scratch data.
-foreach ($dir in 'Runs','Unreal') {
-    $path = (New-Item -ItemType Directory -Path (Join-Path $root $dir)).FullName
+# Provision engine sources and binaries as administrator. Only mutable UE and run data need write access.
+foreach ($dir in 'Runs','Unreal/Engine/Intermediate','Unreal/Engine/Saved') {
+    $path = [IO.Directory]::CreateDirectory((Join-Path $root $dir)).FullName
     & icacls.exe $path /grant:r "*$($worker.SID.Value):(OI)(CI)M"
     if ($LASTEXITCODE) { throw "Cannot grant worker access to $path." }
 }

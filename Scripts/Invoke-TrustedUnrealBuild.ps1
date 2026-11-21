@@ -19,8 +19,8 @@ if ($ExpectedWorkerSid) {
         throw 'Expected the dedicated, non-administrative Windows worker.'
     }
 }
-if (!$RunId) { $RunId = [guid]::NewGuid().ToString('N').Substring(0,12) }
-$run = (New-Item -ItemType Directory -Path (Join-Path $root $RunId)).FullName
+$directoryName = if ($RunId) { $RunId } else { [guid]::NewGuid().ToString('N').Substring(0,12) }
+$run = (New-Item -ItemType Directory -Path (Join-Path $root $directoryName)).FullName
 $profileDir = Join-Path $run 'Profile'
 $info = [Diagnostics.ProcessStartInfo]::new((Join-Path $PSHOME 'pwsh.exe'))
 $info.UseShellExecute = $false
