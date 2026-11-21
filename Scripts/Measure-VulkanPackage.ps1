@@ -7,6 +7,7 @@ param(
     [ValidateSet('Separate', 'Instanced')][string]$ChamberDecor,
     [ValidateSet('Separate', 'Compound')][string]$WeightShell,
     [switch]$PreloadWeightShell,
+    [switch]$InstanceWeightShellVisuals,
     [switch]$DisableChamberMeshReuse,
     [switch]$RedrawOutgoingChamber,
     [switch]$TraceDeferredGCTail,
@@ -24,6 +25,9 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($ChamberDecor -and !$TraceTravel) { throw 'ChamberDecor requires TraceTravel' }
 if ($WeightShell -and !$TraceTravel) { throw 'WeightShell requires TraceTravel' }
+if ($InstanceWeightShellVisuals -and ($WeightShell -ne 'Compound' -or $ChamberDecor -ne 'Instanced')) {
+    throw 'InstanceWeightShellVisuals requires compound collision and instanced decor'
+}
 if ($PreloadWeightShell -and ($WeightShell -ne 'Compound' -or $DisableChamberMeshReuse)) {
     throw 'PreloadWeightShell requires compound collision and chamber mesh reuse'
 }
@@ -83,6 +87,7 @@ if ($DisableChamberMeshReuse) { $start.ArgumentList.Add('-NoChamberMeshReuse') }
 if ($ChamberDecor -eq 'Separate') { $start.ArgumentList.Add('-NoInstancedChamberDecor') }
 if ($WeightShell -eq 'Compound') { $start.ArgumentList.Add('-CompoundWeightShell') }
 if ($PreloadWeightShell) { $start.ArgumentList.Add('-PreloadWeightShell') }
+if ($InstanceWeightShellVisuals) { $start.ArgumentList.Add('-InstanceWeightShellVisuals') }
 if ($measureReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
 if ($TestMapReserveTrim) { $start.ArgumentList.Add('-TestMapReserveTrim') }
 if ($TraceMapPages) { $start.ArgumentList.Add('-AuditMapPages') }
@@ -170,6 +175,14 @@ if ($Scenario -eq 'Travel') {
             throw "Weight shell differs from $WeightShell on the measured route"
         }
     }
+    if ($WeightShell -eq 'Compound') {
+        $expected = if ($InstanceWeightShellVisuals) { 11 } else { 0 }
+        $groups = @($log -match 'Weight shell grouped visuals=')
+        if (($InstanceWeightShellVisuals -or $groups.Count) -and
+            ($groups.Count -ne $WeightVisits -or @($groups -notmatch "visuals=$expected$").Count)) {
+            throw 'Unexpected grouped Weight shell visual count'
+        }
+    }
     if ($DisableRenderThreadLag -and !($log -match 'r\.OneFrameThreadLag = "0"')) {
         throw 'The render-thread lag control was not applied'
     }
@@ -200,6 +213,7 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     RedrawOutgoingChamber = [bool]$RedrawOutgoingChamber
     DisableChamberMeshReuse = [bool]$DisableChamberMeshReuse
     ChamberDecor = $ChamberDecor
+    InstanceWeightShellVisuals = [bool]$InstanceWeightShellVisuals
     WeightShell = $WeightShell
     PreloadWeightShell = [bool]$PreloadWeightShell
     TraceTravelTasks = [bool]$TraceTravelTasks
