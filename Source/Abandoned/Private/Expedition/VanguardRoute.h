@@ -31,9 +31,6 @@ public:
     AVanguardRouteGameMode();
     void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
     void HandleStartingNewPlayer_Implementation(APlayerController* Player) override;
-private:
-    UPROPERTY(Transient)
-    TObjectPtr<AVanguardSegment> Segment;
 };
 
 // The same route rules serve a dedicated Vanguard world and a streamed campaign segment.
@@ -46,12 +43,18 @@ public:
     AVanguardSegment();
 #if WITH_EDITOR
     UFUNCTION(BlueprintCallable, Category="Passage")
-    bool BakePassageRoom();
+    bool BakePassageRoom(bool bStation = false);
 #endif
     bool PollPassageAssets();
     void Prepare(Abandoned::Application::Expedition::VanguardDestination Destination, FString& Error);
     bool HasPassageSupport() const;
+    static AVanguardSegment* ActiveIn(UWorld& World);
     FVector PlayerStart() const;
+    bool StationLoadFailed() const { return bStationFailed; }
+#if WITH_DEV_AUTOMATION_TESTS
+    bool RevealStationForVerification();
+    const UBoxComponent* GetStationGate() const { return StationGate; }
+#endif
     void Activate();
     void Equip(AVanguardCharacter& Player);
     void Tick(float DeltaSeconds) override;
@@ -66,6 +69,16 @@ private:
     TSharedPtr<struct FStreamableHandle> AssetRequest;
     bool bRequestedAssets = false;
     bool bActive = false;
+    bool bStationFailed = false;
+    void PollStation();
+    bool StationReady() const;
+    bool EnterStation(AVanguardCharacter& Player);
+    UPROPERTY(Transient)
+    TObjectPtr<class ULevelStreamingDynamic> StationInstance;
+    UPROPERTY(Transient)
+    TObjectPtr<AVanguardSegment> IncomingStation;
+    UPROPERTY(Transient)
+    TObjectPtr<UBoxComponent> StationGate;
     UPROPERTY(Transient)
     TArray<TObjectPtr<UBoxComponent>> Ledges;
 #if WITH_DEV_AUTOMATION_TESTS

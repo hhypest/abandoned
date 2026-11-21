@@ -63,12 +63,12 @@ bool FitsMesh(UStaticMeshComponent* Visual, UStaticMesh* Mesh, FVector FitSize, 
     return true;
 }
 
-void MovePassageAirlock(UBoxComponent& Door, const UVanguardPassageLayout& Passage, const FVector& Position, float DeltaSeconds)
+void MovePassageAirlock(UBoxComponent& Door, const FSceneBlock& Leaf, const FVector& Position, float DeltaSeconds, bool bReady = true)
 {
-    const bool bNearDoor = FMath::Abs(Position.X - Passage.Door.Center.X) < 385.0 &&
-        FMath::Abs(Position.Y - Passage.Door.Center.Y) < 135.0;
+    const bool bNearDoor = FMath::Abs(Position.X - Leaf.Center.X) < 385.0 &&
+        FMath::Abs(Position.Y - Leaf.Center.Y) < 135.0;
     FVector DoorPosition = Door.GetComponentLocation();
-    const double TargetZ = Passage.Door.Center.Z + (bNearDoor ? VanguardAirlockTravelCm : 0.0);
+    const double TargetZ = Leaf.Center.Z + (bNearDoor && bReady ? VanguardAirlockTravelCm : 0.0);
     const double DoorStep = 340.0 * DeltaSeconds;
     DoorPosition.Z += FMath::Clamp(TargetZ - DoorPosition.Z, -DoorStep, DoorStep);
     Door.SetWorldLocation(DoorPosition, true);
@@ -111,7 +111,7 @@ void AVanguardRouteGameMode::InitGame(const FString& MapName, const FString& Opt
     {
         Destination.Entry = RouteEntry::Direct;
     }
-    Segment = GetWorld()->SpawnActor<AVanguardSegment>();
+    auto* Segment = GetWorld()->SpawnActor<AVanguardSegment>();
     if (!Segment) { ErrorMessage = TEXT("Could not create Vanguard segment."); return; }
     Segment->Prepare(Destination, ErrorMessage);
     if (ErrorMessage.IsEmpty()) { Segment->Activate(); }
@@ -129,12 +129,24 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
     const UVanguardPassageLayout* Passage = bRadiation ? GetDefault<UVanguardRadiationLayout>() : GetDefault<UVanguardPassageLayout>();
     const auto* Station = GetDefault<UVanguardStationLayout>();
     Layout = bAtStation ? static_cast<const UVanguardRouteLayout*>(Station) : Passage;
-    if (GetLevel() != GetWorld()->PersistentLevel)
+    if (GetLevel() != GetWorld()->PersistentLevel && bAtStation)
+    {
+        auto* Placed = DuplicateObject<UVanguardStationLayout>(Station, this);
+        const FVector Offset = GetActorLocation();
+        Placed->Spawn += Offset;
+        Placed->SupplyCabinet.Center += Offset;
+        for (auto& Block : Placed->Room) { Block.Center += Offset; }
+        for (auto& Light : Placed->Lights) { Light.Position += Offset; }
+        Station = Placed;
+        Layout = Placed;
+    }
+    else if (GetLevel() != GetWorld()->PersistentLevel)
     {
         auto* Placed = DuplicateObject<UVanguardPassageLayout>(Passage, this);
         const FVector Offset = GetActorLocation();
         Placed->Spawn += Offset;
         Placed->Door.Center += Offset;
+        Placed->StationGate.Center += Offset;
         Placed->FrameFit.Center += Offset;
         Placed->ExitZone.Center += Offset;
         for (auto& Block : Placed->Room) { Block.Center += Offset; }
@@ -152,7 +164,7 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
         Layout->Room.ContainsByPredicate([](const FSceneBlock& Block) { return !Block.IsValid(); }) ||
         Layout->Lights.ContainsByPredicate([](const FSceneLight& Light) { return !Light.IsValid(); }) ||
         Layout->Finishes.ContainsByPredicate([](const FSceneFinish& Finish) { return !Finish.IsValid(); }) ||
-        (bAtStation ? !Station->SupplyCabinet.IsValid() : (!Passage->Door.IsValid() || !Passage->ExitZone.IsValid() ||
+        (bAtStation ? !Station->SupplyCabinet.IsValid() : (!Passage->Door.IsValid() || !Passage->ExitZone.IsValid() || !Passage->StationGate.IsValid() || !Passage->StationGate.bCollision ||
             (Passage->bEnableMantle && (Passage->MantleLedges.IsEmpty() ||
                 Passage->MantleLedges.ContainsByPredicate([](const FSceneBlock& Ledge) { return !Ledge.IsValid() || !Ledge.bCollision; }))) ||
             !Passage->FrameFit.IsValid() || Passage->FrameRotation.ContainsNaN() || Passage->LeafRotation.ContainsNaN())))
@@ -236,6 +248,7 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
         }
         const auto DoorVisual = SpawnBlock(Passage->Door, EComponentMobility::Movable);
         Door = DoorVisual.Collision;
+        StationGate = SpawnBlock(Passage->StationGate, EComponentMobility::Movable).Collision;
         const bool bLeaf = FitsMesh(DoorVisual.Visual, Passage->LeafMesh.LoadSynchronous(), Passage->Door.Size,
             Passage->LeafRotation);
 
@@ -257,7 +270,7 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
             bFrame ? TEXT("loaded") : TEXT("fallback"), bLeaf ? TEXT("loaded") : TEXT("fallback"),
             bFloor ? TEXT("loaded") : TEXT("fallback"), bWall ? TEXT("loaded") : TEXT("fallback"));
     }
-    if (bAtStation ? !SupplyCabinet : !Door)
+    if (bAtStation ? !SupplyCabinet : (!Door || !StationGate))
     {
         ErrorMessage = TEXT("Could not spawn the Vanguard route device.");
         return;
@@ -294,6 +307,7 @@ void AVanguardSegment::Activate()
 
 void AVanguardRouteGameMode::HandleStartingNewPlayer_Implementation(APlayerController* Player)
 {
+    auto* Segment = AVanguardSegment::ActiveIn(*GetWorld());
     if (!Player || !Segment) { return; }
     RestartPlayerAtTransform(Player, FTransform(FRotator::ZeroRotator, Segment->PlayerStart()));
     Player->SetInputMode(FInputModeGameOnly());
@@ -376,8 +390,12 @@ void AVanguardSegment::Tick(float DeltaSeconds)
         const auto& Passage = *CastChecked<UVanguardPassageLayout>(Layout.Get());
         Player->UpdatePassageMovement(*RouteState, Passage.bEnableMantle, DeltaSeconds);
         const FVector Position = Player->GetActorLocation();
-        MovePassageAirlock(*Door, Passage, Position, DeltaSeconds);
-        if (const auto Transition = RouteState->AdvancePassage(Position, DeltaSeconds))
+        MovePassageAirlock(*Door, Passage.Door, Position, DeltaSeconds);
+        if (Position.X >= Passage.StationGate.Center.X - 2000.0) { PollStation(); }
+        const bool bReady = StationReady();
+        MovePassageAirlock(*StationGate, Passage.StationGate, Position, DeltaSeconds, bReady);
+        const bool bCanCross = bReady && StationGate->GetComponentLocation().Z >= Passage.StationGate.Center.Z + VanguardAirlockTravelCm - 1.0;
+        if (const auto Transition = RouteState->AdvancePassage(Position, DeltaSeconds, bCanCross))
         {
 #if WITH_DEV_AUTOMATION_TESTS
             if (Transition->bDoseLimitReached && RadiationCheck.IsValid())
@@ -388,6 +406,11 @@ void AVanguardSegment::Tick(float DeltaSeconds)
                 }
             }
 #endif
+            if (const auto* Stop = std::get_if<VanguardDestination>(&Transition->Destination); Stop && Stop->Stop == VanguardStop::Station)
+            {
+                EnterStation(*Player);
+                return;
+            }
             Player->CloseWristTerminal();
             TravelToWorld(this, Transition->Destination);
             return;
@@ -448,6 +471,11 @@ void AVanguardCharacter::ResetRadiation()
 {
     if (AVanguardSegment* Mode = Segment.Get())
     {
+        if (Mode->bStationFailed)
+        {
+            Mode->bStationFailed = false;
+            return;
+        }
         if (const auto Recovery = Mode->RouteState->RestartRadiationPassage())
         {
             CloseWristTerminal();

@@ -170,6 +170,8 @@ bool ATrainingChamberGameMode::EnterNextChamber(ATrainingChamberCharacter& Playe
         bReachedExit = false;
         Passage->Activate();
         Passage->Equip(*Suit);
+        ActiveInstance = nullptr;
+        Passage = nullptr;
         UE_LOG(LogChamberAirlock, Display, TEXT("Balance exit crossed: passage controls and suit HUD active in the same world."));
         return true;
     }

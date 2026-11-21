@@ -19,7 +19,7 @@ class UVanguardRouteVerification final : public UActorComponent
 public:
     static UVanguardRouteVerification* AttachIfRequested(AVanguardSegment& Route, const UVanguardRouteLayout& Layout, UBoxComponent* Door);
     static bool AllowsResupplySave();
-    void CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds);
+    void CheckStep(AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds);
     void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
@@ -30,6 +30,9 @@ private:
     FVerificationKeyPress FlashlightKey;
     TWeakObjectPtr<UVanguardMantleVerification> MantleCheck;
     TWeakObjectPtr<UBoxComponent> Airlock;
+    FVector ClosedStationGate = FVector::ZeroVector;
+    float WaitingAtStation = 0;
+    bool bRevealedStation = false;
     FVector ClosedDoor = FVector::ZeroVector;
     double SpawnZ = 0.0;
     float Elapsed = 0.0f;

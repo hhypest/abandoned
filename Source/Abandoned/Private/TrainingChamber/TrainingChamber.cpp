@@ -263,10 +263,13 @@ void ATrainingChamberGameMode::ActivateChamber()
 
 void ATrainingChamberGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
 {
-    if (IsValid(NewPlayer) && Course.Current == Segment::Passage && IsValid(Passage))
+    if (IsValid(NewPlayer) && Course.Current == Segment::Passage)
     {
-        RestartPlayerAtTransform(NewPlayer, FTransform(FRotator::ZeroRotator, Passage->PlayerStart()));
-        if (auto* Suit = Cast<AVanguardCharacter>(NewPlayer->GetPawn())) { Passage->Equip(*Suit); }
+        if (auto* Active = AVanguardSegment::ActiveIn(*GetWorld()))
+        {
+            RestartPlayerAtTransform(NewPlayer, FTransform(FRotator::ZeroRotator, Active->PlayerStart()));
+            if (auto* Suit = Cast<AVanguardCharacter>(NewPlayer->GetPawn())) { Active->Equip(*Suit); }
+        }
         return;
     }
     if (IsValid(NewPlayer) && IsValid(GetDoor()) && IsValid(GetPlate()))
