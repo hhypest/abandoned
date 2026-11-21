@@ -1,0 +1,158 @@
+:root {
+  color-scheme: dark;
+  --body: #0d1011; --surface: #181c1c; --raised: #242927;
+  --ink: #edece5; --soft: #b2b6ad; --line: #454b44; --accent: #ffb35e;
+  --on-accent: #24190b; --edge: #5e645b;
+  --sans: "Barlow","Bahnschrift","Segoe UI",Arial,sans-serif;
+  --mono: "IBM Plex Mono",Consolas,"Courier New",monospace;
+}
+* {box-sizing:border-box}
+body {margin:0; min-height:100vh; background:var(--body); color:var(--ink); font:16px/1.45 var(--sans)}
+button,select,input {font:inherit}
+button,a,select {touch-action:manipulation}
+button,select {color:var(--ink); background:var(--raised); border:1px solid var(--line); border-radius:0}
+button {cursor:pointer; min-height:42px; padding:8px 17px}
+button:hover:not(:disabled), select:hover, a:hover {border-color:var(--accent); color:var(--accent)}
+button:disabled {cursor:default; opacity:.48}
+:focus-visible {outline:3px solid var(--accent); outline-offset:3px}
+button.primary {background:var(--accent); border-color:var(--accent); color:var(--on-accent); font-weight:650}
+button.primary:hover {background:var(--ink); color:var(--on-accent); border-color:var(--ink)}
+button b {font:21px var(--sans); margin-left:20px}
+h1,h2,p,figure,dl,dd {margin:0}
+.sr-only {position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
+.panel {position:relative; max-width:1190px; margin:30px auto 0; padding:0 34px; border:1px solid var(--edge); background:var(--surface)}
+.topbar,.runtime-footer,.module-heading,.topbar>div,.brand,.live-state,.actions .aux,.dialog-head {display:flex; align-items:center}
+.topbar {border-bottom:1px solid var(--line); padding:20px 0; justify-content:space-between; gap:16px}
+.topbar>div {gap:22px; flex-wrap:wrap}
+.brand {gap:10px; font-size:29px; font-weight:700; letter-spacing:-1.8px; line-height:1}
+.ft {position:relative; display:inline-block; width:32px; height:24px; flex:none; background:currentColor; clip-path:polygon(0 0,100% 0,92% 23%,51% 23%,46% 38%,77% 38%,70% 60%,39% 60%,25% 100%,0 100%,25% 23%,0 23%)}
+.system-name,.kicker,.live-state,.module-heading,.runtime-footer,.plot figcaption,.repeat,.review-name {font-family:var(--mono); font-size:12px}
+.system-name {padding-left:20px; border-left:1px solid var(--line); color:var(--soft)}
+.live-state {gap:9px; color:var(--accent)}
+.live-state i {height:8px; width:8px; background:currentColor; border-radius:50%}
+.kicker,.module-heading h2,.runtime-footer>span:first-child {font-weight:600; letter-spacing:.12em; text-transform:uppercase}
+.kicker {color:var(--accent)}
+.module-heading {justify-content:space-between; gap:12px}
+.module-heading h2 {font-size:12px}
+.module-heading span {color:var(--accent)}
+.results dl>div {display:flex; justify-content:space-between; gap:13px; padding:15px 0; border-bottom:1px solid var(--line)}
+.results dd {font-family:var(--mono); font-size:13px; color:var(--ink); white-space:nowrap}
+.results dt {color:var(--soft)}
+.tick {display:inline-block; margin-right:10px; color:var(--accent); font:14px var(--mono)}
+.repeat,.aux button {background:transparent; color:var(--soft); border:0; padding-left:0; padding-right:0; min-height:40px}
+.actions .aux {gap:28px}
+.start-actions {display:flex; flex-wrap:wrap; gap:8px}
+.start-actions button {display:flex; align-items:center; justify-content:space-between; min-height:48px}
+.slot-info {margin:9px 0 2px; min-height:20px; font-size:13px; color:var(--soft)}
+.runtime-footer {gap:15px; justify-content:space-between; padding:14px 0; border-top:1px solid var(--line); color:var(--soft); font-size:10px}
+kbd {font:inherit; border:1px solid var(--line); padding:1px 4px; margin-left:8px}
+.plot {isolation:isolate; position:relative; display:grid; place-items:center; align-self:stretch; overflow:hidden; min-width:0}
+.plot img {display:block; margin:auto; object-fit:contain; position:relative; z-index:1; width:100%; height:100%; max-height:315px}
+.plot figcaption {position:absolute; bottom:9px; left:12px; color:var(--soft); font-size:10px; z-index:2}
+#review {--accent:#fcdda4; --line:#51585b; --soft:#b9bdc1; --ink:#f0f0ee; --raised:#202526; color-scheme:dark; max-width:1190px; margin:13px auto; padding:6px 4px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; color:var(--soft); font:13px var(--sans)}
+#review nav {display:flex; gap:4px; flex-wrap:wrap}
+#review a {display:inline-block; text-decoration:none; color:#bfc3c1; border:1px solid transparent; padding:6px 10px}
+#review a[aria-current] {color:#f4f3ec; border:1px solid #676e6d}
+#review a:hover {color:#fcdda4}
+#review label {margin-left:auto}
+#review select {padding:5px; margin-left:5px}
+dialog {width:min(440px,calc(100vw - 36px)); color:var(--ink); background:var(--surface); border:1px solid var(--accent); padding:26px 30px 30px}
+dialog::backdrop {background:#0e1010bf}
+.dialog-head {justify-content:space-between; margin-bottom:16px; gap:8px}
+.dialog-head button {min-width:36px; min-height:36px; padding:0; font-size:22px}
+dialog h2 {font-size:28px; line-height:1.1; margin:14px 0}
+dialog p {margin:12px 0}
+dialog .note {font-size:13px; color:var(--soft); margin:12px 0 20px}
+.setting {display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; border-top:1px solid var(--line); padding:14px 0}
+.setting select {padding:4px}
+.setting input {width:20px; height:20px; accent-color:var(--accent)}
+.offline {min-height:580px; display:grid; align-content:center; justify-items:center; gap:24px}
+.offline h1 {text-align:center; font-size:42px}
+[data-theme=stand] body {background:radial-gradient(ellipse at 70% 30%,#383d36,#121515 75%)}
+[data-theme=stand] .panel {border-top:5px solid #8c9283; background:linear-gradient(125deg,#222822,#141819 88%); box-shadow:0 16px 54px #0007}
+.stand-body {display:grid; grid-template-columns:1fr 1.02fr; gap:24px; padding:28px 0 25px}
+.intro h1 {margin:16px 0 12px; font-weight:650; font-size:clamp(46px,5.8vw,83px); letter-spacing:-.065em; line-height:.91}
+.lead {color:var(--soft); font-size:18px}
+.intro .actions {margin-top:25px}
+.assembly {border:1px solid var(--line); display:grid; background:radial-gradient(ellipse at 62% 45%,#45483b55,transparent 68%), repeating-linear-gradient(0deg,transparent 0 31px,#82887915 31px 32px),repeating-linear-gradient(90deg,transparent 0 31px,#82887915 31px 32px)}
+.assembly .plot {padding:15px 45px 25px; min-height:310px}
+.assembly .plot:before,.assembly .plot:after {position:absolute; left:12px; content:""; width:25px; height:17px; border-top:2px solid #a4a796; border-left:2px solid #a4a796; top:12px}
+.assembly .plot:after {top:auto; left:auto; bottom:12px; right:12px; transform:rotate(180deg)}
+.assembly .plot img {filter:drop-shadow(0 11px 10px #0006)}
+[data-theme=stand] .results {padding:17px 0 9px; border-top:1px solid var(--line)}
+[data-theme=stand] .results dl {display:grid; grid-template-columns:repeat(3,1fr); gap:23px}
+[data-theme=stand] .results dl>div {padding:10px 0 6px; border:0}
+[data-theme=stand] .results .repeat {min-height:29px}
+[data-theme=passport] {--surface:#eae7dc; --raised:#e0ddd2; --ink:#222725; --soft:#535953; --line:#a3a69c; --edge:#a0a095; --accent:#933f32; --on-accent:#fff6e5}
+[data-theme=passport] body {background:radial-gradient(ellipse at 52% 12%,#485047,#252c29)}
+[data-theme=passport] .panel {color-scheme:light; border-left:15px solid #b3b3a4; box-shadow:inset 3px 0 0 #d3d1c2, 0 16px 54px #0004; padding:0 36px; background:linear-gradient(90deg,#d6d4c7,#eeebdf 5%,#e9e6da 99%)}
+[data-theme=passport] .topbar {border-bottom:3px double #595d55}
+[data-theme=passport] .live-state i {border-radius:0; transform:rotate(45deg)}
+.paper-heading {padding:19px 0 13px; border-bottom:1px solid var(--line); position:relative}
+.paper-heading h1 {font:normal clamp(43px,5vw,72px)/1.12 Cambria,Georgia,serif; margin:6px 0 0; letter-spacing:-.04em}
+.paper-heading p {margin:5px 0 0; color:var(--soft)}
+.paper-heading p span {color:var(--accent); padding:0 6px}
+.paper-body {display:grid; grid-template-columns:1fr 1.1fr; gap:28px; padding:15px 0}
+.paper-figure {display:grid; border:1px solid var(--line); background:repeating-linear-gradient(0deg,transparent 0 23px,#747e6e19 23px 24px),repeating-linear-gradient(90deg,transparent 0 23px,#747e6e19 23px 24px)}
+.paper-figure .plot {padding:8px 0 22px}
+.paper-figure img {height:205px; width:auto; max-width:95%; filter:grayscale(1) contrast(1.15); mix-blend-mode:multiply}
+.stamp {font:700 clamp(18px,2vw,30px)/1 var(--sans); text-transform:uppercase; letter-spacing:.035em; color:var(--accent); border:3px double var(--accent); padding:8px 12px 6px; display:inline-block; transform:rotate(-2deg); margin:4px 0 16px}
+.paper-data .results dl>div {padding:8px 0}
+.paper-data .repeat {min-height:32px}
+[data-theme=passport] .actions {border-top:2px solid var(--ink); padding:12px 0 8px; display:grid; grid-template-columns:1fr auto; align-items:start}
+[data-theme=passport] .actions .slot-info {grid-column:1; grid-row:2}
+[data-theme=passport] .actions .aux {grid-row:1; grid-column:2}
+[data-theme=passport] button.primary:hover {background:#333c35; color:white}
+[data-theme=passport] dialog {color-scheme:light}
+[data-theme=visor] {--surface:#101e29; --raised:#172c37; --ink:#f0f4ef; --soft:#b0c3c5; --line:#46606a; --edge:#526b74; --accent:#8ce0da; --on-accent:#102e33}
+[data-theme=visor] body {background:radial-gradient(ellipse at 47% 32%,#253946,#0c141b 85%)}
+[data-theme=visor] .panel {border-radius:22px; background:linear-gradient(120deg,#1a2a35,#101d28 65%); padding:0 32px; box-shadow:inset 0 1px 1px #a0c0c344,0 18px 45px #060c13aa}
+.visor-body {display:grid; grid-template-columns:minmax(0,1.45fr) minmax(255px,.85fr); gap:30px; padding:25px 0}
+.visor-screen {position:relative; overflow:hidden; border:1px solid #4b6975; border-radius:26% 18% 22% 18% / 14% 13% 15% 14%; background:radial-gradient(ellipse at 50% 54%,#244957 2%,#143342 49%,#0b1f2b 73%); min-height:410px; padding:20px 18px 12px; text-align:center; display:grid; grid-template-rows:auto auto 1fr auto; box-shadow:inset 0 0 0 5px #122532, inset 0 0 0 6px #385260}
+.visor-screen h1 {font-weight:400; font-size:clamp(28px,3vw,42px); letter-spacing:-.045em; line-height:1.1; margin:5px 0}
+.visor-screen .plot {min-height:205px}
+.visor-screen .plot img {height:235px; width:auto; max-width:67%; filter:grayscale(.95) sepia(.35) hue-rotate(135deg) saturate(1.2); opacity:.9}
+.scan-ring {display:none}
+.visor-screen .scan-ring {position:absolute; display:block; width:64%; max-width:315px; aspect-ratio:1; border:1px dashed #7bb6bc99; border-radius:50%; transform:scaleY(.88)}
+.visor-screen .scan-ring:before,.visor-screen .scan-ring:after {content:""; position:absolute; border:1px solid #69939a7a; inset:7%; border-radius:50%}
+.visor-screen .scan-ring:after {inset:-7%; border-color:#466e79}
+.visor-screen .plot-axes {position:absolute; width:100%; height:1px; background:repeating-linear-gradient(90deg,#a2d7d588 0 5px, transparent 5px 10px)}
+.visor-screen .plot figcaption {position:relative; bottom:auto; left:auto; text-align:center; margin:3px 0 5px; color:#bbd7d8}
+.visor-verdict {justify-self:center; color:var(--accent); line-height:1.1; padding:5px 12px; border-top:1px solid #6a939c; font-size:15px}
+.visor-side {align-self:center}
+.visor-side .results dl>div {padding:10px 0}
+.visor-side .actions {margin-top:14px}
+.visor-side .start-actions {display:grid; grid-template-columns:1fr}
+.visor-side .actions .aux {justify-content:space-between}
+.scanning .plot {opacity:.65}
+@media (min-width:1500px) { .panel {margin-top:5vh} }
+@media (max-width:1250px) { .panel {margin:18px 24px 0} #review {margin:8px 24px} }
+@media (max-width:800px) {
+  .panel {margin:10px 12px 0; padding:0 18px} #review {margin:5px 12px}
+  .topbar {padding:14px 0} .system-name {display:none}
+  .stand-body {gap:15px; grid-template-columns:1fr .9fr}
+  .assembly .plot {padding:12px 5px 23px}
+  [data-theme=stand] .results dl {gap:9px}
+  [data-theme=stand] .results dl>div {display:block}
+  [data-theme=stand] .results dd {margin-left:24px}
+  [data-theme=passport] .panel,[data-theme=visor] .panel {padding:0 18px}
+  .visor-body {gap:18px; grid-template-columns:1fr 240px}
+  #review label {margin-left:0}
+}
+@media (max-width:620px) {
+  .panel {margin:6px 5px 0}
+  .topbar>div {gap:0} .brand {font-size:23px} .live-state {font-size:10px}
+  .stand-body,.paper-body,.visor-body {grid-template-columns:1fr; padding:15px 0; gap:15px}
+  .intro h1 {font-size:49px; margin:12px 0} .intro .actions {margin-top:16px}
+  .assembly .plot {min-height:175px} .assembly img {height:160px; width:auto}
+  .runtime-footer {flex-wrap:wrap; padding:10px 0}
+  [data-theme=stand] .results dl {display:block}
+  [data-theme=stand] .results dl>div {display:flex}
+  .paper-heading h1 {font-size:42px}
+  .paper-figure img {height:148px}
+  [data-theme=passport] .actions {display:block} .paper-data {padding:0 2px}
+  .visor-screen {min-height:300px} .visor-screen .plot img {height:172px}
+  .visor-screen .plot {min-height:170px} .visor-side .start-actions {grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+  #review {gap:8px; padding:4px} #review nav {gap:1px} #review a {padding:5px}
+  dialog {padding:18px 20px}.offline {min-height:390px}
+}
