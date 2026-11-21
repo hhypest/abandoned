@@ -71,9 +71,12 @@ bool APuzzleCube::Initialize(EPuzzleCubeType Type)
 void APuzzleCube::BeginPlay()
 {
     Super::BeginPlay();
-    if (bPlacedBallast && !Initialize(PlacedType))
+    if (bPlacedBallast)
     {
-        UE_LOG(LogTemp, Error, TEXT("Placed ballast has no matching FosTech mesh."));
+        // The serialized component mesh loads with the hidden sublevel package.
+        UStaticMesh* Mesh = Visual->GetStaticMesh();
+        if (Mesh && IsValidType(PlacedType)) { Initialize(PlacedType, *Mesh); }
+        else { UE_LOG(LogTemp, Error, TEXT("Placed ballast has no valid type or mesh.")); }
     }
 }
 
