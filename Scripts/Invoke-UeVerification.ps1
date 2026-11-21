@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Package')]
     [string]$PackageRoot,
 
-    [ValidateSet('WeightStreaming', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
+    [ValidateSet('WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
                  'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
@@ -147,12 +147,24 @@ $scenarios = @{
         Chambers = @('Balance'); Success = $fallsSuccess + 'Vanguard injury breath decoded in audio mixer.'
         RealTime = $true
     }
+    WeightAirlock = @{
+        Map = $entry; Flag = '-VerifyWeightAirlock'; Chambers = @('Button', 'Weight', 'Button', 'Weight')
+        SeedCheckpoint = 'Button'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Weight'
+        Success = @('Airlock visit 1: solved circuit held closed during load.',
+                    'Airlock visit 2: solved circuit held closed during load.',
+                    'Airlock visit 1: open gate, checkpoint still Button.',
+                    'Airlock visit 1: reached streamed Weight, checkpoint and archive confirmed.',
+                    'Airlock visit 2: open gate, checkpoint still Button.',
+                    'Airlock visit 2: reached streamed Weight, checkpoint and archive confirmed.')
+    }
     WeightStreaming = @{
         Map = $entry; Flag = '-VerifyWeightStreaming'; Chambers = @('Stairs')
         SeedCheckpoint = 'Stairs'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Stairs'
         Success = @('Weight streaming cancelled before visibility; site clear.',
                     'Weight streaming visit 1: player landed on Weight and returned to Stairs.',
                     'Weight streaming visit 2: player landed on Weight and returned to Stairs.',
+                    'Weight visit 1: plate, switch and door drive removed.',
+                    'Weight visit 2: plate, switch and door drive removed.',
                     'Weight visit 1: removed 4 verified ballast bodies.',
                     'Weight visit 2: removed 4 verified ballast bodies.',
                     'Weight streaming verification passed: two removals, site clear.')
@@ -162,7 +174,7 @@ $scenarios = @{
         Flag = '-VerifyEntryCourse'
         CaptureFlag = '-CaptureVanguard'
         Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
-        QuietChambers = @('Button', 'Weight', 'Balance')
+        QuietChambers = @('Button', 'Balance')
         Success = $courseSuccess
     }
     EntryCourseAlternate = @{
@@ -171,7 +183,7 @@ $scenarios = @{
         ExtraFlag = @('-VerifyEntryAlternatePlate', '-VerifyEntryAlternateWeight')
         CaptureFlag = '-CaptureEntryCourse'
         Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
-        QuietChambers = @('Button', 'Weight', 'Balance')
+        QuietChambers = @('Button', 'Balance')
         Success = $courseSuccess + @('Entry alternate solution: cube snapped to plate B.', 'alternate solution assembled, 10 + 5 + 5 kg.')
     }
     EntryCheckpoint = @{
@@ -403,7 +415,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         LeakEntries = @($lines -match 'LogVulkanRHI: Warning:\s+\*\* LEAK ').Count
     }
     $checkAllocatorOnExit = $target -eq 'Package' -and $name -in @(
-        'WeightStreaming', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
+        'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
     )
     $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6')
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1

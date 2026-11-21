@@ -4,8 +4,12 @@
 
 bool Abandoned::FosTech::SetVisual(UStaticMeshComponent* Visual, const TCHAR* Path, double Height, double Yaw)
 {
+    return FitVisual(Visual, LoadObject<UStaticMesh>(nullptr, Path), Height, Yaw);
+}
+
+bool Abandoned::FosTech::FitVisual(UStaticMeshComponent* Visual, UStaticMesh* Mesh, double Height, double Yaw)
+{
     if (!Visual) { return false; }
-    UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, Path);
     if (!Mesh || Mesh->GetBounds().BoxExtent.Z <= UE_SMALL_NUMBER) { return false; }
     const auto Bounds = Mesh->GetBounds();
     const double Scale = Height / (2.0 * Bounds.BoxExtent.Z);

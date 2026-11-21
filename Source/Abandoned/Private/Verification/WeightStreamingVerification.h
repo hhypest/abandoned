@@ -5,6 +5,8 @@
 
 class ULevelStreamingDynamic;
 class APuzzleCube;
+class AChamberAssembly;
+class UBoxComponent;
 
 UCLASS()
 class UWeightStreamingVerification final : public UActorComponent
@@ -22,6 +24,8 @@ private:
     EPhase Phase = EPhase::Start;
     TWeakObjectPtr<ULevelStreamingDynamic> Instance;
     TArray<TWeakObjectPtr<APuzzleCube>> Ballast;
+    TWeakObjectPtr<AChamberAssembly> Assembly;
+    TArray<TWeakObjectPtr<UBoxComponent>> DeviceBodies;
     FTransform Home;
     int32 CompletedVisits = 0;
     bool bCancelledFirstRequest = false;

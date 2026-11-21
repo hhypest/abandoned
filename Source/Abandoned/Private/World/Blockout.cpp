@@ -24,9 +24,11 @@ void ApplyGravity(UWorld& World)
 }
 
 FBox SpawnBox(UWorld& World, UStaticMesh& Cube, FVector Center, FVector Size,
-    EComponentMobility::Type Mobility, FName CollisionProfile)
+    EComponentMobility::Type Mobility, FName CollisionProfile, AActor* Owner)
 {
-    AActor* Actor = World.SpawnActor<AActor>();
+    FActorSpawnParameters Params;
+    Params.Owner = Owner;
+    AActor* Actor = World.SpawnActor<AActor>(Params);
     if (!ensure(Actor))
     {
         return {};

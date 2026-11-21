@@ -7,7 +7,7 @@
 
 void ATrainingChamberGameMode::ObserveHints(const ATrainingChamberCharacter& Player, float DeltaSeconds)
 {
-    if (!IsValid(HintTerminal))
+    if (!IsValid(Devices->HintTerminal))
     {
         return;
     }
@@ -27,7 +27,7 @@ void ATrainingChamberGameMode::ObserveHints(const ATrainingChamberCharacter& Pla
     }
     else if (Layout->bRequiresStack)
     {
-        if (Cubes.ContainsByPredicate([](const APuzzleCube* Cube)
+        if (Devices->Cubes.ContainsByPredicate([](const APuzzleCube* Cube)
             { return IsValid(Cube) && Cube->GetStackMass() > Cube->GetMassKg(); }))
         {
             CorrectNodes |= BallastStackHintNode;
