@@ -1,0 +1,231 @@
+{
+  "Commit": "10f06e4f92cae4c328f3c68109eb9d801c1c3553",
+  "TrackedChanges": false,
+  "Target": "Package",
+  "Unreal": "5.7.4",
+  "Rhi": "VULKAN_SM6",
+  "Resolution": "1280x720",
+  "ExecutableSha256": "A04BB1F630176B3F14219412114422C939B15CA12A4B4AEAA65B36FA642EF076",
+  "Date": "2026-11-22",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "FixedStepFps": 60,
+  "Scenarios": [
+    {
+      "Name": "ButtonAirlockIncomplete",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Stairs"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "ButtonAirlock",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Stairs",
+        "Button",
+        "Stairs",
+        "Button"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "WeightAirlock",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Button",
+        "Weight",
+        "Button",
+        "Weight"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "WeightStreaming",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Stairs"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourse",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Stairs",
+        "Button",
+        "Weight",
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourseAlternate",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Stairs",
+        "Button",
+        "Weight",
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCheckpoint",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Weight",
+        "Balance"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "ParallelCircuit",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "Dev20",
+      "Outcome": "Passed",
+      "Chambers": [
+        "Button",
+        "Weight"
+      ],
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "DoorClamp",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    }
+  ],
+  "Airlocks": {
+    "ButtonAirlock": {
+      "SuccessMarkers": [
+        "Airlock visit 1: solved circuit held closed during load.",
+        "Airlock visit 2: solved circuit held closed during load.",
+        "Airlock visit 1: open gate, checkpoint still Stairs.",
+        "Airlock visit 1: reached streamed Button, checkpoint and archive confirmed.",
+        "Airlock visit 2: open gate, checkpoint still Stairs.",
+        "Airlock visit 2: reached streamed Button, checkpoint and archive confirmed."
+      ],
+      "SavedOnExit": {
+        "version": 2,
+        "checkpoint": "Button",
+        "archive": [
+          "oxygen-restored"
+        ]
+      }
+    },
+    "ButtonAirlockIncomplete": {
+      "SuccessMarkers": [
+        "Airlock visit 1: solved circuit held closed during load.",
+        "Incomplete Button circuit rejected: gate closed and Stairs checkpoint preserved."
+      ],
+      "SavedOnExit": {
+        "archive": [
+          "oxygen-restored"
+        ],
+        "checkpoint": "Stairs",
+        "version": 2
+      }
+    },
+    "WeightAirlock": {
+      "SuccessMarkers": [
+        "Airlock visit 1: solved circuit held closed during load.",
+        "Airlock visit 2: solved circuit held closed during load.",
+        "Airlock visit 1: open gate, checkpoint still Button.",
+        "Airlock visit 1: reached streamed Weight, checkpoint and archive confirmed.",
+        "Airlock visit 2: open gate, checkpoint still Button.",
+        "Airlock visit 2: reached streamed Weight, checkpoint and archive confirmed."
+      ],
+      "SavedOnExit": {
+        "version": 2,
+        "checkpoint": "Weight",
+        "archive": [
+          "oxygen-restored"
+        ]
+      }
+    }
+  }
+}

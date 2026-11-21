@@ -82,8 +82,10 @@ if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 `ButtonAirlock` проходит Stairs дважды в одном процессе. Во время каждого решения тест удерживает Button скрытой и проверяет закрытую дверь. После готовности обеих плит и реле шлюз открывается, а на диске остаётся Stairs. После физического прохода проверяются тот же персонаж, опора и устройства в подуровне Button, два малых куба и слот Button с исходной записью архива. Сквозные сценарии проводят игрока дальше в Weight через разные входы реле.
 
 ```powershell
-./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Scenario ButtonAirlock,EntryCourse,EntryCourseAlternate -Resolution 1280x720
+./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Scenario ButtonAirlock,ButtonAirlockIncomplete,EntryCourse,EntryCourseAlternate -Resolution 1280x720
 ```
+
+В `ButtonAirlockIncomplete` конфигурация Button отключает параллельное реле. После решения Stairs и показа подуровня тест проверяет отказ сборки, исходную позицию створки и прежнюю точку с архивом на диске. [Отчёт пакета](Measurements/A02-ButtonAirlock.json)
 
 ### Шлюз Button → Weight
 
