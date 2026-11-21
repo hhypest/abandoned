@@ -216,10 +216,22 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
             }
             return;
         }
+        if (bTestButton && EntryFlag(TEXT("VerifyIncompleteButton")) && Chamber.HasChamberLoadFailed())
+        {
+            if (!Chamber.GetDoor()->GetComponentLocation().Equals(Layout.Door.Center) || !SavedWithArchive(Segment))
+            {
+                Fail(TEXT("incomplete Button circuit advanced the gate or checkpoint"));
+                return;
+            }
+            UE_LOG(LogEntryChamberTest, Display, TEXT("Incomplete Button circuit rejected: gate closed and Stairs checkpoint preserved."));
+            SetComponentTickEnabled(false);
+            FPlatformMisc::RequestExitWithStatus(false, 0);
+            return;
+        }
         if (!Chamber.IsDoorOpen()) { return; }
-        if (!SavedWithArchive(Segment)) { Fail(TEXT("checkpoint advanced before crossing")); return; }
         if (AirlockPawn.Get() != &Player)
         {
+            if (!SavedWithArchive(Segment)) { Fail(TEXT("checkpoint advanced before crossing")); return; }
             AirlockPawn = &Player;
             UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: open gate, checkpoint still %s."), AirlockVisits + 1, *WriteSegment(Segment));
         }
