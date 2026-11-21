@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)][string]$PackageRoot,
     [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
     [switch]$TraceTravel,
+    [switch]$StockDisplay,
     [ValidateSet('Separate', 'Instanced')][string]$ChamberDecor,
     [ValidateSet('Separate', 'Compound')][string]$WeightShell,
     [switch]$PreloadWeightShell,
@@ -78,9 +79,10 @@ $profileCommand = if ($frameCount) { "CsvProfile FRAMES=$frameCount" } else { 'C
 if ($map) { $start.ArgumentList.Add($map) }
 $syncControl = if ($DisableRenderThreadLag) { 'r.OneFrameThreadLag 0,r.OneFrameThreadLag,' } else { '' }
 $gcControl = if ($DisableSmallGCPolicy) { 'gc.SmallFullGCSerialSlots 0,gc.SmallFullGCSerialSlots,' } else { '' }
+$displayCommand = if ($StockDisplay) { 'r.VSync,t.MaxFPS' } else { 'r.VSync 0,t.MaxFPS 0' }
 foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1080',
     "-UserDir=$dir", "-abslog=$dir/Game.log", '-ExitAfterCsvProfiling',
-    "-ExecCmds=${syncControl}${gcControl}r.VSync 0,t.MaxFPS 0,r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
+    "-ExecCmds=${syncControl}${gcControl}${displayCommand},r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
 }
 if ($DisableChamberMeshReuse) { $start.ArgumentList.Add('-NoChamberMeshReuse') }
@@ -109,6 +111,7 @@ if ($TraceDeferredGCTail) { $start.ArgumentList.Add('-TraceDeferredGCTail') }
 $category = [Diagnostics.PerformanceCounterCategory]::new('GPU Process Memory')
 $counters = @()
 $process = [Diagnostics.Process]::Start($start)
+$processStartUtc = $process.StartTime.ToUniversalTime()
 $drain = $process.StandardOutput.BaseStream.CopyToAsync([IO.Stream]::Null)
 $timer = [Diagnostics.Stopwatch]::StartNew()
 $samples = [Collections.Generic.List[object]]::new()
@@ -149,7 +152,8 @@ if ($Allocator -ne 'Default' -and $Allocator -ne $actualAllocator) {
 if ($measureReserve -and !($log -match "MapPageReserve configured=$MapPageReserve\s*$")) {
     throw 'The package did not confirm the requested page reserve'
 }
-foreach ($setting in @('r\.VSync = "0"', 't\.MaxFPS = "0"', 'r\.ScreenPercentage = "100"', 'sg\.ShadowQuality = "2"')) {
+$displaySettings = if ($StockDisplay) { @('r\.VSync = "1"', 't\.MaxFPS = "60(?:\.0+)?"') } else { @('r\.VSync = "0"', 't\.MaxFPS = "0"') }
+foreach ($setting in @($displaySettings) + @( 'r\.ScreenPercentage = "100"', 'sg\.ShadowQuality = "2"')) {
     if (!($log -match $setting)) { throw "Unexpected profile in $dir/Game.log ($setting)" }
 }
 if (!($log -match 'LogInit: Build Configuration: Development\s*$') -or
@@ -204,6 +208,9 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     throw "Missing CPU trace in $dir"
 }
 [ordered]@{
+    ProcessStartUtc = $processStartUtc.ToString("o")
+    BootUtc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString("o")
+    StockDisplay = [bool]$StockDisplay
     VisiblePhysicalMemoryKiB = (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize
     Scenario = $Scenario
     ExecutableSha256 = (Get-FileHash -LiteralPath $exe).Hash
