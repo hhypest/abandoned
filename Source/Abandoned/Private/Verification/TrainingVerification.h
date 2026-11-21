@@ -41,6 +41,7 @@ private:
     double Elapsed = 0.0;
     TWeakObjectPtr<APuzzleCube> Cubes[3];
     TWeakObjectPtr<UStaticMeshComponent> PlateVisual;
+    FVector PlateRestLocation;
     TWeakObjectPtr<UPointLightComponent> PlateIndicator;
     TWeakObjectPtr<APlayerController> MouseOwner;
     FVerificationKeyPress Input;

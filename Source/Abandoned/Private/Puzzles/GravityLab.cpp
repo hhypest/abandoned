@@ -1,4 +1,5 @@
 #include "Puzzles/GravityLab.h"
+#include "World/FosTech.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Verification/GravityLabVerification.h"
@@ -75,8 +76,7 @@ void AGravityLabGameMode::InitGame(const FString& Map, const FString& Options, F
     const auto Finishes = Abandoned::Scene::MakeFinishes(*this, BaseMaterial, Layout->Finishes);
     Violet = Finishes.FindRef(TEXT("Violet"));
     Inactive = Finishes.FindRef(TEXT("Inactive"));
-    UMaterialInterface* Ballast = Finishes.FindRef(TEXT("Ballast"));
-    if (!Violet || !Inactive || !Ballast || !Finishes.Contains(TEXT("Steel")))
+    if (!Violet || !Inactive || !Finishes.Contains(TEXT("Steel")))
     {
         Error = TEXT("Missing gravity lab materials.");
         return;
@@ -104,19 +104,18 @@ void AGravityLabGameMode::InitGame(const FString& Map, const FString& Options, F
             return;
         }
     }
-    PowerSwitch = Spawn({Layout->PowerSwitch, FVector(50, 26, 54), true, TEXT("Steel")}).Collision;
+    const auto Switch = Spawn({Layout->PowerSwitch, FVector(50, 26, 54), true, TEXT("Steel")});
+    PowerSwitch = Switch.Collision;
     Terminal = Spawn({Layout->Terminal, FVector(98, 32, 78), true, TEXT("Steel")}).Collision;
     Small = World.SpawnActor<APuzzleCube>();
     Large = World.SpawnActor<APuzzleCube>();
-    if (!PowerSwitch || !Terminal || !Small || !Large)
+    if (!PowerSwitch || !Terminal || !Small || !Large ||
+        !Abandoned::FosTech::SetVisual(Switch.Visual, Abandoned::FosTech::Switch, 54.0) ||
+        !Small->Initialize(EPuzzleCubeType::Small) || !Large->Initialize(EPuzzleCubeType::Large))
     {
         Error = TEXT("Could not assemble gravity lab controls and ballast.");
         return;
     }
-    Small->Initialize(EPuzzleCubeType::Small, *CubeMesh);
-    Large->Initialize(EPuzzleCubeType::Large, *CubeMesh);
-    Small->SetVisualMaterial(*Ballast);
-    Large->SetVisualMaterial(*Ballast);
     Small->ResetPosition(Layout->SmallStart);
     Large->ResetPosition(Layout->LargeStart);
 

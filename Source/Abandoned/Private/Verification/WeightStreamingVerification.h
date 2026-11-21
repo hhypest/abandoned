@@ -4,6 +4,7 @@
 #include "WeightStreamingVerification.generated.h"
 
 class ULevelStreamingDynamic;
+class APuzzleCube;
 
 UCLASS()
 class UWeightStreamingVerification final : public UActorComponent
@@ -20,6 +21,7 @@ private:
     enum class EPhase { Start, Hidden, Visible, Land, Return, Removal };
     EPhase Phase = EPhase::Start;
     TWeakObjectPtr<ULevelStreamingDynamic> Instance;
+    TArray<TWeakObjectPtr<APuzzleCube>> Ballast;
     FTransform Home;
     int32 CompletedVisits = 0;
     bool bCancelledFirstRequest = false;

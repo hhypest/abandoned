@@ -52,6 +52,7 @@ void UTrainingVerification::Attach(ATrainingChamberGameMode& Chamber, const TArr
         Scenario->Cubes[Index] = Ballast[Index].Get();
     }
     Scenario->PlateVisual = Plates[0].Visual.Get();
+    Scenario->PlateRestLocation = Plates[0].RestLocation;
     Scenario->PlateIndicator = Plates[0].Indicator.Get();
     Chamber.AddInstanceComponent(Scenario);
     Scenario->RegisterComponent();
@@ -170,13 +171,18 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
                 Fail(TEXT("The grounded player should be the only load on the plate"));
                 return;
             }
+            if (!PlateVisual->GetRelativeLocation().Equals(PlateRestLocation - FVector(0, 0, 4.0), 0.01))
+            {
+                Fail(TEXT("Pressure plate tread did not descend 4 cm"));
+                return;
+            }
             OnPlate = Player.GetActorLocation();
             Input.Press(Controller, EKeys::R);
             Advance(EPhase::CheckPlateReset, TEXT("Resetting with the player on the plate."));
         }
         break;
     case EPhase::CheckPlateReset:
-        if (Chamber.IsPlatePressed() || Chamber.IsExitEnabled() || !PlateVisual->GetRelativeLocation().IsNearlyZero() ||
+        if (Chamber.IsPlatePressed() || Chamber.IsExitEnabled() || !PlateVisual->GetRelativeLocation().Equals(PlateRestLocation) ||
             !FMath::IsNearlyEqual(PlateIndicator->Intensity, Layout->PlateLight.Intensity))
         {
             Fail(TEXT("Reset left the pressure plate active"));

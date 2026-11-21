@@ -153,6 +153,8 @@ $scenarios = @{
         Success = @('Weight streaming cancelled before visibility; site clear.',
                     'Weight streaming visit 1: player landed on Weight and returned to Stairs.',
                     'Weight streaming visit 2: player landed on Weight and returned to Stairs.',
+                    'Weight visit 1: removed 4 verified ballast bodies.',
+                    'Weight visit 2: removed 4 verified ballast bodies.',
                     'Weight streaming verification passed: two removals, site clear.')
     }
     EntryCourse = @{

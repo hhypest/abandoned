@@ -84,8 +84,7 @@ void APortalLabGameMode::InitGame(const FString& Map, const FString& Options, FS
     const auto Finishes = Abandoned::Scene::MakeFinishes(*this, BaseMaterial, Layout->Finishes);
     Lit = Finishes.FindRef(TEXT("Amber"));
     Unlit = Finishes.FindRef(TEXT("Unpowered"));
-    Ballast = Finishes.FindRef(TEXT("Ballast"));
-    if (!Lit || !Unlit || !Ballast || !Finishes.Contains(TEXT("Frame")))
+    if (!Lit || !Unlit || !Finishes.Contains(TEXT("Frame")))
     {
         Error = TEXT("Missing portal finishes.");
         return;
@@ -202,8 +201,7 @@ APuzzleCube* APortalLabGameMode::SpawnCube(int32 Index)
     APuzzleCube* Cube = GetWorld()->SpawnActor<APuzzleCube>();
     if (Cube)
     {
-        Cube->Initialize(CubeType(Index), *CubeMesh);
-        Cube->SetVisualMaterial(*Ballast);
+        if (!Cube->Initialize(CubeType(Index))) { Cube->Destroy(); return nullptr; }
         Cube->ResetPosition(Index == 0 ? Layout->SmallCube : Layout->LargeCube);
     }
     return Cube;

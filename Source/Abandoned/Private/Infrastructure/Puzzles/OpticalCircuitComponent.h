@@ -20,6 +20,9 @@ struct FOpticalLane
     TObjectPtr<UBoxComponent> Receiver;
 
     UPROPERTY()
+    TObjectPtr<UStaticMeshComponent> EmitterHousing;
+
+    UPROPERTY()
     TObjectPtr<UStaticMeshComponent> EmitterLamp;
 
     UPROPERTY()
