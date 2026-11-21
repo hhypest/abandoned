@@ -32,7 +32,7 @@ private:
         RunUp, JumpToStack, CrossLedge, TakeUpper, AimUpper, PlaceUpper, CheckUpper,
         WaitDoor, CheckReset, WalkToExit, RetrieveUnit, CarryToExit
     };
-    void Check(const ATrainingChamberGameMode& Chamber, ATrainingChamberCharacter& Player, APlayerController& Controller);
+    void Check(ATrainingChamberGameMode& Chamber, ATrainingChamberCharacter& Player, APlayerController& Controller);
     void Advance(EPhase Next);
     void Fail(const TCHAR* Reason);
 
@@ -48,5 +48,6 @@ private:
     bool bDev20 = false;
     bool bVerifiedWeightReset = false;
     bool bCaptured = false;
+    bool bRevealedWeight = false;
 #endif
 };

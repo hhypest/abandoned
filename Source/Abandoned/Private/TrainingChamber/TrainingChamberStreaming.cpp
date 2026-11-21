@@ -4,6 +4,9 @@
 #include "Engine/Level.h"
 #include "Engine/LevelStreamingDynamic.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Misc/CommandLine.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogWeightAirlock, Log, All);
 
 using Abandoned::Domain::Expedition::Segment;
 
@@ -23,15 +26,24 @@ void ATrainingChamberGameMode::RequestWeight()
     bool bAccepted = false;
     ULevelStreamingDynamic::FLoadLevelInstanceParams Request(GetWorld(),
         TEXT("/Game/Abandoned/Verification/WeightShellPilot"), FTransform(WeightOrigin));
+#if WITH_DEV_AUTOMATION_TESTS
+    Request.bInitiallyVisible = !FParse::Param(FCommandLine::Get(), TEXT("VerifyWeightAirlock"));
+#endif
     WeightInstance = ULevelStreamingDynamic::LoadLevelInstance(Request, bAccepted);
     bWeightLoadFailed = !bAccepted || !WeightInstance;
-    if (bWeightLoadFailed) { UE_LOG(LogTemp, Warning, TEXT("Weight load request failed. Reset to retry.")); }
+    if (bWeightLoadFailed) { UE_LOG(LogWeightAirlock, Warning, TEXT("Weight load request failed. Reset to retry.")); }
 }
 
 void ATrainingChamberGameMode::PrepareWeight()
 {
-    if (IncomingWeight || bWeightLoadFailed || !WeightInstance) { return; }
-    if (WeightInstance->GetLevelStreamingState() == ELevelStreamingState::FailedToLoad)
+    if (bWeightLoadFailed || !WeightInstance) { return; }
+    if (IncomingWeight)
+    {
+        if (IsValid(IncomingWeight) && WeightInstance->IsLevelVisible() && IncomingWeight->IsWeightReady()) { return; }
+        IncomingWeight = nullptr;
+        bWeightLoadFailed = true;
+    }
+    if (bWeightLoadFailed || WeightInstance->GetLevelStreamingState() == ELevelStreamingState::FailedToLoad)
     {
         bWeightLoadFailed = true;
     }
@@ -55,13 +67,15 @@ void ATrainingChamberGameMode::PrepareWeight()
                 Floor.GetActor() && Floor.GetActor()->GetLevel() == Level)
             {
                 IncomingWeight = Room;
-                UE_LOG(LogTemp, Display, TEXT("Weight airlock ready: floor, four ballast bodies, plate, switch and drive."));
+                UE_LOG(LogWeightAirlock, Display, TEXT("Weight airlock ready: floor, four ballast bodies, plate, switch and drive."));
                 return;
             }
         }
-        UE_LOG(LogTemp, Warning, TEXT("Weight devices unavailable. Reset to retry. %s"), *Error);
+        UE_LOG(LogWeightAirlock, Warning, TEXT("Weight devices unavailable. Reset to retry. %s"), *Error);
         bWeightLoadFailed = true;
     }
+    WeightInstance->SetShouldBeVisible(false);
+    WeightInstance->SetShouldBeLoaded(false);
     WeightInstance->SetIsRequestingUnloadAndRemoval(true);
     WeightInstance = nullptr;
 }
@@ -84,8 +98,17 @@ bool ATrainingChamberGameMode::EnterWeight(ATrainingChamberCharacter& Player)
     HintReader = {};
     bReachedExit = false;
     Previous->Retire();
-    UE_LOG(LogTemp, Display, TEXT("Weight airlock crossed: same pawn transferred to the prepared chamber."));
+    UE_LOG(LogWeightAirlock, Display, TEXT("Weight airlock crossed: same pawn transferred to the prepared chamber."));
     SaveEntryCheckpoint();
     ActivateChamber();
     return true;
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool ATrainingChamberGameMode::RevealWeightForVerification()
+{
+    if (!WeightInstance || !WeightInstance->IsLevelLoaded() || WeightInstance->IsLevelVisible()) { return false; }
+    WeightInstance->SetShouldBeVisible(true);
+    return true;
+}
+#endif

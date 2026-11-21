@@ -11,6 +11,8 @@ UWeightStreamingVerification::UWeightStreamingVerification()
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Components/BoxComponent.h"
 #include "Engine/Level.h"
+#include "TrainingChamber/ChamberAssembly.h"
+#include "Materials/MaterialInterface.h"
 #include "Puzzles/PuzzleCube.h"
 #include "TrainingChamber/TrainingChamberLayout.h"
 #include "Engine/LevelStreamingDynamic.h"
@@ -103,8 +105,15 @@ void UWeightStreamingVerification::TickComponent(float Delta, ELevelTick TickTyp
         for (AActor* Actor : Level->GetLoadedLevel()->Actors)
         {
             if (APuzzleCube* Cube = Cast<APuzzleCube>(Actor)) { Ballast.Add(Cube); }
+            if (auto* Room = Cast<AChamberAssembly>(Actor)) { Assembly = Room; }
         }
         {
+            if (!Assembly.IsValid()) { return Fail(TEXT("missing Weight device assembly")); }
+            FString Error;
+            Assembly->BuildStreamedWeight(LoadObject<UMaterialInterface>(nullptr,
+                TEXT("/Game/Abandoned/Materials/M_AbandonedSurface.M_AbandonedSurface")), Error);
+            if (!Error.IsEmpty() || !Assembly->IsWeightReady()) { return Fail(TEXT("incomplete Weight circuit")); }
+            DeviceBodies = {Assembly->PlateCircuit->GetPlate(0), Assembly->DoorDrive->GetDoor(), Assembly->Button.Get()};
             const auto& Spawns = GetDefault<UEntryWeightLayout>()->CubeSpawns;
             if (Ballast.IsEmpty() || Ballast.Num() != Spawns.Num()) { return Fail(TEXT("streamed ballast count")); }
             for (const FTrainingCubeSpawn& Spawn : Spawns)
@@ -146,8 +155,15 @@ void UWeightStreamingVerification::TickComponent(float Delta, ELevelTick TickTyp
                 return Fail(TEXT("ballast body still registered after unload"));
             }
         }
+        if (DeviceBodies.ContainsByPredicate([](const TWeakObjectPtr<UBoxComponent>& Body)
+        {
+            return Body.IsValid() && Body->IsRegistered();
+        })) { return Fail(TEXT("Weight device collision survived unload")); }
         if (!Ballast.IsEmpty())
         {
+            UE_LOG(LogWeightStreaming, Display, TEXT("Weight visit %d: plate, switch and door drive removed."), CompletedVisits);
+            DeviceBodies.Reset();
+            Assembly.Reset();
             UE_LOG(LogWeightStreaming, Display, TEXT("Weight visit %d: removed %d verified ballast bodies."), CompletedVisits, Ballast.Num());
             Ballast.Reset();
         }

@@ -150,7 +150,9 @@ $scenarios = @{
     WeightAirlock = @{
         Map = $entry; Flag = '-VerifyWeightAirlock'; Chambers = @('Button', 'Weight', 'Button', 'Weight')
         SeedCheckpoint = 'Button'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Weight'
-        Success = @('Airlock visit 1: open gate, checkpoint still Button.',
+        Success = @('Airlock visit 1: solved circuit held closed during load.',
+                    'Airlock visit 2: solved circuit held closed during load.',
+                    'Airlock visit 1: open gate, checkpoint still Button.',
                     'Airlock visit 1: reached streamed Weight, checkpoint and archive confirmed.',
                     'Airlock visit 2: open gate, checkpoint still Button.',
                     'Airlock visit 2: reached streamed Weight, checkpoint and archive confirmed.')
@@ -161,6 +163,8 @@ $scenarios = @{
         Success = @('Weight streaming cancelled before visibility; site clear.',
                     'Weight streaming visit 1: player landed on Weight and returned to Stairs.',
                     'Weight streaming visit 2: player landed on Weight and returned to Stairs.',
+                    'Weight visit 1: plate, switch and door drive removed.',
+                    'Weight visit 2: plate, switch and door drive removed.',
                     'Weight visit 1: removed 4 verified ballast bodies.',
                     'Weight visit 2: removed 4 verified ballast bodies.',
                     'Weight streaming verification passed: two removals, site clear.')

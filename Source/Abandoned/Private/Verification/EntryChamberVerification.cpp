@@ -120,7 +120,7 @@ void UEntryChamberVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
     {
         return;
     }
-    const auto* Chamber = Cast<ATrainingChamberGameMode>(GetOwner());
+    auto* Chamber = Cast<ATrainingChamberGameMode>(GetOwner());
     if (!Chamber || !Chamber->GetLayout() || !IsValid(Chamber->GetPlate(ExitPlateIndex)) || !IsValid(Chamber->GetDoor()) ||
         Cubes.ContainsByPredicate([](const auto& Cube) { return !Cube.IsValid(); }))
     {
@@ -135,7 +135,7 @@ void UEntryChamberVerification::TickComponent(float DeltaSeconds, ELevelTick Tic
     }
 }
 
-void UEntryChamberVerification::Check(const ATrainingChamberGameMode& Chamber, ATrainingChamberCharacter& Player, APlayerController& Controller)
+void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATrainingChamberCharacter& Player, APlayerController& Controller)
 {
     using ESegment = Abandoned::Domain::Expedition::Segment;
     using Abandoned::Domain::Expedition::Dev20MassKg;
@@ -417,6 +417,20 @@ void UEntryChamberVerification::Check(const ATrainingChamberGameMode& Chamber, A
         Advance(EPhase::WaitDoor);
         break;
     case EPhase::WaitDoor:
+        if (Segment == ESegment::Button && EntryFlag(TEXT("VerifyWeightAirlock")) && !bRevealedWeight &&
+            Chamber.IsExitEnabled() && Elapsed >= 0.5f)
+        {
+            if (!Chamber.GetDoor()->GetComponentLocation().Equals(Layout.Door.Center) || !SavedWithArchive(ESegment::Button))
+            {
+                Fail(TEXT("gate moved or checkpoint changed while Weight was hidden"));
+                return;
+            }
+            if (Chamber.RevealWeightForVerification())
+            {
+                bRevealedWeight = true;
+                UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: solved circuit held closed during load."), AirlockVisits + 1);
+            }
+        }
         if (Chamber.IsDoorOpen())
         {
             if (Segment == ESegment::Button && EntryFlag(TEXT("VerifyWeightAirlock")))

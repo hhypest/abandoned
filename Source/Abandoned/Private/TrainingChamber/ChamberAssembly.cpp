@@ -174,8 +174,8 @@ void AChamberAssembly::Build(const UTrainingChamberLayout& Settings, UMaterialIn
         }
         UE_LOG(LogChamberAssembly, Log, TEXT("Weight shell mode=%s"), Shell ? TEXT("Compound") : TEXT("Separate"));
     }
-    const bool bInstanceShellVisuals = bStreamed || (Shell && bInstanceDecor &&
-        FParse::Param(FCommandLine::Get(), TEXT("InstanceWeightShellVisuals")));
+    const bool bInstanceShellVisuals = Shell && bInstanceDecor &&
+        FParse::Param(FCommandLine::Get(), TEXT("InstanceWeightShellVisuals"));
     int32 GroupedSolidCount = 0;
     for (const FSceneBlock& Block : Layout->Room)
     {
@@ -389,9 +389,13 @@ bool AChamberAssembly::IsWeightReady() const
 {
     const auto* Door = DoorDrive->GetDoor();
     const auto* Plate = PlateCircuit->GetPlate(0);
-    return Layout && IsValid(Door) && Door->IsRegistered() && Door->IsQueryCollisionEnabled() &&
-        IsValid(Plate) && Plate->IsRegistered() && Plate->IsQueryCollisionEnabled() &&
-        IsValid(Button) && Button->IsRegistered() && Cubes.Num() == Layout->CubeSpawns.Num() &&
+    const auto ReadyBody = [this](const UBoxComponent* Body)
+    {
+        return IsValid(Body) && Body->GetOwner()->GetLevel() == GetLevel() && Body->IsRegistered() &&
+            Body->IsQueryCollisionEnabled();
+    };
+    return Layout && ReadyBody(Door) && ReadyBody(Plate) && ReadyBody(Button) &&
+        Cubes.Num() == Layout->CubeSpawns.Num() &&
         !Cubes.ContainsByPredicate([this](const APuzzleCube* Cube)
         {
             return !IsValid(Cube) || Cube->GetLevel() != GetLevel() || !Cube->GetBody()->IsSimulatingPhysics();

@@ -52,7 +52,11 @@ public:
     Abandoned::Application::Expedition::CheckpointIssue GetCheckpointIssue() const { return Course.Issue; }
     bool HasCheckpointWriteFailed() const { return ArrivalWrite.IsReady() && !ArrivalWrite.Get(); }
     void PressButton();
+#if WITH_DEV_AUTOMATION_TESTS
+    bool RevealWeightForVerification();
+#endif
     bool IsPlatePressed(int32 Index = 0) const { return Devices->PlateCircuit->IsPressed(Index); }
+    bool HasWeightLoadFailed() const { return bWeightLoadFailed; }
     bool IsDoorOpen() const { return Devices->DoorDrive->IsOpen(); }
     bool HasClampedObject() const { return Devices->DoorDrive->HasClampedObject(); }
     bool HasReachedExit() const { return bReachedExit; }

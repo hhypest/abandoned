@@ -12,13 +12,10 @@
 #include "Verification/EntryChamberVerification.h"
 
 #include "Components/BoxComponent.h"
-#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Components/TextRenderComponent.h"
 #include "Engine/Canvas.h"
-#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "Engine/World.h"
-#include "PhysicsEngine/BodySetup.h"
 #include "TimerManager.h"
 #include "Expedition/Dev20Actor.h"
 #include "GameFramework/PlayerController.h"
@@ -30,9 +27,6 @@
 #include "Player/AbandonedTestController.h"
 #include "Player/MovementProfile.h"
 #include "UObject/ConstructorHelpers.h"
-#include "World/Blockout.h"
-#include "World/FosTech.h"
-#include "World/SceneAssembly.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTrainingChamber, Log, All);
 
@@ -496,7 +490,7 @@ void ATrainingChamberHUD::DrawHUD()
         : TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   Esc pause");
     DrawText(Controls, FLinearColor::White, 24.0f, 52.0f);
     const bool bDoorObstructed = Chamber->HasClampedObject() && !Chamber->HasReachedExit();
-    const FString Status = Chamber->HasReachedExit()
+    const FString Status = Chamber->HasWeightLoadFailed() ? TEXT("Weight unavailable. Press R to retry.") : Chamber->HasReachedExit()
         ? (Layout->UsesPlateBalance() ? TEXT("Balance chamber complete") : TEXT("Entry course complete")) :
         (bDoorObstructed ? TEXT("Door obstructed. Restore power to release.") :
         Chamber->IsDoorOpen() ? TEXT("Exit open") :
