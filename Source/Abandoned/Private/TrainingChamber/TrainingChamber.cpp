@@ -8,6 +8,7 @@
 #include "Verification/ParallelCircuitVerification.h"
 #include "Verification/PlateBalanceVerification.h"
 #include "Verification/TrainingVerification.h"
+#include "Verification/WeightStreamingVerification.h"
 #include "Verification/EntryChamberVerification.h"
 
 #include "Components/BoxComponent.h"
@@ -493,6 +494,10 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     }
     TRACE_CPUPROFILER_EVENT_SCOPE(Training_ArrivalReady);
 #if WITH_DEV_AUTOMATION_TESTS
+    if (Course.Current == Segment::Stairs)
+    {
+        UWeightStreamingVerification::AttachIfRequested(*this);
+    }
     const bool bVerifyCourse = UEntryChamberVerification::IsRequested(bDev20Run);
     if (Course.Current == Segment::Sandbox && UTrainingVerification::IsRequested())
     {
