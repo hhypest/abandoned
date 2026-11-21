@@ -23,6 +23,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "TimerManager.h"
 #include "Expedition/Dev20Actor.h"
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
@@ -320,7 +321,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     {
         if (FParse::Param(FCommandLine::Get(), TEXT("CompoundWeightShell")))
         {
-            UStaticMesh* BodyMesh = MeshLibrary->LoadForChamber(World, TEXT("/Game/Abandoned/Collision/SM_WeightShell.SM_WeightShell"));
+            UStaticMesh* BodyMesh = MeshLibrary->LoadForChamber(World, UChamberMeshLibrary::WeightShellPath);
             Shell = SpawnWeightShell(World, BodyMesh, Layout->Room);
             if (!Shell)
             {
@@ -475,6 +476,18 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         Abandoned::Scene::AddLight(World, Light);
     }
     SaveEntryCheckpoint();
+    if ((Layout->IsA<UEntryStairsLayout>() || Layout->IsA<UEntryButtonLayout>())
+        && FParse::Param(FCommandLine::Get(), TEXT("CompoundWeightShell")))
+    {
+        FTimerHandle PrepareTimer;
+        World.GetTimerManager().SetTimer(PrepareTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+        {
+            if (GetWorld() && GetGameInstance()->GetWorld() == GetWorld())
+            {
+                GetGameInstance()->GetSubsystem<UChamberMeshLibrary>()->PrepareWeightShell();
+            }
+        }), 0.5f, false);
+    }
     TRACE_CPUPROFILER_EVENT_SCOPE(Training_ArrivalReady);
 #if WITH_DEV_AUTOMATION_TESTS
     const bool bVerifyCourse = UEntryChamberVerification::IsRequested(bDev20Run);
