@@ -3,6 +3,7 @@
 #include "TrainingChamber/TrainingChamberLayout.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/BoxComponent.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
@@ -124,11 +125,11 @@ void AChamberAssembly::Build(const UTrainingChamberLayout& Settings, UMaterialIn
 
     const bool bStreamed = GetLevel() != GetWorld()->PersistentLevel;
     auto* MeshLibrary = GetGameInstance()->GetSubsystem<UChamberMeshLibrary>();
-    UStaticMesh* SmallCube = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::SmallCube);
-    UStaticMesh* LargeCube = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::LargeCube);
+    UStaticMesh* SmallCube = bStreamed ? nullptr : MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::SmallCube);
+    UStaticMesh* LargeCube = bStreamed ? nullptr : MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::LargeCube);
     UStaticMesh* PlateBase = bStreamed ? PlateBaseMesh.Get() : MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::PlateBase);
     UStaticMesh* PlateTop = bStreamed ? PlateTopMesh.Get() : MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::PlateTop);
-    if (!SmallCube || !LargeCube || !PlateBase || !PlateTop)
+    if ((!bStreamed && (!SmallCube || !LargeCube)) || !PlateBase || !PlateTop)
     {
         ErrorMessage = TEXT("Training chamber requires the FosTech cube and plate meshes.");
         return;
@@ -141,7 +142,7 @@ void AChamberAssembly::Build(const UTrainingChamberLayout& Settings, UMaterialIn
     const bool bInstanceDecor = bDecorLayout && !FParse::Param(FCommandLine::Get(), TEXT("NoInstancedChamberDecor"));
     FDecorGroups DecorGroups;
     UStaticMeshComponent* Shell = nullptr;
-    if (bStreamed)
+    if (bStreamed && Layout->IsA<UEntryWeightLayout>())
     {
         for (AActor* Actor : GetLevel()->Actors)
         {
@@ -181,7 +182,7 @@ void AChamberAssembly::Build(const UTrainingChamberLayout& Settings, UMaterialIn
     {
         TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_SolidRoomBlock, Block.bCollision);
         TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_DecorativeRoomBlock, !Block.bCollision);
-        if (bStreamed || (bInstanceDecor && (!Block.bCollision || bInstanceShellVisuals)))
+        if ((bStreamed && Shell) || (bInstanceDecor && (!Block.bCollision || bInstanceShellVisuals)))
         {
             DecorGroups.FindOrAdd(Finishes.FindRef(Block.Finish)).Emplace(
                 FQuat::Identity, Block.Center, Block.Size / 100.0);
@@ -322,7 +323,9 @@ void AChamberAssembly::Build(const UTrainingChamberLayout& Settings, UMaterialIn
         const auto RelayBox = Abandoned::Blockout::SpawnBox(World, *Mesh,
             Layout->Door.Center + FVector(-40, Layout->Door.Size.Y * 0.5 + 44, 0), FVector(20, 46, 52),
             EComponentMobility::Static, TEXT("NoCollision"), this);
-        if (!Abandoned::FosTech::SetVisual(RelayBox.Visual, Abandoned::FosTech::Relay, 52.0, 90.0))
+        RelayHousing = RelayBox.Visual;
+        auto* HousingMesh = bStreamed ? RelayMesh.Get() : MeshLibrary->LoadForChamber(World, Abandoned::FosTech::Relay);
+        if (!Abandoned::FosTech::FitVisual(RelayHousing, HousingMesh, 52.0, 90.0))
         {
             ErrorMessage = TEXT("Missing FosTech relay box.");
             return;
@@ -385,16 +388,37 @@ void AChamberAssembly::Build(const UTrainingChamberLayout& Settings, UMaterialIn
     }
 }
 
-bool AChamberAssembly::IsWeightReady() const
+bool AChamberAssembly::IsStreamedRoomReady() const
 {
     const auto* Door = DoorDrive->GetDoor();
-    const auto* Plate = PlateCircuit->GetPlate(0);
     const auto ReadyBody = [this](const UBoxComponent* Body)
     {
         return IsValid(Body) && Body->GetOwner()->GetLevel() == GetLevel() && Body->IsRegistered() &&
             Body->IsQueryCollisionEnabled();
     };
-    return Layout && ReadyBody(Door) && ReadyBody(Plate) && ReadyBody(Button) &&
+    if (!Layout || !ReadyBody(Door) || !ReadyBody(Button) || PlateCircuit->GetPlates().Num() != Layout->GetPlateCount())
+    {
+        return false;
+    }
+    const auto ReadyVisual = [this](const UStaticMeshComponent* Visual)
+    {
+        return IsValid(Visual) && Visual->GetOwner()->GetLevel() == GetLevel() &&
+            Visual->IsRegistered() && Visual->GetStaticMesh();
+    };
+    for (const auto& Plate : PlateCircuit->GetPlates())
+    {
+        if (!ReadyBody(Plate.Body) || !ReadyVisual(Plate.Visual) || !IsValid(Plate.Indicator) || !Plate.Indicator->IsRegistered())
+        {
+            return false;
+        }
+    }
+    if (Layout->UsesParallelPlates() && (!ReadyVisual(RelayHousing) || !RelayIdleMaterial || !RelayPoweredMaterial ||
+        RelayTraces.Num() != Layout->RelayTraces.Num() ||
+        RelayTraces.ContainsByPredicate([&](const auto& Trace) { return !ReadyVisual(Trace); })))
+    {
+        return false;
+    }
+    return
         Cubes.Num() == Layout->CubeSpawns.Num() &&
         !Cubes.ContainsByPredicate([this](const APuzzleCube* Cube)
         {
@@ -413,9 +437,10 @@ void AChamberAssembly::Retire()
     Destroy();
 }
 
-void AChamberAssembly::BuildStreamedWeight(UMaterialInterface* SurfaceMaterial, FString& ErrorMessage)
+void AChamberAssembly::BuildStreamed(const UTrainingChamberLayout& Template, UMaterialInterface* SurfaceMaterial, FString& ErrorMessage)
 {
-    auto* Settings = DuplicateObject<UEntryWeightLayout>(GetDefault<UEntryWeightLayout>(), this);
+    auto* Settings = DuplicateObject<UTrainingChamberLayout>(&Template, this);
+    if (!Settings->IsValid() || (Settings->IsA<UEntryButtonLayout>() && !Settings->UsesParallelPlates())) { ErrorMessage = TEXT("Invalid streamed chamber layout."); return; }
     const FVector Origin = GetActorLocation();
     Settings->Spawn += Origin;
     Settings->HintTerminal.Center += Origin;
@@ -429,5 +454,7 @@ void AChamberAssembly::BuildStreamedWeight(UMaterialInterface* SurfaceMaterial, 
     for (auto& Block : Settings->Room) { Block.Center += Origin; }
     for (auto& Light : Settings->Lights) { Light.Position += Origin; }
     for (auto& Spawn : Settings->CubeSpawns) { Spawn.Center += Origin; Spawn.Outlet += Origin; }
+    for (auto& Plate : Settings->AdditionalPlates) { Plate.Center += Origin; }
+    for (auto& Trace : Settings->RelayTraces) { Trace.Block.Center += Origin; }
     Build(*Settings, SurfaceMaterial, true, ErrorMessage);
 }

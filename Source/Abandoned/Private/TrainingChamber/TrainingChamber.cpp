@@ -205,7 +205,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     if (!ErrorMessage.IsEmpty()) { return; }
     UWorld& World = *GetWorld();
     SaveEntryCheckpoint();
-    if (NeedsWeightAirlock()) { RequestWeight(); }
+    if (NeedsAirlock()) { RequestNextChamber(); }
     if ((Layout->IsA<UEntryStairsLayout>() || Layout->IsA<UEntryButtonLayout>())
         && FParse::Param(FCommandLine::Get(), TEXT("CompoundWeightShell")))
     {
@@ -309,12 +309,12 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         return;
     }
 
-    if (NeedsWeightAirlock())
+    if (NeedsAirlock())
     {
-        PrepareWeight();
+        PrepareNextChamber();
         if (bReachedExit)
         {
-            if (!EnterWeight(*Player)) { bReachedExit = false; }
+            if (!EnterNextChamber(*Player)) { bReachedExit = false; }
             return;
         }
     }
@@ -344,7 +344,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         Devices->UpdateRelayTraces();
     }
     ObserveHints(*Player, DeltaSeconds);
-    if (Devices->DoorDrive->Move(*Player, Dev20.Get(), IsExitEnabled() && (!NeedsWeightAirlock() || IncomingWeight), Course.Current != Segment::Sandbox, DeltaSeconds) ==
+    if (Devices->DoorDrive->Move(*Player, Dev20.Get(), IsExitEnabled() && (!NeedsAirlock() || IncomingChamber), Course.Current != Segment::Sandbox, DeltaSeconds) ==
         ETrainingDoorResult::ResetPlayer)
     {
         ResetChamber(*Player);
@@ -356,7 +356,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     {
         bReachedExit = true;
         UE_LOG(LogTrainingChamber, Display, TEXT("Player reached the exit."));
-        if (!NeedsWeightAirlock()) { AdvanceCourse(*Player); }
+        if (!NeedsAirlock()) { AdvanceCourse(*Player); }
     }
 }
 
@@ -412,7 +412,7 @@ void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
         }
         return;
     }
-    if (NeedsWeightAirlock() && bWeightLoadFailed) { RequestWeight(); }
+    if (NeedsAirlock() && bChamberLoadFailed) { RequestNextChamber(); }
     Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
     Player.ReleaseHeldObject();
     for (int32 Index = 0; Index < Devices->Cubes.Num(); ++Index)
@@ -490,11 +490,11 @@ void ATrainingChamberHUD::DrawHUD()
         : TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   Esc pause");
     DrawText(Controls, FLinearColor::White, 24.0f, 52.0f);
     const bool bDoorObstructed = Chamber->HasClampedObject() && !Chamber->HasReachedExit();
-    const FString Status = Chamber->HasWeightLoadFailed() ? TEXT("Weight unavailable. Press R to retry.") : Chamber->HasReachedExit()
+    const FString Status = Chamber->HasChamberLoadFailed() ? TEXT("Next chamber unavailable. Press R to retry.") : Chamber->HasReachedExit()
         ? (Layout->UsesPlateBalance() ? TEXT("Balance chamber complete") : TEXT("Entry course complete")) :
         (bDoorObstructed ? TEXT("Door obstructed. Restore power to release.") :
         Chamber->IsDoorOpen() ? TEXT("Exit open") :
-        (Chamber->IsExitEnabled() ? (Chamber->IsWaitingForWeight() ? TEXT("Preparing Weight chamber") : TEXT("Exit opening")) : Layout->Objective));
+        (Chamber->IsExitEnabled() ? (Chamber->IsWaitingForChamber() ? TEXT("Preparing next chamber") : TEXT("Exit opening")) : Layout->Objective));
     if (bDoorObstructed)
     {
         DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.78f), 16.0f, 71.0f, 300.0f, 24.0f);

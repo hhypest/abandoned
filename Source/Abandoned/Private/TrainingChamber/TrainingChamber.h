@@ -53,11 +53,11 @@ public:
     bool HasCheckpointWriteFailed() const { return ArrivalWrite.IsReady() && !ArrivalWrite.Get(); }
     void PressButton();
 #if WITH_DEV_AUTOMATION_TESTS
-    bool RevealWeightForVerification();
+    bool RevealChamberForVerification();
 #endif
     bool IsPlatePressed(int32 Index = 0) const { return Devices->PlateCircuit->IsPressed(Index); }
-    bool IsWaitingForWeight() const { return NeedsWeightAirlock() && !IncomingWeight; }
-    bool HasWeightLoadFailed() const { return bWeightLoadFailed; }
+    bool IsWaitingForChamber() const { return NeedsAirlock() && !IncomingChamber; }
+    bool HasChamberLoadFailed() const { return bChamberLoadFailed; }
     bool IsDoorOpen() const { return Devices->DoorDrive->IsOpen(); }
     bool HasClampedObject() const { return Devices->DoorDrive->HasClampedObject(); }
     bool HasReachedExit() const { return bReachedExit; }
@@ -69,16 +69,18 @@ private:
     void ReturnCube(ATrainingChamberCharacter& Player, int32 Index, bool bUseDispenser = false);
     void ObserveHints(const ATrainingChamberCharacter& Player, float DeltaSeconds);
     void ActivateChamber();
-    void RequestWeight();
-    void PrepareWeight();
-    bool EnterWeight(ATrainingChamberCharacter& Player);
-    bool NeedsWeightAirlock() const;
-    bool bWeightLoadFailed = false;
-    bool bWeightRetryRequested = false;
+    void RequestNextChamber();
+    void PrepareNextChamber();
+    bool EnterNextChamber(ATrainingChamberCharacter& Player);
+    bool NeedsAirlock() const;
+    bool bChamberLoadFailed = false;
+    bool bChamberRetryRequested = false;
     UPROPERTY(Transient)
-    TObjectPtr<ULevelStreamingDynamic> WeightInstance;
+    TObjectPtr<ULevelStreamingDynamic> IncomingInstance;
     UPROPERTY(Transient)
-    TObjectPtr<AChamberAssembly> IncomingWeight;
+    TObjectPtr<ULevelStreamingDynamic> ActiveInstance;
+    UPROPERTY(Transient)
+    TObjectPtr<AChamberAssembly> IncomingChamber;
     void SelectLayout(const Abandoned::Application::Expedition::WorldDestination& Destination);
     void SaveEntryCheckpoint();
     TSharedFuture<bool> ArrivalWrite;

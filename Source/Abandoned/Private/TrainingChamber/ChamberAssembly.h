@@ -15,9 +15,9 @@ class AChamberAssembly final : public AActor
 public:
     AChamberAssembly();
     void Build(const UTrainingChamberLayout& Settings, UMaterialInterface* SurfaceMaterial, bool bCountHeldMass, FString& ErrorMessage);
-    void BuildStreamedWeight(UMaterialInterface* SurfaceMaterial, FString& ErrorMessage);
+    void BuildStreamed(const UTrainingChamberLayout& Template, UMaterialInterface* SurfaceMaterial, FString& ErrorMessage);
     void Retire();
-    bool IsWeightReady() const;
+    bool IsStreamedRoomReady() const;
     void UpdateRelayTraces();
 
     UPROPERTY(Transient)
@@ -51,7 +51,7 @@ public:
     TObjectPtr<UTrainingDoorDriveComponent> DoorDrive;
 
 private:
-    // Hard references on the placed actor travel in the cooked Weight package.
+    // Hard references on the placed actor travel in the cooked chamber package.
     UPROPERTY(EditInstanceOnly, Category="Weight")
     TObjectPtr<UStaticMesh> PlateBaseMesh;
     UPROPERTY(EditInstanceOnly, Category="Weight")
@@ -62,5 +62,9 @@ private:
     TObjectPtr<UStaticMesh> DoorFrameMesh;
     UPROPERTY(EditInstanceOnly, Category="Weight")
     TObjectPtr<UStaticMesh> SwitchMesh;
+    UPROPERTY(EditInstanceOnly, Category="Chamber")
+    TObjectPtr<UStaticMesh> RelayMesh;
+    UPROPERTY(Transient)
+    TObjectPtr<UStaticMeshComponent> RelayHousing;
     bool SpawnRelayTraces(UStaticMesh& Mesh, UMaterialInterface* Idle, UMaterialInterface* Powered);
 };

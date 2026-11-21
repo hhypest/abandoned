@@ -110,9 +110,9 @@ void UWeightStreamingVerification::TickComponent(float Delta, ELevelTick TickTyp
         {
             if (!Assembly.IsValid()) { return Fail(TEXT("missing Weight device assembly")); }
             FString Error;
-            Assembly->BuildStreamedWeight(LoadObject<UMaterialInterface>(nullptr,
+            Assembly->BuildStreamed(*GetDefault<UEntryWeightLayout>(), LoadObject<UMaterialInterface>(nullptr,
                 TEXT("/Game/Abandoned/Materials/M_AbandonedSurface.M_AbandonedSurface")), Error);
-            if (!Error.IsEmpty() || !Assembly->IsWeightReady()) { return Fail(TEXT("incomplete Weight circuit")); }
+            if (!Error.IsEmpty() || !Assembly->IsStreamedRoomReady()) { return Fail(TEXT("incomplete Weight circuit")); }
             DeviceBodies = {Assembly->PlateCircuit->GetPlate(0), Assembly->DoorDrive->GetDoor(), Assembly->Button.Get()};
             const auto& Spawns = GetDefault<UEntryWeightLayout>()->CubeSpawns;
             if (Ballast.IsEmpty() || Ballast.Num() != Spawns.Num()) { return Fail(TEXT("streamed ballast count")); }
