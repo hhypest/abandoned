@@ -228,12 +228,15 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     const auto Finishes = Abandoned::Scene::MakeFinishes(*this, SurfaceMaterial, Layout->Finishes);
     for (const FSceneBlock& Block : Layout->Room)
     {
+        TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_SolidRoomBlock, Block.bCollision);
+        TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_DecorativeRoomBlock, !Block.bCollision);
         const auto Parts = Abandoned::Blockout::SpawnBox(World, *Mesh, Block.Center, Block.Size,
             EComponentMobility::Static, Block.bCollision ? TEXT("BlockAll") : TEXT("NoCollision"));
         Abandoned::Scene::SetFinish(Parts, Block, Finishes);
     }
     for (const FTrainingCubeSpawn& CubeSpawn : Layout->CubeSpawns)
     {
+        TRACE_CPUPROFILER_EVENT_SCOPE(Training_SpawnPuzzleCube);
         APuzzleCube* Cube = World.SpawnActor<APuzzleCube>(CubeSpawn.Center, FRotator::ZeroRotator);
         if (!Cube)
         {
@@ -250,6 +253,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     for (int32 Index = 0; Index < Layout->GetPlateCount(); ++Index)
     {
         const FSceneBlock& Block = Layout->GetPlateAt(Index);
+        TRACE_CPUPROFILER_EVENT_SCOPE(Training_BuildPressurePlate);
         const auto Parts = Abandoned::Blockout::SpawnBox(World, *PlateTop, Block.Center, Block.Size, EComponentMobility::Movable);
         if (!Parts.Collision || !Parts.Visual)
         {

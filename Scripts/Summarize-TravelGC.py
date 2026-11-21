@@ -55,7 +55,7 @@ class Event:
         return self.start <= event.start <= event.end <= self.end and self.depth < event.depth
 
 
-def read_trace(path):
+def read_trace(path, timers=TIMERS):
     events = defaultdict(list)
     with path.open(encoding="utf-8-sig", newline="") as stream:
         rows = csv.DictReader(stream)
@@ -64,7 +64,7 @@ def read_trace(path):
                 raise ValueError(f"Missing column {column}")
         for row in rows:
             name = row["TimerName"]
-            if name in TIMERS and row["ThreadName"] == "GameThread":
+            if name in timers and row["ThreadName"] == "GameThread":
                 event = Event(float(row["StartTime"]), float(row["EndTime"]), int(row["Depth"]))
                 if not (math.isfinite(event.start) and math.isfinite(event.end)
                         and 0 <= event.start <= event.end and event.depth >= 0):
