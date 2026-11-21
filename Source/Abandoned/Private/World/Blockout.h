@@ -7,6 +7,7 @@ class UBoxComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
 class UWorld;
+class AActor;
 
 namespace Abandoned::Blockout
 {
@@ -19,5 +20,5 @@ struct FBox
 [[nodiscard]] UStaticMesh* LoadCube();
 void ApplyGravity(UWorld& World);
 FBox SpawnBox(UWorld& World, UStaticMesh& Cube, FVector Center, FVector Size,
-    EComponentMobility::Type Mobility = EComponentMobility::Static, FName CollisionProfile = TEXT("BlockAll"));
+    EComponentMobility::Type Mobility = EComponentMobility::Static, FName CollisionProfile = TEXT("BlockAll"), AActor* Owner = nullptr);
 }

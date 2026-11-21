@@ -39,9 +39,11 @@ void SetFinish(const Blockout::FBox& Parts, const FSceneBlock& Block, const Fini
     }
 }
 
-UPointLightComponent* AddLight(UWorld& World, const FSceneLight& Data)
+UPointLightComponent* AddLight(UWorld& World, const FSceneLight& Data, AActor* Owner)
 {
-    APointLight* Lamp = World.SpawnActor<APointLight>(Data.Position, FRotator::ZeroRotator);
+    FActorSpawnParameters Params;
+    Params.Owner = Owner;
+    APointLight* Lamp = World.SpawnActor<APointLight>(Data.Position, FRotator::ZeroRotator, Params);
     if (!Lamp)
     {
         return nullptr;

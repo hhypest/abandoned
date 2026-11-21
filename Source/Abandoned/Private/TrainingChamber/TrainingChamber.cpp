@@ -45,94 +45,10 @@ using Dev20Step = Abandoned::Domain::Expedition::Dev20Stage;
 using Abandoned::Infrastructure::Expedition::UnrealCheckpointStore;
 using Abandoned::Infrastructure::Expedition::WriteSegment;
 
-using FDecorGroups = TMap<UMaterialInterface*, TArray<FTransform>>;
-
-UStaticMeshComponent* SpawnWeightShell(UWorld& World, UStaticMesh* Mesh, TConstArrayView<FSceneBlock> Room)
-{
-    TRACE_CPUPROFILER_EVENT_SCOPE(Training_WeightShellBody);
-    const UBodySetup* Body = Mesh ? Mesh->GetBodySetup() : nullptr;
-    if (!Body)
-    {
-        return nullptr;
-    }
-    const auto& Boxes = Body->AggGeom.BoxElems;
-    int32 Index = 0;
-    for (const FSceneBlock& Block : Room)
-    {
-        if (Block.bCollision)
-        {
-            if (!Boxes.IsValidIndex(Index))
-            {
-                return nullptr;
-            }
-            const FKBoxElem& Box = Boxes[Index++];
-            if (!Box.Center.Equals(Block.Center) || !FVector(Box.X, Box.Y, Box.Z).Equals(Block.Size)
-                || !Box.Rotation.IsNearlyZero())
-            {
-                return nullptr;
-            }
-        }
-    }
-    if (Index != Boxes.Num() || Index != Body->AggGeom.GetElementCount())
-    {
-        return nullptr;
-    }
-    AActor* Owner = World.SpawnActor<AActor>();
-    if (!Owner)
-    {
-        return nullptr;
-    }
-    auto* Shell = NewObject<UStaticMeshComponent>(Owner);
-    Owner->SetRootComponent(Shell);
-    Owner->AddInstanceComponent(Shell);
-    Shell->SetMobility(EComponentMobility::Static);
-    Shell->SetStaticMesh(Mesh);
-    Shell->SetVisibility(false);
-    Shell->SetCastShadow(false);
-    Shell->SetCollisionProfileName(TEXT("BlockAll"));
-    Shell->RegisterComponent();
-    return Shell;
-}
-
-bool SpawnRoomDecor(UWorld& World, UStaticMesh& Mesh, const FDecorGroups& Groups)
-{
-    TRACE_CPUPROFILER_EVENT_SCOPE(Training_RegisterDecorInstances);
-    AActor* Owner = World.SpawnActor<AActor>();
-    if (!Owner)
-    {
-        return false;
-    }
-    for (const auto& Group : Groups)
-    {
-        auto* Instances = NewObject<UInstancedStaticMeshComponent>(Owner);
-        Owner->AddInstanceComponent(Instances);
-        if (USceneComponent* Root = Owner->GetRootComponent())
-        {
-            Instances->SetupAttachment(Root);
-        }
-        else
-        {
-            Owner->SetRootComponent(Instances);
-        }
-        Instances->SetMobility(EComponentMobility::Static);
-        Instances->SetStaticMesh(&Mesh);
-        if (Group.Key)
-        {
-            Instances->SetMaterial(0, Group.Key);
-        }
-        Instances->SetCollisionProfileName(TEXT("NoCollision"));
-        Instances->SetCanEverAffectNavigation(false);
-        Instances->AddInstances(Group.Value, false, false, false);
-        Instances->RegisterComponent();
-    }
-    return true;
-}
 }
 
 ATrainingChamberGameMode::ATrainingChamberGameMode()
 {
-    PlateCircuit = CreateDefaultSubobject<UTrainingPlateCircuitComponent>(TEXT("PlateCircuit"));
-    DoorDrive = CreateDefaultSubobject<UTrainingDoorDriveComponent>(TEXT("DoorDrive"));
     DefaultPawnClass = ATrainingChamberCharacter::StaticClass();
     HUDClass = ATrainingChamberHUD::StaticClass();
     PlayerControllerClass = AAbandonedTestController::StaticClass();
@@ -289,233 +205,13 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
         return;
     }
 
-    UStaticMesh* Mesh = Abandoned::Blockout::LoadCube();
-    if (!Mesh)
-    {
-        ErrorMessage = TEXT("Training chamber requires the Engine BasicShapes cube.");
-        return;
-    }
-
-    auto* MeshLibrary = GetGameInstance()->GetSubsystem<UChamberMeshLibrary>();
-    UStaticMesh* SmallCube = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::SmallCube);
-    UStaticMesh* LargeCube = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::LargeCube);
-    UStaticMesh* PlateBase = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::PlateBase);
-    UStaticMesh* PlateTop = MeshLibrary->LoadForChamber(*GetWorld(), Abandoned::FosTech::PlateTop);
-    if (!SmallCube || !LargeCube || !PlateBase || !PlateTop)
-    {
-        ErrorMessage = TEXT("Training chamber requires the FosTech cube and plate meshes.");
-        return;
-    }
-
+    Devices = GetWorld()->SpawnActor<AChamberAssembly>();
+    if (!Devices) { ErrorMessage = TEXT("Could not create chamber devices."); return; }
+    Devices->Build(*Layout, SurfaceMaterial, Course.Current != Segment::Sandbox, ErrorMessage);
+    if (!ErrorMessage.IsEmpty()) { return; }
     UWorld& World = *GetWorld();
-    Abandoned::Blockout::ApplyGravity(World);
-    const auto Finishes = Abandoned::Scene::MakeFinishes(*this, SurfaceMaterial, Layout->Finishes);
-    const bool bDecorLayout = Layout->IsA<UEntryStairsLayout>() || Layout->IsA<UEntryWeightLayout>();
-    const bool bInstanceDecor = bDecorLayout && !FParse::Param(FCommandLine::Get(), TEXT("NoInstancedChamberDecor"));
-    FDecorGroups DecorGroups;
-    UStaticMeshComponent* Shell = nullptr;
-    if (Layout->IsA<UEntryWeightLayout>())
-    {
-        if (FParse::Param(FCommandLine::Get(), TEXT("CompoundWeightShell")))
-        {
-            UStaticMesh* BodyMesh = MeshLibrary->LoadForChamber(World, UChamberMeshLibrary::WeightShellPath);
-            Shell = SpawnWeightShell(World, BodyMesh, Layout->Room);
-            if (!Shell)
-            {
-                ErrorMessage = TEXT("Cooked Weight shell does not match the chamber layout.");
-                return;
-            }
-        }
-        UE_LOG(LogTrainingChamber, Log, TEXT("Weight shell mode=%s"), Shell ? TEXT("Compound") : TEXT("Separate"));
-    }
-    const bool bInstanceShellVisuals = Shell && bInstanceDecor &&
-        FParse::Param(FCommandLine::Get(), TEXT("InstanceWeightShellVisuals"));
-    int32 GroupedSolidCount = 0;
-    for (const FSceneBlock& Block : Layout->Room)
-    {
-        TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_SolidRoomBlock, Block.bCollision);
-        TRACE_CPUPROFILER_EVENT_SCOPE_CONDITIONAL(Training_DecorativeRoomBlock, !Block.bCollision);
-        if (bInstanceDecor && (!Block.bCollision || bInstanceShellVisuals))
-        {
-            DecorGroups.FindOrAdd(Finishes.FindRef(Block.Finish)).Emplace(
-                FQuat::Identity, Block.Center, Block.Size / 100.0);
-            GroupedSolidCount += Block.bCollision ? 1 : 0;
-            continue;
-        }
-        if (Shell && Block.bCollision)
-        {
-            auto* Visual = NewObject<UStaticMeshComponent>(Shell->GetOwner());
-            Shell->GetOwner()->AddInstanceComponent(Visual);
-            Visual->SetupAttachment(Shell);
-            Visual->SetMobility(EComponentMobility::Static);
-            Visual->SetStaticMesh(Mesh);
-            Visual->SetCollisionProfileName(TEXT("NoCollision"));
-            Visual->SetRelativeLocation(Block.Center);
-            Visual->SetRelativeScale3D(Block.Size / 100.0);
-            Visual->RegisterComponent();
-            Abandoned::Scene::SetFinish({nullptr, Visual}, Block, Finishes);
-            continue;
-        }
-        const auto Parts = Abandoned::Blockout::SpawnBox(World, *Mesh, Block.Center, Block.Size,
-            EComponentMobility::Static, Block.bCollision ? TEXT("BlockAll") : TEXT("NoCollision"));
-        Abandoned::Scene::SetFinish(Parts, Block, Finishes);
-    }
-    if (!DecorGroups.IsEmpty() && !SpawnRoomDecor(World, *Mesh, DecorGroups))
-    {
-        ErrorMessage = TEXT("Could not create the training chamber decor.");
-        return;
-    }
-    if (Shell)
-    {
-        UE_LOG(LogTrainingChamber, Log, TEXT("Weight shell grouped visuals=%d"), GroupedSolidCount);
-    }
-    if (bDecorLayout)
-    {
-        UE_LOG(LogTrainingChamber, Log, TEXT("Room decor mode=%s groups=%d"),
-            bInstanceDecor ? TEXT("instanced") : TEXT("separate"), DecorGroups.Num());
-    }
-    for (const FTrainingCubeSpawn& CubeSpawn : Layout->CubeSpawns)
-    {
-        TRACE_CPUPROFILER_EVENT_SCOPE(Training_SpawnPuzzleCube);
-        APuzzleCube* Cube = World.SpawnActor<APuzzleCube>(CubeSpawn.Center, FRotator::ZeroRotator);
-        if (!Cube)
-        {
-            ErrorMessage = TEXT("Could not create a training chamber cube.");
-            return;
-        }
-        Cube->Initialize(CubeSpawn.Type, CubeSpawn.Type == EPuzzleCubeType::Small ? *SmallCube : *LargeCube);
-        Cubes.Add(Cube);
-    }
-    const auto DoorParts = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center, Layout->Door.Size,
-        EComponentMobility::Movable, TEXT("BlockAllDynamic"));
-    // The leaf is 114.30 cm wide at its original height of 190.25 cm.
-    const double LeafHeight = FMath::Max(Layout->Door.Size.Z, Layout->Door.Size.Y * 190.25 / 114.30);
-    // Mount the jambs on the chamber side of the wall, around the playable opening.
-    const double FrameWidth = Layout->Door.Size.Y + 32.0;
-    const double FrameHeight = FMath::Max(Layout->Door.Size.Z, FrameWidth * 190.18 / 163.48);
-    const FVector FrameSize(Layout->Door.Size.X, FrameWidth, FrameHeight);
-    const FVector FrameOffset(-Layout->Door.Size.X * 0.5 - 22.0, 0, (FrameHeight - Layout->Door.Size.Z) * 0.5);
-    const auto Frame = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Door.Center + FrameOffset,
-        FrameSize, EComponentMobility::Static, TEXT("NoCollision"));
-    if (!Abandoned::FosTech::SetVisual(DoorParts.Visual, Abandoned::FosTech::Leaf, LeafHeight, 90.0) ||
-        !Abandoned::FosTech::SetVisual(Frame.Visual, Abandoned::FosTech::Frame, FrameSize.Z, 90.0))
-    {
-        ErrorMessage = TEXT("Missing FosTech door assembly.");
-        return;
-    }
-    DoorParts.Visual->AddLocalOffset(FVector(0, 0, (LeafHeight - Layout->Door.Size.Z) * 0.5));
-    PlateCircuit->Configure(*Layout, Course.Current != Segment::Sandbox);
-    for (int32 Index = 0; Index < Layout->GetPlateCount(); ++Index)
-    {
-        const FSceneBlock& Block = Layout->GetPlateAt(Index);
-        TRACE_CPUPROFILER_EVENT_SCOPE(Training_BuildPressurePlate);
-        const auto Parts = Abandoned::Blockout::SpawnBox(World, *PlateTop, Block.Center, Block.Size, EComponentMobility::Movable);
-        if (!Parts.Collision || !Parts.Visual)
-        {
-            ErrorMessage = TEXT("Could not create the pressure plates.");
-            return;
-        }
-        // Both parts retain the common GLB origin; align the tread surface with the gameplay box.
-        const auto Bounds = PlateBase->GetBounds();
-        const double PlateScale = FMath::Min(Block.Size.X / (2.0 * Bounds.BoxExtent.X), Block.Size.Y / (2.0 * Bounds.BoxExtent.Y));
-        const FVector PlateOffset(-Bounds.Origin.X * PlateScale, -Bounds.Origin.Y * PlateScale,
-            Block.Size.Z * 0.5 - PlateTop->GetBoundingBox().Max.Z * PlateScale);
-        Parts.Visual->SetRelativeLocation(PlateOffset);
-        Parts.Visual->SetRelativeScale3D(FVector(PlateScale));
-        AActor* PlateActor = Parts.Collision->GetOwner();
-        auto* Base = NewObject<UStaticMeshComponent>(PlateActor);
-        PlateActor->AddInstanceComponent(Base);
-        Base->SetupAttachment(Parts.Collision);
-        Base->SetMobility(EComponentMobility::Movable);
-        Base->SetCollisionProfileName(TEXT("NoCollision"));
-        Base->SetStaticMesh(PlateBase);
-        Base->SetRelativeLocation(PlateOffset);
-        Base->SetRelativeScale3D(FVector(PlateScale));
-        Base->RegisterComponent();
-        FSceneLight Light = Layout->PlateLight;
-        Light.Position += Block.Center - Layout->Plate.Center;
-        PlateCircuit->AddPlate(*Parts.Collision, *Parts.Visual, Abandoned::Scene::AddLight(World, Light));
-        if (Layout->UsesPlateBalance() || Layout->UsesParallelPlates())
-        {
-            auto* Sign = NewObject<UTextRenderComponent>(PlateActor);
-            PlateActor->AddInstanceComponent(Sign);
-            Sign->SetupAttachment(Parts.Collision);
-            Sign->SetRelativeLocation(FVector(-Block.Size.X * 0.5 - 12.0, 0, 22.0));
-            Sign->SetRelativeRotation(FRotator(0, 180, 0));
-            Sign->SetHorizontalAlignment(EHTA_Center);
-            Sign->SetVerticalAlignment(EVRTA_TextCenter);
-            Sign->SetWorldSize(20.0f);
-            Sign->SetText(Layout->UsesParallelPlates() ? FText::FromString(Index == 0 ? TEXT("A") : TEXT("B"))
-                : FText::AsNumber(Index + 1));
-            Sign->RegisterComponent();
-        }
-    }
-    if (Layout->UsesParallelPlates())
-    {
-        const auto RelayBox = Abandoned::Blockout::SpawnBox(World, *Mesh,
-            Layout->Door.Center + FVector(-40, Layout->Door.Size.Y * 0.5 + 44, 0), FVector(20, 46, 52),
-            EComponentMobility::Static, TEXT("NoCollision"));
-        if (!Abandoned::FosTech::SetVisual(RelayBox.Visual, Abandoned::FosTech::Relay, 52.0, 90.0))
-        {
-            ErrorMessage = TEXT("Missing FosTech relay box.");
-            return;
-        }
-    }
-    if (Layout->UsesParallelPlates() &&
-        !SpawnRelayTraces(*Mesh, Finishes.FindRef(FName(TEXT("RelayIdle"))), Finishes.FindRef(FName(TEXT("RelayPowered")))))
-    {
-        ErrorMessage = TEXT("Could not create the parallel plate signal traces.");
-        return;
-    }
-    if (Layout->bRequiresButton)
-    {
-        const auto ButtonParts = Abandoned::Blockout::SpawnBox(World, *Mesh, Layout->Button.Center,
-            Layout->Button.Size, EComponentMobility::Movable);
-        Button = ButtonParts.Collision;
-        ButtonVisual = ButtonParts.Visual;
-        if (!Abandoned::FosTech::SetVisual(ButtonVisual, Abandoned::FosTech::Button, Layout->Button.Size.Z, 90.0))
-        {
-            ErrorMessage = TEXT("Missing FosTech wall button.");
-            return;
-        }
-    }
-
-    if (!IsValid(DoorParts.Collision) || (Layout->bRequiresButton && (!Button || !ButtonVisual)))
-    {
-        ErrorMessage = TEXT("Could not create the cube, pressure plate or door.");
-        return;
-    }
-    DoorDrive->Bind(*DoorParts.Collision, Layout->Door.Center);
-
-    if (!Layout->HintPages.IsEmpty())
-    {
-        const FSceneBlock& Terminal = Layout->HintTerminal;
-        const auto Parts = Abandoned::Blockout::SpawnBox(World, *Mesh, Terminal.Center, Terminal.Size);
-        if (!IsValid(Parts.Collision))
-        {
-            ErrorMessage = TEXT("Could not create the chamber hint terminal.");
-            return;
-        }
-        HintTerminal = Parts.Collision;
-        Abandoned::Scene::SetFinish(Parts, Terminal, Finishes);
-        AActor* TerminalActor = HintTerminal->GetOwner();
-        auto* Label = NewObject<UTextRenderComponent>(TerminalActor);
-        TerminalActor->AddInstanceComponent(Label);
-        Label->SetupAttachment(HintTerminal);
-        Label->SetRelativeLocation(FVector(Terminal.Size.X * 0.5 + 1.0, 0.0, 0.0));
-        Label->SetHorizontalAlignment(EHTA_Center);
-        Label->SetVerticalAlignment(EVRTA_TextCenter);
-        Label->SetWorldSize(10.0f);
-        Label->SetText(NSLOCTEXT("ChamberHints", "TerminalLabel", "HINTS"));
-        Label->RegisterComponent();
-    }
-
-    for (const FSceneLight& Light : Layout->Lights)
-    {
-        TRACE_CPUPROFILER_EVENT_SCOPE(Training_AddLight);
-        Abandoned::Scene::AddLight(World, Light);
-    }
     SaveEntryCheckpoint();
+    if (NeedsWeightAirlock()) { RequestWeight(); }
     if ((Layout->IsA<UEntryStairsLayout>() || Layout->IsA<UEntryButtonLayout>())
         && FParse::Param(FCommandLine::Get(), TEXT("CompoundWeightShell")))
     {
@@ -528,6 +224,11 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
             }
         }), 0.5f, false);
     }
+    ActivateChamber();
+}
+
+void ATrainingChamberGameMode::ActivateChamber()
+{
     TRACE_CPUPROFILER_EVENT_SCOPE(Training_ArrivalReady);
 #if WITH_DEV_AUTOMATION_TESTS
     if (Course.Current == Segment::Stairs)
@@ -537,7 +238,7 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     const bool bVerifyCourse = UEntryChamberVerification::IsRequested(bDev20Run);
     if (Course.Current == Segment::Sandbox && UTrainingVerification::IsRequested())
     {
-        UTrainingVerification::Attach(*this, Cubes, PlateCircuit->GetPlates());
+        UTrainingVerification::Attach(*this, Devices->Cubes, Devices->PlateCircuit->GetPlates());
     }
     else if (UChamberHintsVerification::IsRequested())
     {
@@ -545,20 +246,20 @@ void ATrainingChamberGameMode::InitGame(const FString& MapName, const FString& O
     }
     else if (Course.Current == Segment::Button && UParallelCircuitVerification::IsRequested())
     {
-        UParallelCircuitVerification::Attach(*this, Cubes, RelayTraces, RelayIdleMaterial, RelayPoweredMaterial);
+        UParallelCircuitVerification::Attach(*this, Devices->Cubes, Devices->RelayTraces, Devices->RelayIdleMaterial, Devices->RelayPoweredMaterial);
     }
     else if (Course.Current == Segment::Balance && (UPlateBalanceVerification::IsStandaloneRequested() || bVerifyCourse))
     {
-        UPlateBalanceVerification::Attach(*this, Cubes, PlateCircuit->GetPlates());
+        UPlateBalanceVerification::Attach(*this, Devices->Cubes, Devices->PlateCircuit->GetPlates());
     }
     else if (bVerifyCourse && (Course.Current == Segment::Stairs || Course.Current == Segment::Button || Course.Current == Segment::Weight))
     {
-        UEntryChamberVerification::Attach(*this, Course.Current, Cubes);
+        UEntryChamberVerification::Attach(*this, Course.Current, Devices->Cubes);
     }
 #endif
     UDoorClampVerification::Attach(*this);
     UE_LOG(LogTrainingChamber, Display, TEXT("Training chamber ready. %s, %d cubes, plate released, exit closed."),
-        *WriteSegment(Course.Current), Cubes.Num());
+        *WriteSegment(Course.Current), Devices->Cubes.Num());
 }
 
 void ATrainingChamberGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
@@ -602,9 +303,9 @@ void ATrainingChamberGameMode::HandleStartingNewPlayer_Implementation(APlayerCon
 void ATrainingChamberGameMode::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    if (!IsValid(GetDoor()))
+    if (!Devices || !IsValid(GetDoor()))
     {
-        DoorDrive->ReleaseClamp();
+        if (Devices) { Devices->DoorDrive->ReleaseClamp(); }
         return;
     }
     const APlayerController* Controller = GetWorld()->GetFirstPlayerController();
@@ -614,6 +315,15 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         return;
     }
 
+    if (NeedsWeightAirlock())
+    {
+        PrepareWeight();
+        if (bReachedExit)
+        {
+            if (!EnterWeight(*Player)) { bReachedExit = false; }
+            return;
+        }
+    }
     const FVector Location = Player->GetActorLocation();
     if (Location.Z < -600.0)
     {
@@ -626,21 +336,21 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
         ResetChamber(*Player);
         return;
     }
-    for (int32 Index = 0; Index < Cubes.Num(); ++Index)
+    for (int32 Index = 0; Index < Devices->Cubes.Num(); ++Index)
     {
-        if (IsValid(Cubes[Index]) && !CubeBounds.IsInside(Cubes[Index]->GetActorLocation()))
+        if (IsValid(Devices->Cubes[Index]) && !CubeBounds.IsInside(Devices->Cubes[Index]->GetActorLocation()))
         {
             ReturnCube(*Player, Index, Layout->bDispenseCubes);
         }
     }
 
-    PlateCircuit->Observe(*Player, Cubes, Dev20.Get(), DeltaSeconds);
+    Devices->PlateCircuit->Observe(*Player, Devices->Cubes, Dev20.Get(), DeltaSeconds);
     if (Layout->UsesParallelPlates())
     {
-        UpdateRelayTraces();
+        Devices->UpdateRelayTraces();
     }
     ObserveHints(*Player, DeltaSeconds);
-    if (DoorDrive->Move(*Player, Dev20.Get(), IsExitEnabled(), Course.Current != Segment::Sandbox, DeltaSeconds) ==
+    if (Devices->DoorDrive->Move(*Player, Dev20.Get(), IsExitEnabled() && (!NeedsWeightAirlock() || IncomingWeight), Course.Current != Segment::Sandbox, DeltaSeconds) ==
         ETrainingDoorResult::ResetPlayer)
     {
         ResetChamber(*Player);
@@ -652,7 +362,7 @@ void ATrainingChamberGameMode::Tick(float DeltaSeconds)
     {
         bReachedExit = true;
         UE_LOG(LogTrainingChamber, Display, TEXT("Player reached the exit."));
-        AdvanceCourse(*Player);
+        if (!NeedsWeightAirlock()) { AdvanceCourse(*Player); }
     }
 }
 
@@ -672,19 +382,19 @@ const TCHAR* ATrainingChamberGameMode::GetDev20Status(const ATrainingChamberChar
 
 void ATrainingChamberGameMode::PressButton()
 {
-    if (!IsButtonLatched() && IsValid(ButtonVisual))
+    if (!IsButtonLatched() && IsValid(Devices->ButtonVisual))
     {
-        PlateCircuit->PressButton();
-        ButtonVisual->SetRelativeLocation(FVector(8.0, 0.0, 0.0));
+        Devices->PlateCircuit->PressButton();
+        Devices->ButtonVisual->SetRelativeLocation(FVector(8.0, 0.0, 0.0));
         UE_LOG(LogTrainingChamber, Display, TEXT("Door circuit armed by wall button."));
     }
 }
 
 void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int32 Index, bool bUseDispenser)
 {
-    if (APuzzleCube* Cube = Cubes[Index]; IsValid(Cube))
+    if (APuzzleCube* Cube = Devices->Cubes[Index]; IsValid(Cube))
     {
-        DoorDrive->ReleaseIfHolding(Cube->GetBody());
+        Devices->DoorDrive->ReleaseIfHolding(Cube->GetBody());
         if (Player.GetHeldCube() == Cube)
         {
             Player.ReleaseHeldObject();
@@ -697,7 +407,7 @@ void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int
 
 void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
 {
-    DoorDrive->ReleaseClamp();
+    Devices->DoorDrive->ReleaseClamp();
     if (bDev20Run)
     {
         if (!bDev20Recovering)
@@ -708,31 +418,32 @@ void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
         }
         return;
     }
+    if (NeedsWeightAirlock() && bWeightLoadFailed) { RequestWeight(); }
     Player.PlaceAt(FTransform(FRotator::ZeroRotator, Layout->Spawn));
     Player.ReleaseHeldObject();
-    for (int32 Index = 0; Index < Cubes.Num(); ++Index)
+    for (int32 Index = 0; Index < Devices->Cubes.Num(); ++Index)
     {
         ReturnCube(Player, Index);
     }
-    PlateCircuit->Reset();
+    Devices->PlateCircuit->Reset();
     HintReader = {};
-    UpdateRelayTraces();
-    DoorDrive->ReturnToClosedPosition();
-    if (ButtonVisual)
+    Devices->UpdateRelayTraces();
+    Devices->DoorDrive->ReturnToClosedPosition();
+    if (Devices->ButtonVisual)
     {
-        ButtonVisual->SetRelativeLocation(FVector::ZeroVector);
+        Devices->ButtonVisual->SetRelativeLocation(FVector::ZeroVector);
     }
     bReachedExit = false;
 }
 
 bool ATrainingChamberGameMode::UseDevice(APuzzleCharacter&, UPrimitiveComponent& Target)
 {
-    if (&Target == HintTerminal)
+    if (&Target == Devices->HintTerminal)
     {
         ReadNextHint();
         return true;
     }
-    if (&Target == Button)
+    if (&Target == Devices->Button)
     {
         PressButton();
         return true;
@@ -742,11 +453,11 @@ bool ATrainingChamberGameMode::UseDevice(APuzzleCharacter&, UPrimitiveComponent&
 
 const TCHAR* ATrainingChamberGameMode::DevicePrompt(const UPrimitiveComponent& Target) const
 {
-    if (&Target == HintTerminal)
+    if (&Target == Devices->HintTerminal)
     {
         return TEXT("[E] Read hint terminal");
     }
-    if (&Target == Button)
+    if (&Target == Devices->Button)
     {
         return IsButtonLatched() ? TEXT("Circuit armed") : TEXT("[E] Arm the door circuit");
     }

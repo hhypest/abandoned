@@ -1,11 +1,11 @@
-#include "TrainingChamber/TrainingChamber.h"
+#include "TrainingChamber/ChamberAssembly.h"
 #include "TrainingChamber/TrainingChamberLayout.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "World/Blockout.h"
 
-bool ATrainingChamberGameMode::SpawnRelayTraces(UStaticMesh& Mesh, UMaterialInterface* Idle, UMaterialInterface* Powered)
+bool AChamberAssembly::SpawnRelayTraces(UStaticMesh& Mesh, UMaterialInterface* Idle, UMaterialInterface* Powered)
 {
     if (!Idle || !Powered)
     {
@@ -17,7 +17,7 @@ bool ATrainingChamberGameMode::SpawnRelayTraces(UStaticMesh& Mesh, UMaterialInte
     for (const FTrainingRelayTrace& Trace : Layout->RelayTraces)
     {
         const auto Parts = Abandoned::Blockout::SpawnBox(*GetWorld(), Mesh, Trace.Block.Center, Trace.Block.Size,
-            EComponentMobility::Movable, TEXT("NoCollision"));
+            EComponentMobility::Movable, TEXT("NoCollision"), this);
         if (!IsValid(Parts.Visual))
         {
             return false;
@@ -28,7 +28,7 @@ bool ATrainingChamberGameMode::SpawnRelayTraces(UStaticMesh& Mesh, UMaterialInte
     return true;
 }
 
-void ATrainingChamberGameMode::UpdateRelayTraces()
+void AChamberAssembly::UpdateRelayTraces()
 {
     const auto& State = PlateCircuit->GetState();
     const bool Powered[] = {State.PlatePressed, State.AlternatePlatePressed, State.ExitEnabled};

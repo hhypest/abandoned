@@ -50,6 +50,23 @@ for index, line in enumerate(rows):
     cube.set_editor_property("placed_ballast", True)
 if existing:
     raise RuntimeError("Unexpected ballast actors in pilot")
+rooms = [a for a in actors.get_all_level_actors() if isinstance(a, unreal.ChamberAssembly)]
+if len(rooms) > 1:
+    raise RuntimeError("Expected one Weight device assembly")
+if not rooms:
+    room = actors.spawn_actor_from_class(unreal.ChamberAssembly, unreal.Vector(0, 0, 0))
+    room.set_actor_label("Weight devices")
+else:
+    room = rooms[0]
+for prop, code, name in (
+    ("plate_base_mesh", "02", "PlateBase"), ("plate_top_mesh", "02", "PlateTop"),
+    ("door_leaf_mesh", "13", "DEV-13"), ("door_frame_mesh", "12", "DEV-12"),
+    ("switch_mesh", "03", "DEV-03"),
+):
+    asset = unreal.load_asset(f"/Game/Abandoned/Meshy/DEV_{code}/DEV-{code}/StaticMeshes/{name}")
+    if not asset:
+        raise RuntimeError(f"Missing Weight device mesh {name}")
+    room.set_editor_property(prop, asset)
 if not levels.save_current_level():
     raise RuntimeError("Could not save pilot sublevel")
 unreal.log(f"Saved WeightShellPilot with {len(rows)} ballast actors")

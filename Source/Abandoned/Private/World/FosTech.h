@@ -20,5 +20,6 @@ inline constexpr TCHAR PlateBase[] = TEXT("/Game/Abandoned/Meshy/DEV_02/DEV-02/S
 inline constexpr TCHAR PlateTop[] = TEXT("/Game/Abandoned/Meshy/DEV_02/DEV-02/StaticMeshes/PlateTop.PlateTop");
 
 // Size in centimetres along the mesh's original vertical axis. Preserve its proportions.
+bool FitVisual(UStaticMeshComponent* Visual, UStaticMesh* Mesh, double Height, double Yaw = 0.0);
 bool SetVisual(UStaticMeshComponent* Visual, const TCHAR* Path, double Height, double Yaw = 0.0);
 }
