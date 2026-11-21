@@ -52,7 +52,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Не удалось применить исп�
 
 ## Сборка доверенной ревизии
 
-Для воспроизводимой проверки `AbandonedEditor Win64 Development` из чистой копии защищённой `main` используйте [запускатель A‑01](Docs/TrustedUnrealBuild.md). Он фиксирует версии UE, MSVC и SDK и сохраняет код завершения и SHA проверенного коммита.
+Запускатель A‑01 собирает `AbandonedEditor Win64 Development` из чистой копии защищённой `main` с зафиксированными версиями UE, MSVC и SDK. Для проверки воспроизводимости используйте `Scripts/Test-TrustedUnrealReproducibility.ps1`. Он собирает одну ревизию в двух клонах и сравнивает DLL побайтово. [Подготовка, запуск и отчёт](Docs/TrustedUnrealBuild.md)
 
 ## Проверки перед PR
 
