@@ -19,6 +19,7 @@ param(
     [switch]$Capture,
     [switch]$SeparateChamberDecor,
     [switch]$CompoundWeightShell,
+    [switch]$PreloadWeightShell,
 
     [ValidateRange(1, 3600)]
     [int]$TimeoutSeconds = 180,
@@ -333,7 +334,8 @@ function Invoke-Scenario($name, $definition, $profile) {
     if ($target -eq 'Editor') { $start.ArgumentList.Add('-game') }
     if ($testReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
     if ($SeparateChamberDecor) { $start.ArgumentList.Add('-NoInstancedChamberDecor') }
-    if ($CompoundWeightShell) { $start.ArgumentList.Add('-CompoundWeightShell') }
+    if ($CompoundWeightShell -or $PreloadWeightShell) { $start.ArgumentList.Add('-CompoundWeightShell') }
+    if ($PreloadWeightShell) { $start.ArgumentList.Add('-PreloadWeightShell') }
     foreach ($arg in @($definition.Flag, '-vulkan', '-unattended',
                        '-windowed', "-ResX=$($dimensions[0])", "-ResY=$($dimensions[1])",
                        "-UserDir=$profile", "-abslog=$log", "-ExecCmds=$execCommands")) {

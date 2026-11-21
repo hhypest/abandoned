@@ -22,11 +22,47 @@ def p95(values):
     return sorted(values)[math.ceil(len(values) * .95) - 1]
 
 
-def report(run_id, folder, export):
+def preload_windows(frames, commands, enabled):
+    markers = {name: [] for name in ("WeightShellPrepare", "WeightShellRequest", "WeightShellReady")}
+    for i, frame in enumerate(frames):
+        for label in map(str.strip, frame["EVENTS"].split(";")):
+            if label in markers:
+                markers[label].append(i)
+    anchors = markers["WeightShellPrepare"]
+    requested, ready = markers["WeightShellRequest"], markers["WeightShellReady"]
+    if len(anchors) != len(commands) or len(requested) != int(enabled) or len(ready) != int(enabled):
+        raise ValueError(f"Unexpected preload events: {markers}")
+    if enabled and not (anchors[0] == requested[0] <= ready[0] < commands[0]):
+        raise ValueError("First request did not complete before the Weight command")
+
+    windows = []
+    for visit, (anchor, command) in enumerate(zip(anchors, commands)):
+        previous = commands[visit - 1] if visit else -1
+        if not previous < anchor <= command - 12 or command - 120 <= previous:
+            raise ValueError("Incomplete or out-of-order pre-travel window")
+        source = [f["FrameTime"] for f in frames[anchor:command]]
+        before = [f["FrameTime"] for f in frames[command - 120:command]]
+        row = dict(PrepareLeadFrames=command - anchor, PrepareFrameMs=source[0],
+                   Prepare12MaxMs=max(source[:12]), PrepareToCommandMaxMs=max(source),
+                   PrepareToCommandP95Ms=p95(source), BeforeLastMs=before[-1],
+                   Before12MaxMs=max(before[-12:]), Before120MaxMs=max(before), Before120P95Ms=p95(before),
+                   ReadyOffsetFrames="", ReadyFrameMs="", RequestToReadyMaxMs="")
+        if enabled and visit == 0:
+            offset = ready[0] - anchor
+            row.update(ReadyOffsetFrames=offset, ReadyFrameMs=source[offset],
+                       RequestToReadyMaxMs=max(source[:offset + 1]))
+        windows.append(row)
+    return windows
+
+
+def report(run_id, folder, export, preload=False):
     meta = json.loads((folder / "Run.json").read_text(encoding="utf-8-sig"))
-    compound = run_id.startswith("B")
-    mode = "Compound" if compound else "Separate"
-    if meta["WeightShell"] != mode or meta["ChamberDecor"] != "Instanced":
+    candidate = run_id.startswith("B")
+    compound = preload or candidate
+    shell = "Compound" if compound else "Separate"
+    mode = ("Async" if candidate else "OnDemand") if preload else shell
+    if (meta["WeightShell"] != shell or meta["ChamberDecor"] != "Instanced"
+            or meta.get("PreloadWeightShell", False) != (preload and candidate)):
         raise ValueError(f"Wrong configuration in {run_id}")
     mem = profile["summarize"](folder)
     frames = profile["read_frames"](folder / "Saved/Profiling/CSV" / meta["Profile"])
@@ -34,6 +70,7 @@ def report(run_id, folder, export):
     visits = list(budget["weight_rows"](folder, export))
     if len(commands) != 16 or len(visits) != 16:
         raise ValueError(f"Expected first visit and 15 repeats in {run_id}")
+    before = preload_windows(frames, commands, candidate) if preload else None
     events = gc["read_trace"](export, {gc["ACTORS"], UPDATE, CULL, SHELL, LOOKUP, SOLID, "BoxComponent", PHYSICS})
     rows = []
     for pos, visit in zip(commands, visits):
@@ -79,6 +116,10 @@ def report(run_id, folder, export):
                          SettledCpuP95Ms=p95([f["CPU"] for f in settled]),
                          SettledGpuP95Ms=p95([f["GPUTime"] for f in settled]),
                          **{k: visit[k] for k in budget["PHASES"] if k != "LoadMapMs"}))
+        if before is not None:
+            rows[-1].update(before[n - 1])
+            rows[-1].update(CommandToArrivalFrames=arrival - pos,
+                            BeforeArrival12MaxMs=max(f["FrameTime"] for f in frames[arrival - 12:arrival]))
     process = dict(Run=run_id, Mode=mode, Repeats=15, FrameP95Ms=p95([r["FrameMs"] for r in rows[1:]]),
                    InBudget=sum(r["FrameMs"] <= 16.67 for r in rows[1:]), PeakWorkingSetMiB=mem["peakWorkingSetMiB"],
                    PeakPrivateMiB=mem["peakPrivateMiB"], PeakDedicatedMiB=mem["peakDedicatedMiB"],
@@ -98,14 +139,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("captures", type=Path, help="A1.path, B1.path, ... and corresponding *.events.csv")
     parser.add_argument("output", type=Path, help="existing directory for visits and per-process peaks")
+    parser.add_argument("--preload", action="store_true", help="compare on-demand and async compound shell")
     args = parser.parse_args()
     visits, processes = [], []
     for run in ORDER:
         folder = Path((args.captures / f"{run}.path").read_text(encoding="utf-8-sig").strip())
-        rows, process = report(run, folder, args.captures / f"{run}.events.csv")
+        rows, process = report(run, folder, args.captures / f"{run}.events.csv", args.preload)
         visits.extend(rows)
         processes.append(process)
     if len({p["ExecutableSHA256"] for p in processes}) != 1:
         raise ValueError("Executable changed between runs")
-    write_csv(args.output / "A07-WeightShellVisits.csv", visits)
-    write_csv(args.output / "A07-WeightShellProcesses.csv", processes)
+    prefix = "A07-WeightShellPreload" if args.preload else "A07-WeightShell"
+    write_csv(args.output / f"{prefix}Visits.csv", visits)
+    write_csv(args.output / f"{prefix}Processes.csv", processes)

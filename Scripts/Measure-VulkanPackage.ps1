@@ -6,6 +6,7 @@ param(
     [switch]$TraceTravel,
     [ValidateSet('Separate', 'Instanced')][string]$ChamberDecor,
     [ValidateSet('Separate', 'Compound')][string]$WeightShell,
+    [switch]$PreloadWeightShell,
     [switch]$DisableChamberMeshReuse,
     [switch]$RedrawOutgoingChamber,
     [switch]$TraceDeferredGCTail,
@@ -23,6 +24,9 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($ChamberDecor -and !$TraceTravel) { throw 'ChamberDecor requires TraceTravel' }
 if ($WeightShell -and !$TraceTravel) { throw 'WeightShell requires TraceTravel' }
+if ($PreloadWeightShell -and ($WeightShell -ne 'Compound' -or $DisableChamberMeshReuse)) {
+    throw 'PreloadWeightShell requires compound collision and chamber mesh reuse'
+}
 if ($RedrawOutgoingChamber -and !$TraceTravel) { throw 'RedrawOutgoingChamber requires TraceTravel' }
 if ($DisableChamberMeshReuse -and !$TraceTravel) { throw 'DisableChamberMeshReuse requires TraceTravel' }
 if ($TraceDeferredGCTail -and !$TraceTravel) { throw 'TraceDeferredGCTail requires TraceTravel' }
@@ -78,6 +82,7 @@ foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1
 if ($DisableChamberMeshReuse) { $start.ArgumentList.Add('-NoChamberMeshReuse') }
 if ($ChamberDecor -eq 'Separate') { $start.ArgumentList.Add('-NoInstancedChamberDecor') }
 if ($WeightShell -eq 'Compound') { $start.ArgumentList.Add('-CompoundWeightShell') }
+if ($PreloadWeightShell) { $start.ArgumentList.Add('-PreloadWeightShell') }
 if ($measureReserve) { $start.ArgumentList.Add("-MapPageReserve=$MapPageReserve") }
 if ($TestMapReserveTrim) { $start.ArgumentList.Add('-TestMapReserveTrim') }
 if ($TraceMapPages) { $start.ArgumentList.Add('-AuditMapPages') }
@@ -196,6 +201,7 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     DisableChamberMeshReuse = [bool]$DisableChamberMeshReuse
     ChamberDecor = $ChamberDecor
     WeightShell = $WeightShell
+    PreloadWeightShell = [bool]$PreloadWeightShell
     TraceTravelTasks = [bool]$TraceTravelTasks
     TraceTravelStats = [bool]$TraceTravelStats
     MapPageReserve = if ($measureReserve) { $MapPageReserve } else { $null }
