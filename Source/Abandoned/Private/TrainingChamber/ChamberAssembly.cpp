@@ -396,7 +396,7 @@ bool AChamberAssembly::IsStreamedRoomReady() const
         return IsValid(Body) && Body->GetOwner()->GetLevel() == GetLevel() && Body->IsRegistered() &&
             Body->IsQueryCollisionEnabled();
     };
-    if (!Layout || !ReadyBody(Door) || (Layout->bRequiresButton && !ReadyBody(Button)) || PlateCircuit->GetPlates().Num() != Layout->GetPlateCount())
+    if (!Layout || !ReadyBody(Door) || (!Layout->IsA<UWeightBalanceLayout>() && !ReadyBody(Button)) || PlateCircuit->GetPlates().Num() != Layout->GetPlateCount())
     {
         return false;
     }
