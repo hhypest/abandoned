@@ -77,7 +77,7 @@ bool AVanguardSegment::HasPassageSupport() const
         return IsValid(Body) && Body->IsRegistered() && Body->IsQueryCollisionEnabled() && Body->GetOwner()->GetLevel() == GetLevel();
     };
     const auto* Passage = Cast<UVanguardPassageLayout>(Layout.Get());
-    if (!Passage || !Ready(Door) || Ledges.Num() != Passage->MantleLedges.Num() ||
+    if (!Passage || !Ready(Door) || !Ready(StationGate) || Ledges.Num() != Passage->MantleLedges.Num() ||
         Ledges.ContainsByPredicate([&](const auto& Ledge) { return !Ready(Ledge); })) { return false; }
     FHitResult Floor;
     return GetWorld()->LineTraceSingleByChannel(Floor, Passage->Spawn, Passage->Spawn - FVector(0, 0, 150), ECC_Pawn) &&

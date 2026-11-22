@@ -10,6 +10,8 @@
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Misc/CommandLine.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogStationAirlockTest, Log, All);
+
 namespace Abandoned::Verification::StationAirlock
 {
 namespace
@@ -56,7 +58,7 @@ bool CheckArrival(const AVanguardSegment& Station, const AVanguardCharacter& Pla
         Player.IsFlashlightOn() && Session && ExpectedArchive(Session->Suit.Records(), false) && OriginalSlot();
     if (bPassed)
     {
-        UE_LOG(LogTemp, Display, TEXT("Station handoff verified: same world and controller, passage removed, oxygen %.3f -> %.3f, light and archive retained."), LastOxygen, Oxygen);
+        UE_LOG(LogStationAirlockTest, Display, TEXT("Station handoff verified: same world and controller, passage removed, oxygen %.3f -> %.3f, light and archive retained."), LastOxygen, Oxygen);
     }
     return bPassed;
 }

@@ -8,6 +8,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Misc/CommandLine.h"
+#include "Player/MovementProfile.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogStationAirlock, Log, All);
 
@@ -41,17 +42,19 @@ bool AVanguardSegment::StationReady() const
         return false;
     }
     const FVector Spawn = IncomingStation->PlayerStart();
+    const auto Capsule = FCollisionShape::MakeCapsule(Abandoned::MovementProfile::CapsuleRadius, Abandoned::MovementProfile::StandingHalfHeight);
+    if (GetWorld()->OverlapBlockingTestByChannel(Spawn, FQuat::Identity, ECC_Pawn, Capsule)) { return false; }
     FHitResult Floor;
     return GetWorld()->LineTraceSingleByChannel(Floor, Spawn, Spawn - FVector(0, 0, 150), ECC_Pawn) &&
         Floor.GetActor() && Floor.GetActor()->GetLevel() == Level;
 }
 
-void AVanguardSegment::PollStation()
+bool AVanguardSegment::PollStation()
 {
-    if (bStationFailed) { return; }
+    if (bStationFailed) { return false; }
     if (StationInstance && StationInstance->GetIsRequestingUnloadAndRemoval())
     {
-        if (GetWorld()->GetStreamingLevels().Contains(StationInstance)) { return; }
+        if (GetWorld()->GetStreamingLevels().Contains(StationInstance)) { return false; }
         StationInstance = nullptr;
     }
     if (!StationInstance)
@@ -63,12 +66,12 @@ void AVanguardSegment::PollStation()
         Request.bInitiallyVisible = !FParse::Param(FCommandLine::Get(), TEXT("VerifyStationAirlock"));
 #endif
         StationInstance = ULevelStreamingDynamic::LoadLevelInstance(Request, bAccepted);
-        if (bAccepted && StationInstance) { return; }
+        if (bAccepted && StationInstance) { return false; }
     }
     else if (StationInstance->GetLevelStreamingState() != ELevelStreamingState::FailedToLoad)
     {
-        if (!StationInstance->IsLevelVisible()) { return; }
-        if (IncomingStation && StationReady()) { return; }
+        if (!StationInstance->IsLevelVisible()) { return false; }
+        if (IncomingStation && StationReady()) { return true; }
         if (!IncomingStation)
         {
             for (AActor* Actor : StationInstance->GetLoadedLevel()->Actors)
@@ -83,7 +86,7 @@ void AVanguardSegment::PollStation()
                     if (StationReady())
                     {
                         UE_LOG(LogStationAirlock, Display, TEXT("Station airlock ready: floor and supply cabinet registered."));
-                        return;
+                        return true;
                     }
                 }
                 UE_LOG(LogStationAirlock, Warning, TEXT("Station preparation failed. %s"), *Error);
@@ -95,6 +98,7 @@ void AVanguardSegment::PollStation()
     IncomingStation = nullptr;
     if (StationInstance) { RemoveInstance(*StationInstance); }
     UE_LOG(LogStationAirlock, Warning, TEXT("Station unavailable. Airlock locked; press R to retry."));
+    return false;
 }
 
 bool AVanguardSegment::EnterStation(AVanguardCharacter& Player)

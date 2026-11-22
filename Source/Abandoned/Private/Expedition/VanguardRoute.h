@@ -70,7 +70,7 @@ private:
     bool bRequestedAssets = false;
     bool bActive = false;
     bool bStationFailed = false;
-    void PollStation();
+    bool PollStation();
     bool StationReady() const;
     bool EnterStation(AVanguardCharacter& Player);
     UPROPERTY(Transient)

@@ -66,7 +66,7 @@ bool FitsMesh(UStaticMeshComponent* Visual, UStaticMesh* Mesh, FVector FitSize, 
 void MovePassageAirlock(UBoxComponent& Door, const FSceneBlock& Leaf, const FVector& Position, float DeltaSeconds, bool bReady = true)
 {
     const bool bNearDoor = FMath::Abs(Position.X - Leaf.Center.X) < 385.0 &&
-        FMath::Abs(Position.Y - Leaf.Center.Y) < 135.0;
+        FMath::Abs(Position.Y - Leaf.Center.Y) < Leaf.Size.Y * 0.5 + 36.0;
     FVector DoorPosition = Door.GetComponentLocation();
     const double TargetZ = Leaf.Center.Z + (bNearDoor && bReady ? VanguardAirlockTravelCm : 0.0);
     const double DoorStep = 340.0 * DeltaSeconds;
@@ -196,7 +196,7 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
     const bool bStreamed = GetLevel() != World.PersistentLevel;
     if (bStreamed && PlacedRoom.Num() != Layout->Room.Num())
     {
-        ErrorMessage = TEXT("Cooked passage shell does not match the room layout.");
+        ErrorMessage = TEXT("Cooked Vanguard shell does not match the room layout.");
         return;
     }
     for (int32 Index = 0; Index < Layout->Room.Num(); ++Index)
@@ -211,7 +211,7 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
                 !Actor->GetActorLocation().Equals(Block.Center, 0.1) ||
                 !(Actor->GetActorScale3D() * 100.0).Equals(Block.Size, 0.1))
             {
-                ErrorMessage = FString::Printf(TEXT("Passage block %d is missing or misplaced."), Index);
+                ErrorMessage = FString::Printf(TEXT("Vanguard block %d is missing or misplaced."), Index);
                 return;
             }
             Abandoned::Scene::SetFinish({nullptr, Visual}, Block, Finishes);
@@ -391,9 +391,8 @@ void AVanguardSegment::Tick(float DeltaSeconds)
         Player->UpdatePassageMovement(*RouteState, Passage.bEnableMantle, DeltaSeconds);
         const FVector Position = Player->GetActorLocation();
         MovePassageAirlock(*Door, Passage.Door, Position, DeltaSeconds);
-        if (Position.X >= Passage.StationGate.Center.X - 2000.0) { PollStation(); }
-        const bool bReady = StationReady();
-        MovePassageAirlock(*StationGate, Passage.StationGate, Position, DeltaSeconds, bReady);
+        const bool bReady = IsValid(StationGate) && Position.X >= Passage.StationGate.Center.X - 2000.0 && PollStation();
+        if (IsValid(StationGate)) { MovePassageAirlock(*StationGate, Passage.StationGate, Position, DeltaSeconds, bReady); }
         const bool bCanCross = bReady && StationGate->GetComponentLocation().Z >= Passage.StationGate.Center.Z + VanguardAirlockTravelCm - 1.0;
         if (const auto Transition = RouteState->AdvancePassage(Position, DeltaSeconds, bCanCross))
         {
