@@ -13,6 +13,7 @@
 #include "ProfilingDebugging/CsvProfiler.h"
 #include "Verification/VanguardMantleVerification.h"
 #include "Verification/PassageAirlockVerification.h"
+#include "Verification/StationAirlockVerification.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVanguardRouteTest, Log, All);
 
@@ -41,6 +42,7 @@ UVanguardRouteVerification* UVanguardRouteVerification::AttachIfRequested(
     {
         Check->Airlock = Door;
         Check->ClosedDoor = Passage->Door.Center;
+        Check->ClosedStationGate = Passage->StationGate.Center;
         if (Passage->bEnableMantle)
         {
             Check->MantleCheck = UVanguardMantleVerification::Attach(Route, Passage->MantleLedges[0], Check->bCapture);
@@ -77,7 +79,7 @@ void UVanguardRouteVerification::Finish(bool bPassed)
     FPlatformMisc::RequestExitWithStatus(false, bPassed ? 0 : 1);
 }
 
-void UVanguardRouteVerification::CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds)
+void UVanguardRouteVerification::CheckStep(AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds)
 {
     if (bFinished)
     {
@@ -109,6 +111,36 @@ void UVanguardRouteVerification::CheckStep(const AVanguardSegment& Route, AVangu
     }
     else if (Elapsed >= 0.9f)
     {
+        if (Abandoned::Verification::StationAirlock::Requested() && Player.GetActorLocation().X >= ClosedStationGate.X - 85.0)
+        {
+            if (!bRevealedStation)
+            {
+                WaitingAtStation += DeltaSeconds;
+                const auto* Gate = Route.GetStationGate();
+                if (!Gate || !Gate->GetComponentLocation().Equals(ClosedStationGate, 0.1) ||
+                    Player.GetActorLocation().X >= ClosedStationGate.X || !Abandoned::Verification::StationAirlock::OriginalSlot())
+                {
+                    UE_LOG(LogVanguardRouteTest, Error, TEXT("Station gate or archive changed before readiness."));
+                    Finish(false);
+                    return;
+                }
+                if (WaitingAtStation >= 0.6f && Route.RevealStationForVerification())
+                {
+                    bRevealedStation = true;
+                    UE_LOG(LogVanguardRouteTest, Display, TEXT("Station gate held the player while the station was hidden."));
+                }
+            }
+            if (Route.StationLoadFailed())
+            {
+                const bool bSafe = FParse::Param(FCommandLine::Get(), TEXT("VerifyInvalidSupply")) && Route.GetStationGate() &&
+                    Route.GetStationGate()->GetComponentLocation().Equals(ClosedStationGate, 0.1) &&
+                    Player.GetActorLocation().X < ClosedStationGate.X && Abandoned::Verification::StationAirlock::OriginalSlot();
+                if (bSafe) { UE_LOG(LogVanguardRouteTest, Display, TEXT("Unavailable supply rejected: gate closed and archive preserved.")); }
+                Finish(bSafe);
+                return;
+            }
+            Abandoned::Verification::StationAirlock::ObservePassage(Route, Player);
+        }
         CheckPassage(Player, DeltaSeconds);
     }
 }
@@ -190,14 +222,32 @@ void UVanguardRouteVerification::CheckStation(const AVanguardSegment& Route, AVa
     const FVector Cabinet = Supply->GetComponentLocation();
     const FVector From(Cabinet.X - 170.0, Cabinet.Y, SpawnZ);
     const FVector Eye = From + FVector(0, 0, Abandoned::MovementProfile::CameraHeight);
-    Player.PlaceAt(FTransform((Cabinet - Eye).Rotation(), From));
     const float Prior = Route.GetRouteState().GetOxygenPercent();
+    namespace Airlock = Abandoned::Verification::StationAirlock;
+    if (Airlock::Requested() && !Airlock::CheckArrival(Route, Player))
+    {
+        UE_LOG(LogVanguardRouteTest, Error, TEXT("Station handoff lost the world, controller, floor, suit state or archive."));
+        Finish(false);
+        return;
+    }
+    Player.PlaceAt(FTransform((Cabinet - Eye).Rotation(), From));
     Player.Interact();
+    if (Airlock::Requested())
+    {
+        Player.Interact();
+        if (!Airlock::CheckResupply(Player))
+        {
+            UE_LOG(LogVanguardRouteTest, Error, TEXT("Repeated supply did not preserve the unique campaign record."));
+            Finish(false);
+            return;
+        }
+        UE_LOG(LogVanguardRouteTest, Display, TEXT("Station supply used twice: one resupply record in suit and Balance slot."));
+    }
     const float Current = Route.GetRouteState().GetOxygenPercent();
     const bool bPassed = Prior < 100.0f && Route.GetRouteState().HasResupplied() && Current == 100.0f && Player.IsFlashlightOn();
     if (bPassed)
     {
-        UE_LOG(LogVanguardRouteTest, Display, TEXT("Vanguard shoulder flashlight stayed on across world travel."));
+        UE_LOG(LogVanguardRouteTest, Display, TEXT("Vanguard shoulder flashlight stayed on at the station."));
         UE_LOG(LogVanguardRouteTest, Display, TEXT("Vanguard verification passed: passage transit and station resupply. Oxygen %.2f -> %.2f."), Prior, Current);
     }
     else

@@ -120,6 +120,9 @@ public:
     FSceneBlock ExitZone;
 
     UPROPERTY(Config)
+    FSceneBlock StationGate;
+
+    UPROPERTY(Config)
     FSceneBlock FrameFit;
 
     UPROPERTY(Config)

@@ -34,7 +34,8 @@ public:
     void ResetMovement() { Hazards.ResetMovement(); }
     void RecordLanding(double SurfaceHeight);
     bool AdvanceMovement(std::optional<double> GroundHeight, float Seconds);
-    std::optional<FVanguardTransition> AdvancePassage(const FVector& Position, float DeltaSeconds);
+    std::optional<FVanguardTransition> AdvancePassage(const FVector& Position, float DeltaSeconds, bool bStationGateOpen);
+    Abandoned::Application::Expedition::VanguardDestination NextStation() const;
     std::optional<Abandoned::Application::Expedition::WorldDestination> RestartRadiationPassage();
     void Resupply(bool bAllowCampaignSave);
     float GetOxygenPercent() const;

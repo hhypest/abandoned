@@ -7,6 +7,7 @@
 #include "Expedition/VanguardRouteLayout.h"
 #include "Verification/VanguardWristTerminalVerification.h"
 
+#include "Components/BoxComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -69,6 +70,9 @@ void UVanguardRadiationVerification::CheckStep(const AVanguardSegment& Route, AV
     Elapsed += DeltaSeconds;
     if (Elapsed > 35.0f)
     {
+        const auto* Gate = Route.GetStationGate();
+        UE_LOG(LogRadiationVerification, Error, TEXT("Timed out at %s, station gate at %s."),
+            *Player.GetActorLocation().ToCompactString(), Gate ? *Gate->GetComponentLocation().ToCompactString() : TEXT("absent"));
         Fail(TEXT("timeout"));
         return;
     }

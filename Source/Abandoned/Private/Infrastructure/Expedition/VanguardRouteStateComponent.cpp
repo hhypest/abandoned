@@ -180,14 +180,20 @@ bool UVanguardRouteStateComponent::AdvanceMovement(std::optional<double> GroundH
     return Hazards.AdvanceMovement(GroundHeight, Seconds, GetDefault<UVanguardInjurySettings>()->Recovery());
 }
 
-std::optional<FVanguardTransition> UVanguardRouteStateComponent::AdvancePassage(const FVector& Position, float DeltaSeconds)
+Abandoned::Application::Expedition::VanguardDestination UVanguardRouteStateComponent::NextStation() const
+{
+    check(RecoveryDestination);
+    return StationAfterPassage(Destination, *RecoveryDestination);
+}
+
+std::optional<FVanguardTransition> UVanguardRouteStateComponent::AdvancePassage(const FVector& Position, float DeltaSeconds, bool bStationGateOpen)
 {
     if (bTravelling || !RecoveryDestination)
     {
         return std::nullopt;
     }
     UVanguardSession* Session = UVanguardSession::Find(*this);
-    const auto Observation = Hazards.Observe(ExitZone.IsInside(Position), Position.Z < -600.0, ClassifyPosition(Position),
+    const auto Observation = Hazards.Observe(bStationGateOpen && ExitZone.IsInside(Position), Position.Z < -600.0, ClassifyPosition(Position),
         DeltaSeconds, Session ? &Session->Suit : nullptr);
     switch (ResolvePassage(Observation))
     {
@@ -205,8 +211,7 @@ std::optional<FVanguardTransition> UVanguardRouteStateComponent::AdvancePassage(
         bTravelling = true;
         return FVanguardTransition{*RecoveryDestination, Observation.RadiationLimitReached};
     case PassageOutcome::EnterSanctuary:
-        bTravelling = true;
-        return FVanguardTransition{StationAfterPassage(Destination, *RecoveryDestination)};
+        return FVanguardTransition{NextStation()};
     default:
         return std::nullopt;
     }

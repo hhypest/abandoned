@@ -18,6 +18,7 @@ function New-WorldLifetimeScenario([string]$entryMap) {
             $commands.Add("$($frame - 30):open ${entryMap}?game=/Script/Abandoned.$mode")
         }
         $expected.Add("Load $mode")
+        if ($mode -eq 'TrainingChamberGameMode') { $expected.Add('Prepared Button') }
         # A class count includes live instances in every world, excluding default objects.
         $probes = @($mode) + $owners[$mode]
         if ($i -gt 0) {
@@ -27,6 +28,8 @@ function New-WorldLifetimeScenario([string]$entryMap) {
         foreach ($class in $probes) {
             $commands.Add("${frame}:obj list class=/Script/Abandoned.$class -skipmemorysize -nodetailedinfo")
             $count = [int]($class -eq $mode -or $class -in $owners[$mode])
+            # Stairs and its ready Button sublevel each own one circuit and one door drive.
+            if ($mode -eq 'TrainingChamberGameMode' -and $class -in $owners.TrainingChamberGameMode) { $count = 2 }
             $expected.Add("$class $count")
         }
         $expected.Add('Teardown')
@@ -47,6 +50,8 @@ function Read-WorldLifetimeEvents([string[]]$lines) {
     foreach ($line in $lines) {
         if ($line -match "LogLoad: Game class is '([^']+)'") {
             "Load $($Matches[1])"
+        } elseif ($line -match 'LogChamberAirlock: Display: Button airlock ready:') {
+            'Prepared Button'
         } elseif ($line -match 'Obj List: class=/Script/Abandoned\.(\w+) -skipmemorysize -nodetailedinfo\s*$') {
             $probe = $Matches[1]
         } elseif ($probe -and $line -match '\]\s*(\d+) Objects\s*$') {

@@ -1,0 +1,241 @@
+{
+  "GameSourceCommit": "be45c6b20a1cafbd2a1e375e0fb1e37989457c6e",
+  "VerificationCommit": "bcec40349935034cbc133a7b35ef03742bc02643",
+  "TrackedChangesAtStart": false,
+  "Date": "2026-11-22",
+  "Target": "Package",
+  "Unreal": "5.7.4",
+  "Rhi": "VULKAN_SM6",
+  "Resolution": "1280x720",
+  "ExecutableSha256": "EFF222EEA0984E0075AC2376BBC648ED55B09BF96F4DB0ADC3F6690212FB2BBF",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "Scenarios": [
+    {
+      "Name": "Radiation",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "WristTerminal",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "StationAirlock",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "StationAirlockMissingSupply",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourse",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCourseAlternate",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "EntryCheckpoint",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "PassageAirlock",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "VanguardRoute",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "VanguardOxygenRecovery",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "WorldLifetime",
+      "Outcome": "Passed",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    },
+    {
+      "Name": "VanguardRouteNegative",
+      "Outcome": "ExpectedFailure",
+      "FixedStepFps": 60,
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "AllocatorWarnings": {
+        "DeviceMemoryWarnings": 0,
+        "PooledBuffer": 0,
+        "Image": 0,
+        "BufferNotReleased": 0,
+        "LeakEntries": 0
+      }
+    }
+  ],
+  "Airlock": {
+    "StationAirlock": {
+      "SuccessMarkers": [
+        "Vanguard shoulder flashlight switched on, off and on with F.",
+        "Verification observed the raised airlock before crossing.",
+        "Verification crossed the moving passage airlock.",
+        "Vanguard segment ready: station.",
+        "Vanguard shoulder flashlight stayed on at the station.",
+        "Vanguard oxygen supply restored.",
+        "Vanguard verification passed: passage transit and station resupply.",
+        "Station gate held the player while the station was hidden.",
+        "Station airlock ready: floor and supply cabinet registered.",
+        "Passage exit crossed: station active in the same world.",
+        "Station handoff verified: same world and controller, passage removed",
+        "Station supply used twice: one resupply record in suit and Balance slot."
+      ],
+      "InitialSlot": {
+        "version": 2,
+        "checkpoint": "Balance",
+        "archive": [
+          "forecast-synchronized"
+        ]
+      },
+      "SavedOnExit": {
+        "version": 2,
+        "checkpoint": "Balance",
+        "archive": [
+          "forecast-synchronized",
+          "oxygen-restored"
+        ]
+      },
+      "OxygenPercent": {
+        "LastPassageVerificationFrame": 94.69,
+        "AtStationBeforeSupply": 94.687,
+        "AfterSupply": 100
+      }
+    },
+    "StationAirlockMissingSupply": {
+      "SuccessMarkers": [
+        "Station gate held the player while the station was hidden.",
+        "Unavailable supply rejected: gate closed and archive preserved."
+      ],
+      "InitialSlot": {
+        "version": 2,
+        "checkpoint": "Balance",
+        "archive": [
+          "forecast-synchronized"
+        ]
+      },
+      "SavedOnExit": {
+        "checkpoint": "Balance",
+        "version": 2,
+        "archive": [
+          "forecast-synchronized"
+        ]
+      }
+    }
+  },
+  "RadiationDoseClearedPercent": 19.53
+}

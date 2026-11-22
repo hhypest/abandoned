@@ -64,7 +64,7 @@ if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 
 ### Пилот потоковой загрузки Weight
 
-Пакет кампании включает карту Entry и подуровни Button, Weight, Balance и Passage через `MapsToCook` в `Config/DefaultGame.ini`. Для проверки пилота Stairs и маршрута кампании выполните команды после обычного BuildCookRun.
+Пакет кампании включает карту Entry и подуровни Button, Weight, Balance, Passage и Station через `MapsToCook` в `Config/DefaultGame.ini`. Для проверки пилота Stairs и маршрута кампании выполните команды после обычного BuildCookRun.
 
 ```powershell
 ./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Scenario WeightStreaming,EntryCourse,EntryCheckpoint -Resolution 1280x720
@@ -117,6 +117,16 @@ if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 
 На снимках из позиции игрока слева показана дверь до разворота, справа — после. Створка обращена лицевой панелью в камеру, индикатор остаётся справа на раме. [Сравнение в пакете](Images/A02-Balance-Door.jpg) · [Протокол Vulkan](Measurements/A02-PassageAirlock.json)
 
+### Шлюз пролёт → станция
+
+```powershell
+./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Scenario StationAirlock,StationAirlockMissingSupply,EntryCourse,EntryCheckpoint,Radiation,WristTerminal -Resolution 1280x720
+```
+
+`StationAirlock` начинает в Balance со слотом v2 и записью `forecast-synchronized`. Сценарий удерживает станцию скрытой, пока игрок идёт вперёд у закрытой выходной створки. После показа проверяются передача контроллера в том же мире, опора скафандра в подуровне станции, выгрузка пролёта, запас кислорода, включённый фонарь и прежний архив. Два взаимодействия со стойкой должны дать 100% кислорода и единственную запись `oxygen-restored` после записи прогноза, как в сессии, так и в слоте Balance. Запускатель повторно читает JSON после завершения игры.
+
+`StationAirlockMissingSupply` отключает коллизию стойки. Шлюз должен удержать игрока в пролёте и сохранить исходный архив. Радиационный маршрут отдельно проверяет дезактивацию и работу терминала на станции. [Результаты в пакете](Measurements/A02-StationAirlock.json)
+
 После замены библиотеки устройств ФосТех в том же пакете проверены оба решения кампании, сброс плит, зажим двери и три стенда. Для повторения [приёмки 11 сценариев](Measurements/A02-MeshyBallast.json) выполните команду в PowerShell.
 
 ```powershell
@@ -152,7 +162,7 @@ if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed ($LASTEXITCODE)" }
 ./Scripts/Invoke-UeVerification.ps1 -EngineRoot $ueRoot -Scenario WorldLifetime,EntryCourse,EntryCheckpoint
 ```
 
-`WorldLifetime` использует консольные команды UE после инициализации Vulkan. Для каждого мира в поле `WorldEvents` отчёта сохраняются класс загруженного GameMode, число живых экземпляров проверяемых классов и события выгрузки. Пропуск очистки, лишний владелец или неполная последовательность завершают проверку ошибкой. [Владельцы и результаты приёмки](AuditProgress.md#приёмка-a-03)
+`WorldLifetime` использует консольные команды UE после инициализации Vulkan. Для каждого мира в поле `WorldEvents` отчёта сохраняются класс загруженного GameMode, число живых экземпляров проверяемых классов и события выгрузки. При запуске Stairs стенд ожидает готовую Button и ровно две цепи плит и два привода. После смены мира он требует ноль таких компонентов. Пропуск очистки, лишний владелец или неполная последовательность завершают проверку ошибкой. [Владельцы и результаты приёмки](AuditProgress.md#приёмка-a-03)
 
 Для учебного стенда запустите оба сценария с отдельными профилями.
 

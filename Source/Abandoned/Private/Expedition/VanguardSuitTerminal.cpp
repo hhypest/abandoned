@@ -229,7 +229,11 @@ void AVanguardHUD::DrawHUD()
     DrawText(Dosimeter ? TEXT("ENERGY TIER / EXTERIOR GALLERY") : Location,
         FLinearColor::White, 24.0f, 24.0f, nullptr, 1.2f);
     DrawText(FString::Printf(TEXT("Suit oxygen: %.0f%%"), Reading.OxygenPercent), FLinearColor::White, 24.0f, 54.0f);
-    if (Player->CanReachSupply())
+    if (Player->Segment->StationLoadFailed())
+    {
+        DrawText(TEXT("Station unavailable. [R] Retry airlock"), FLinearColor::Yellow, 24.0f, 80.0f);
+    }
+    else if (Player->CanReachSupply())
     {
         DrawText(TEXT("[E] Connect oxygen supply"), FLinearColor(1.0, 0.68, 0.23), 24.0f, 80.0f);
     }

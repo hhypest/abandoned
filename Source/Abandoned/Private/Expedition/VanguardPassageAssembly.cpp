@@ -36,7 +36,7 @@ bool AVanguardSegment::PollPassageAssets()
 }
 
 #if WITH_EDITOR
-bool AVanguardSegment::BakePassageRoom()
+bool AVanguardSegment::BakePassageRoom(bool bStation)
 {
     UWorld* World = GetWorld();
     UStaticMesh* Cube = Abandoned::Blockout::LoadCube();
@@ -47,14 +47,14 @@ bool AVanguardSegment::BakePassageRoom()
         if (IsValid(Block)) { World->EditorDestroyActor(Block, true); }
     }
     PlacedRoom.Reset();
-    const auto* Settings = GetDefault<UVanguardPassageLayout>();
+    const UVanguardRouteLayout* Settings = bStation ? static_cast<const UVanguardRouteLayout*>(GetDefault<UVanguardStationLayout>()) : GetDefault<UVanguardPassageLayout>();
     for (const auto& Block : Settings->Room)
     {
         FActorSpawnParameters Params;
         Params.OverrideLevel = GetLevel();
         auto* Actor = World->SpawnActor<AStaticMeshActor>(Block.Center, FRotator::ZeroRotator, Params);
         if (!Actor) { return false; }
-        Actor->SetActorLabel(FString::Printf(TEXT("Passage %03d %s"), PlacedRoom.Num(), *Block.Finish.ToString()));
+        Actor->SetActorLabel(FString::Printf(TEXT("Room %03d %s"), PlacedRoom.Num(), *Block.Finish.ToString()));
         auto* Visual = Actor->GetStaticMeshComponent();
         Visual->SetStaticMesh(Cube);
         Visual->SetCollisionProfileName(Block.bCollision ? TEXT("BlockAll") : TEXT("NoCollision"));
@@ -77,7 +77,7 @@ bool AVanguardSegment::HasPassageSupport() const
         return IsValid(Body) && Body->IsRegistered() && Body->IsQueryCollisionEnabled() && Body->GetOwner()->GetLevel() == GetLevel();
     };
     const auto* Passage = Cast<UVanguardPassageLayout>(Layout.Get());
-    if (!Passage || !Ready(Door) || Ledges.Num() != Passage->MantleLedges.Num() ||
+    if (!Passage || !Ready(Door) || !Ready(StationGate) || Ledges.Num() != Passage->MantleLedges.Num() ||
         Ledges.ContainsByPredicate([&](const auto& Ledge) { return !Ready(Ledge); })) { return false; }
     FHitResult Floor;
     return GetWorld()->LineTraceSingleByChannel(Floor, Passage->Spawn, Passage->Spawn - FVector(0, 0, 150), ECC_Pawn) &&

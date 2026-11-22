@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Package')]
     [string]$PackageRoot,
 
-    [ValidateSet('PassageAirlock', 'PassageAirlockInvalidDoor', 'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
+    [ValidateSet('StationAirlock', 'StationAirlockMissingSupply', 'PassageAirlock', 'PassageAirlockInvalidDoor', 'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
                  'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
@@ -86,7 +86,7 @@ $radiationSuccess = @('Radiation exposure increased dose during a flare:', 'Radi
 $wristSuccess = @('Wrist terminal verification passed', 'Radiation passage verification passed')
 $routeSuccess = @('Vanguard shoulder flashlight switched on, off and on with F.',
                   'Verification observed the raised airlock before crossing.', 'Verification crossed the moving passage airlock.',
-                  'Vanguard segment ready: station.', 'Vanguard shoulder flashlight stayed on across world travel.',
+                  'Vanguard segment ready: station.', 'Vanguard shoulder flashlight stayed on at the station.',
                   'Vanguard oxygen supply restored.', 'Vanguard verification passed: passage transit and station resupply.')
 $entryFinish = @('Entry test: reset restored the weight lock', 'Entry test: Weight accepted 20 kg',
                  'Entry test: crossed Weight exit.', 'First solution opened the door.', 'Alternate arrangement opened the door.',
@@ -163,6 +163,21 @@ $scenarios = @{
         SeedCheckpoint = 'Stairs'; SeedArchive = @('oxygen-restored'); FinalCheckpoint = 'Stairs'
         Success = @('Airlock visit 1: solved circuit held closed during load.',
                     'Incomplete Button circuit rejected: gate closed and Stairs checkpoint preserved.')
+    }
+    StationAirlock = @{
+        Map = $entry; Flag = '-VerifyEntryCheckpoint'; ExtraFlag = '-VerifyStationAirlock'
+        SeedCheckpoint = 'Balance'; SeedArchive = @('forecast-synchronized'); FinalCheckpoint = 'Balance'
+        FinalArchive = @('forecast-synchronized', 'oxygen-restored'); Chambers = @('Balance')
+        Success = $routeSuccess + @('Station gate held the player while the station was hidden.', 'Station airlock ready: floor and supply cabinet registered.',
+                    'Passage exit crossed: station active in the same world.', 'Station handoff verified: same world and controller, passage removed',
+                    'Station supply used twice: one resupply record in suit and Balance slot.')
+    }
+    StationAirlockMissingSupply = @{
+        Map = $entry; Flag = '-VerifyEntryCheckpoint'
+        ExtraFlag = @('-VerifyStationAirlock', '-VerifyInvalidSupply', '-ini:Game:[/Script/Abandoned.VanguardStationLayout]:SupplyCabinet=(Center=(X=540,Y=230,Z=147),Size=(X=90,Y=132,Z=98),bCollision=False,Finish=Supply)')
+        SeedCheckpoint = 'Balance'; SeedArchive = @('forecast-synchronized'); FinalCheckpoint = 'Balance'
+        FinalArchive = @('forecast-synchronized'); Chambers = @('Balance')
+        Success = @('Station gate held the player while the station was hidden.', 'Unavailable supply rejected: gate closed and archive preserved.')
     }
     PassageAirlock = @{
         Map = $entry; Flag = '-VerifyPassageAirlock'; CaptureFlag = '-CapturePassageDoor'
@@ -467,7 +482,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         LeakEntries = @($lines -match 'LogVulkanRHI: Warning:\s+\*\* LEAK ').Count
     }
     $checkAllocatorOnExit = $target -eq 'Package' -and $name -in @(
-        'PassageAirlock', 'PassageAirlockInvalidDoor', 'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
+        'StationAirlock', 'StationAirlockMissingSupply', 'PassageAirlock', 'PassageAirlockInvalidDoor', 'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl'
     )
     $result.Vulkan = [bool]($lines -match 'LogVulkanRHI:.*Vulkan RHI ShaderPlatform for SM6: VULKAN_SM6')
     $gpuLine = $lines -match 'LogVulkanRHI:.*DeviceName:' | Select-Object -First 1
@@ -573,10 +588,12 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Reason = 'Unexpected world lifetime sequence. Check the loaded modes, live owner counts, teardown and cleanup in Game.log.'
     } elseif ($definition.SeedCheckpoint) {
         $saved = Get-Content -LiteralPath $slot -Raw | ConvertFrom-Json
-        if ($saved.version -eq 2 -and $saved.checkpoint -ceq $definition.FinalCheckpoint -and $saved.archive.Count -eq 1 -and $saved.archive[0] -ceq 'oxygen-restored') {
+        $expectedArchive = if ($definition.ContainsKey('FinalArchive')) { $definition.FinalArchive } else { 'oxygen-restored' }
+        if ($saved.version -eq 2 -and $saved.checkpoint -ceq $definition.FinalCheckpoint -and
+            $saved.archive.Count -eq @($expectedArchive).Count -and ($saved.archive -join '|') -ceq ($expectedArchive -join '|')) {
             $result.Outcome = 'Passed'
         } else {
-            $result.Reason = "Expected final checkpoint $($definition.FinalCheckpoint) and the oxygen-restored record."
+            $result.Reason = "Expected final checkpoint $($definition.FinalCheckpoint) and archive [$($expectedArchive -join ', ')]."
         }
     } else {
         $result.Outcome = 'Passed'
