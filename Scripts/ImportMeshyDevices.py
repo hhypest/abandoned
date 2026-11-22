@@ -9,6 +9,7 @@ import unreal
 
 root = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()))
 assets = unreal.EditorAssetLibrary
+registry = unreal.AssetRegistryHelpers.get_asset_registry()
 pipeline = unreal.load_asset("/Interchange/Pipelines/DefaultGLTFAssetsPipeline")
 common = pipeline.get_editor_property("common_meshes_properties")
 for key in ("recompute_normals", "recompute_tangents", "remove_degenerates"):
@@ -50,6 +51,7 @@ for row in devices:
     task.automated = True
     task.replace_existing = True
     task.save = True
+    registry.scan_paths_synchronous([folder])
     existing = assets.list_assets(folder)
     # Upgrade existing EQP-01 game packages produced before the strap was removed.
     old_casing = code == "EQP-01" and any(
@@ -57,13 +59,14 @@ for row in devices:
         for mesh in (unreal.load_asset(path) for path in existing))
     if not existing or old_casing:
         unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+        registry.scan_paths_synchronous([folder], True)
     objects = [unreal.load_asset(path) for path in assets.list_assets(folder)]
     static_meshes = [o for o in objects if isinstance(o, unreal.StaticMesh)]
     if len(static_meshes) != len(gltf["meshes"]):
         raise RuntimeError(f"{code}: unexpected mesh count {len(static_meshes)}")
     count = sum(mesh.get_num_triangles(0) for mesh in static_meshes)
     textures = [o for o in objects if isinstance(o, unreal.Texture2D)]
-    if count != triangles or len(textures) != len(gltf["images"]) or not all(m.get_material(0) for m in static_meshes):
+    if count != triangles or count != int(row["ue_lod0_triangles"]) or len(textures) != len(gltf["images"]) or not all(m.get_material(0) for m in static_meshes):
         raise RuntimeError(f"{code}: {count}/{triangles} triangles, {len(textures)}/{len(gltf['images'])} textures")
     for mesh in static_meshes:
         unreal.log(f"MESHY_DEVICE {code} {mesh.get_path_name()} {mesh.get_num_triangles(0)} triangles {mesh.get_bounds()}")
