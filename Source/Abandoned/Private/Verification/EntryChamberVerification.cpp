@@ -18,15 +18,12 @@
 #include "TrainingChamber/TrainingChamberLayout.h"
 #include "UnrealClient.h"
 #include "Verification/VerificationPlayerPose.h"
+#include "Verification/AirlockVerificationSession.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogEntryChamberTest, Log, All);
 
 namespace
 {
-// Each packaged scenario starts a fresh process; keep continuity across the two visits.
-TWeakObjectPtr<ATrainingChamberCharacter> AirlockPawn;
-int32 AirlockVisits = 0;
-
 bool SavedWithArchive(Abandoned::Domain::Expedition::Segment Expected)
 {
     const auto Saved = Abandoned::Infrastructure::Expedition::UnrealCheckpointStore{}.Read();
@@ -148,6 +145,12 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
     const bool bTestButton = EntryFlag(TEXT("VerifyButtonAirlock"));
     const bool bTestWeight = EntryFlag(TEXT("VerifyWeightAirlock"));
     const bool bTestBalance = EntryFlag(TEXT("VerifyBalanceAirlock"));
+    auto* Session = UAirlockVerificationSession::Find(Chamber);
+    if ((bTestButton || bTestWeight || bTestBalance) && !Session)
+    {
+        Fail(TEXT("airlock verification session unavailable"));
+        return;
+    }
     const bool bMissingPlate = bTestBalance && EntryFlag(TEXT("VerifyMissingBalancePlate"));
     const bool bTestDeparture = (bWeight && bTestBalance) || (bStairs && bTestButton) || (Segment == ESegment::Button && bTestWeight);
     if (bDev20 && Phase != EPhase::Start && !Unit.IsValid())
@@ -215,7 +218,7 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
             if (Elapsed >= 0.5f && Chamber.RevealChamberForVerification())
             {
                 bRevealedRoom = true;
-                UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: solved circuit held closed during load."), AirlockVisits + 1);
+                UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: solved circuit held closed during load."), Session->Chamber.Visits + 1);
             }
             return;
         }
@@ -239,11 +242,11 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
             return;
         }
         if (!Chamber.IsDoorOpen()) { return; }
-        if (AirlockPawn.Get() != &Player)
+        if (Session->Chamber.Pawn.Get() != &Player)
         {
             if (!SavedWithArchive(Segment)) { Fail(TEXT("checkpoint advanced before crossing")); return; }
-            AirlockPawn = &Player;
-            UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: open gate, checkpoint still %s."), AirlockVisits + 1, *WriteSegment(Segment));
+            Session->Chamber.Pawn = &Player;
+            UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: open gate, checkpoint still %s."), Session->Chamber.Visits + 1, *WriteSegment(Segment));
         }
     }
 
@@ -288,7 +291,7 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
                     return;
                 }
             }
-            if (AirlockPawn.Get() != &Player || Level == GetWorld()->PersistentLevel ||
+            if (Session->Chamber.Pawn.Get() != &Player || Level == GetWorld()->PersistentLevel ||
                 Chamber.GetDoor()->GetOwner()->GetLevel() != Level || Cubes.Num() != (bTestBalance ? 6 : bTestButton ? 2 : 4) ||
                 (bTestButton && Chamber.IsParallelRelayPowered()) ||
                 Cubes.ContainsByPredicate([Level](const auto& Cube) { return Cube->GetLevel() != Level; }) ||
@@ -298,9 +301,9 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
                 Fail(TEXT("streamed chamber ownership, pawn, floor or saved arrival mismatch"));
                 return;
             }
-            UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: reached streamed %s, checkpoint and archive confirmed."), ++AirlockVisits, *WriteSegment(Segment));
+            UE_LOG(LogEntryChamberTest, Display, TEXT("Airlock visit %d: reached streamed %s, checkpoint and archive confirmed."), ++Session->Chamber.Visits, *WriteSegment(Segment));
             SetComponentTickEnabled(false);
-            if (AirlockVisits == 2) { FPlatformMisc::RequestExitWithStatus(false, 0); }
+            if (Session->Chamber.Visits == 2) { FPlatformMisc::RequestExitWithStatus(false, 0); }
             else
             {
                 Abandoned::Infrastructure::Expedition::TravelToWorld(this,

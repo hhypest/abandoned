@@ -7,6 +7,11 @@ public class Abandoned : ModuleRules
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         CppStandard = CppStandardVersion.Cpp20;
 
+        if (Target.bBuildEditor)
+        {
+            PrivateDependencyModuleNames.Add("UnrealEd");
+        }
+
         PrivateDependencyModuleNames.AddRange(new[]
         {
             "Core",
