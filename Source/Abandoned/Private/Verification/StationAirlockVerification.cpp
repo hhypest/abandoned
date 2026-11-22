@@ -1,4 +1,3 @@
-#include "CoreMinimal.h"
 #include "Verification/StationAirlockVerification.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
