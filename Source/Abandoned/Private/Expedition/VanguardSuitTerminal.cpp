@@ -8,8 +8,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "EnhancedInputComponent.h"
-#include "Materials/MaterialInstanceDynamic.h"
-#include "World/Blockout.h"
+#include "Materials/MaterialInterface.h"
 
 namespace
 {
@@ -36,7 +35,7 @@ void AVanguardCharacter::CreateWristTerminal()
 {
     WristRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SuitWrist"));
     WristRoot->SetupAttachment(Camera);
-    WristRoot->SetRelativeLocation(FVector(52.0, -26.0, -14.0));
+    WristRoot->SetRelativeLocation(FVector(48.0, -15.0, -12.0));
     // Keep the raised wrist inside the player's collision envelope without changing its framing.
     Camera->SetEnableFirstPersonScale(true);
     Camera->SetFirstPersonScale(0.45f);
@@ -55,41 +54,26 @@ void AVanguardCharacter::CreateWristTerminal()
         Part->SetVisibility(false);
         return Part;
     };
-    WristCasing = MakePart(TEXT("WristCasing"), FVector::ZeroVector, FVector(0.042, 0.30, 0.163));
-    WristDisplay = MakePart(TEXT("WristDisplay"), FVector(-2.2, 0, 0), FVector(0.012, 0.277, 0.139));
-    WristSleeve = MakePart(TEXT("WristSleeve"), FVector(3.5, 1, -1.5), FVector(1.35, 1.0, 1.0));
-    WristSleeve->SetRelativeRotation(FRotationMatrix::MakeFromX(FVector(-8, -27, -16)).Rotator());
-    WristGlove = MakePart(TEXT("WristGlove"), FVector(4, 10, -0.5), FVector::OneVector);
-    WristGlove->SetRelativeRotation(FRotationMatrix::MakeFromXZ(FVector(0, 1, 0.25), -FVector::ForwardVector).Rotator());
+    // EQP-01's glass faces local +Y. Its strap surrounds the forearm behind the display.
+    WristCasing = MakePart(TEXT("WristCasing"), FVector::ZeroVector, FVector(0.15));
+    WristCasing->SetRelativeRotation(FRotator(0, 90, 0));
+    WristSleeve = MakePart(TEXT("WristSleeve"), FVector(3, -1, -3), FVector(1.2, 1, 1));
+    WristSleeve->SetRelativeRotation(FRotationMatrix::MakeFromX(FVector(0, -27, -8)).Rotator());
+    WristGlove = MakePart(TEXT("WristGlove"), FVector(3, 14, -2), FVector::OneVector);
 
     WristRoot->SetVisibility(false);
 }
 
-void AVanguardCharacter::ConfigureWristTerminal(UMaterialInterface* Surface)
+void AVanguardCharacter::ConfigureWristTerminal()
 {
-    UStaticMesh* Cube = Abandoned::Blockout::LoadCube();
-    WristCasing->SetStaticMesh(Cube);
-    WristDisplay->SetStaticMesh(Cube);
-    const UVanguardMantleVisuals& Suit = *GetDefault<UVanguardMantleVisuals>();
+    const auto& Suit = *GetDefault<UVanguardMantleVisuals>();
+    WristCasing->SetStaticMesh(Suit.WristTerminal.LoadSynchronous());
+    WristGlove->SetStaticMesh(Suit.Glove.LoadSynchronous());
+    const FQuat Hand = FRotationMatrix::MakeFromXZ(FVector(0, 1, 0.18), -FVector::ForwardVector).ToQuat();
+    WristGlove->SetRelativeRotation(Hand * Suit.GloveRotation.Quaternion());
+    WristGlove->SetRelativeScale3D(FVector(Suit.GloveScale));
     WristSleeve->SetStaticMesh(Suit.Sleeve.LoadSynchronous());
-    WristGlove->SetStaticMesh(Suit.LeftGlove.LoadSynchronous());
-    if (UMaterialInterface* SuitFinish = Suit.Finish.LoadSynchronous())
-    {
-        WristSleeve->SetMaterial(0, SuitFinish);
-        WristGlove->SetMaterial(0, SuitFinish);
-    }
-    const auto SetFinish = [this, Surface](UStaticMeshComponent& Part, const FLinearColor& Tint, float Glow)
-    {
-        if (UMaterialInstanceDynamic* Finish = UMaterialInstanceDynamic::Create(Surface, this))
-        {
-            Finish->SetVectorParameterValue(TEXT("DiffuseColor"), Tint);
-            Finish->SetScalarParameterValue(TEXT("Roughness"), 0.62f);
-            Finish->SetScalarParameterValue(TEXT("Glow"), Glow);
-            Part.SetMaterial(0, Finish);
-        }
-    };
-    SetFinish(*WristCasing, FLinearColor(0.014f, 0.022f, 0.027f), 0.14f);
-    SetFinish(*WristDisplay, FLinearColor(0.001f, 0.002f, 0.003f), 0.04f);
+    WristSleeve->SetMaterial(0, Suit.Finish.LoadSynchronous());
 }
 
 void AVanguardCharacter::BindWristTerminalInput(UEnhancedInputComponent& Input)
@@ -196,14 +180,15 @@ void AVanguardCharacter::UpdateWristTerminal(const UVanguardRouteStateComponent&
 
 void AVanguardHUD::DrawWristReadout(const AVanguardCharacter& Player)
 {
-    if (!Player.IsWristTerminalOpen() || !Player.WristDisplay->IsVisible())
+    if (!Player.IsWristTerminalOpen() || !Player.WristCasing->IsVisible())
     {
         return;
     }
     // Project the face of the camera-mounted display so text stays crisp in the dark and while moving.
-    const FTransform& Face = Player.WristDisplay->GetComponentTransform();
-    const FVector Top = Project(Face.TransformPosition(FVector(-50, -44, 42)));
-    const FVector Bottom = Project(Face.TransformPosition(FVector(-50, -44, -50)));
+    // Inset corners on the recessed EQP-01 glass, measured in imported mesh space (cm).
+    const FTransform& Face = Player.WristCasing->GetComponentTransform();
+    const FVector Top = Project(Face.TransformPosition(FVector(-48, 82, 49)));
+    const FVector Bottom = Project(Face.TransformPosition(FVector(-48, 93, 1)));
     const float Height = static_cast<float>(Bottom.Y - Top.Y);
     if (Height <= 0.0f)
     {

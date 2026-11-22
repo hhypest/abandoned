@@ -16,10 +16,16 @@ class UVanguardMantleVisuals final : public UObject
 
 public:
     UPROPERTY(Config)
-    TSoftObjectPtr<UStaticMesh> LeftGlove;
+    TSoftObjectPtr<UStaticMesh> WristTerminal;
 
     UPROPERTY(Config)
-    TSoftObjectPtr<UStaticMesh> RightGlove;
+    TSoftObjectPtr<UStaticMesh> Glove;
+
+    UPROPERTY(Config)
+    FRotator GloveRotation = FRotator::ZeroRotator;
+
+    UPROPERTY(Config)
+    float GloveScale = 1.0f;
 
     UPROPERTY(Config)
     TSoftObjectPtr<UStaticMesh> Sleeve;

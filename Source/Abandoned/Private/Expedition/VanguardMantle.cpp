@@ -41,20 +41,16 @@ void AVanguardCharacter::CreateMantleVisuals()
 void AVanguardCharacter::LoadMantleVisuals()
 {
     const UVanguardMantleVisuals& Visuals = *GetDefault<UVanguardMantleVisuals>();
-    UMaterialInterface* Finish = Visuals.Finish.LoadSynchronous();
-    const auto SetPart = [Finish](UStaticMeshComponent& Component, UStaticMesh* PartMesh)
-    {
-        Component.SetStaticMesh(PartMesh);
-        if (Finish)
-        {
-            Component.SetMaterial(0, Finish);
-        }
-    };
-    SetPart(*MantleGloves[0], Visuals.LeftGlove.LoadSynchronous());
-    SetPart(*MantleGloves[1], Visuals.RightGlove.LoadSynchronous());
+    UStaticMesh* Glove = Visuals.Glove.LoadSynchronous();
     UStaticMesh* Sleeve = Visuals.Sleeve.LoadSynchronous();
-    SetPart(*MantleSleeves[0], Sleeve);
-    SetPart(*MantleSleeves[1], Sleeve);
+    UMaterialInterface* Finish = Visuals.Finish.LoadSynchronous();
+    for (int32 Hand = 0; Hand < 2; ++Hand)
+    {
+        MantleGloves[Hand]->SetStaticMesh(Glove);
+        MantleGloves[Hand]->SetRelativeScale3D(FVector(Hand == 0 ? 1 : -1, 1, 1) * Visuals.GloveScale);
+        MantleSleeves[Hand]->SetStaticMesh(Sleeve);
+        MantleSleeves[Hand]->SetMaterial(0, Finish);
+    }
 }
 
 void AVanguardCharacter::UpdateMantleHands()
@@ -90,7 +86,7 @@ void AVanguardCharacter::UpdateMantleHands()
         const FVector Reach = Eye + View.RotateVector(FMath::Lerp(Rest, Ready, RaiseWeight));
         const FVector Pose = FMath::Lerp(Reach, Handhold.Edge[Hand], GripWeight);
         const FQuat Rotation = FQuat::Slerp(View, Handhold.Orientation, GripWeight);
-        MantleGloves[Hand]->SetWorldLocationAndRotation(Pose, Rotation);
+        MantleGloves[Hand]->SetWorldLocationAndRotation(Pose, Rotation * GetDefault<UVanguardMantleVisuals>()->GloveRotation.Quaternion());
         MantleGloves[Hand]->SetVisibility(true);
 
         const FVector Wrist = Pose + Rotation.RotateVector(GloveWrist);

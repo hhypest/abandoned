@@ -6,6 +6,7 @@
 #include "Expedition/VanguardSession.h"
 #include "Expedition/VanguardRouteLayout.h"
 #include "Verification/VanguardWristTerminalVerification.h"
+#include "Verification/RadiationVerificationSession.h"
 
 #include "Components/BoxComponent.h"
 #include "Engine/GameInstance.h"
@@ -21,7 +22,8 @@ UVanguardRadiationVerification* UVanguardRadiationVerification::AttachIfRequeste
     AVanguardSegment& Route, const UVanguardRouteLayout& Layout)
 {
     const auto* Passage = Cast<UVanguardRadiationLayout>(&Layout);
-    const bool bCheckWrist = FParse::Param(FCommandLine::Get(), TEXT("VerifyWristTerminal"));
+    const auto* Run = URadiationVerificationSession::Find(Route);
+    const bool bCheckWrist = (Run && Run->bRunInEditor) || FParse::Param(FCommandLine::Get(), TEXT("VerifyWristTerminal"));
     if ((!Passage && !Route.GetRouteState().AtStation()) || (!bCheckWrist && !FParse::Param(FCommandLine::Get(), TEXT("VerifyRadiation"))))
     {
         return nullptr;
@@ -43,7 +45,7 @@ void UVanguardRadiationVerification::Fail(const TCHAR* Reason)
     UE_LOG(LogRadiationVerification, Error, TEXT("Radiation verification failed: %s (step %d)."),
         Reason, static_cast<int>(Phase));
     Phase = EPhase::Finished;
-    FPlatformMisc::RequestExitWithStatus(false, 1);
+    URadiationVerificationSession::Finish(*this, false);
 }
 
 void UVanguardRadiationVerification::ObserveDoseLimit(UVanguardSession& Session)
@@ -53,7 +55,9 @@ void UVanguardRadiationVerification::ObserveDoseLimit(UVanguardSession& Session)
         Fail(TEXT("checkpoint recovery must follow lethal exposure on the open strip"));
         return;
     }
-    Session.bRecoveredFromRadiation = true;
+    auto* Run = URadiationVerificationSession::Find(*this);
+    if (!Run) { Fail(TEXT("missing radiation verification session")); return; }
+    Run->bObservedLethalDose = true;
 }
 
 void UVanguardRadiationVerification::CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds)
@@ -77,10 +81,12 @@ void UVanguardRadiationVerification::CheckStep(const AVanguardSegment& Route, AV
         return;
     }
     const auto* Session = UGameInstance::GetSubsystem<UVanguardSession>(Route.GetGameInstance());
+    const auto* Run = URadiationVerificationSession::Find(Route);
+    if (!Run) { Fail(TEXT("missing radiation verification session")); return; }
     const auto Reading = Route.GetRouteState().GetDosimeter();
     if (Route.GetRouteState().AtStation())
     {
-        if (Reading || !Session || !Session->bRecoveredFromRadiation || !Route.GetRouteState().HasClearedRadiation() ||
+        if (Reading || !Session || !Run->bObservedLethalDose || !Route.GetRouteState().HasClearedRadiation() ||
             Session->Suit.RadiationDose().Percent() != 0.0)
         {
             Fail(TEXT("the station should clear the remaining dose after a full passage run"));
@@ -88,7 +94,7 @@ void UVanguardRadiationVerification::CheckStep(const AVanguardSegment& Route, AV
         }
         UE_LOG(LogRadiationVerification, Display, TEXT("Radiation passage verification passed: forecast, shelter, recovery outside, checkpoint and station decontamination."));
         Phase = EPhase::Finished;
-        FPlatformMisc::RequestExitWithStatus(false, 0);
+        URadiationVerificationSession::Finish(*this, true);
         return;
     }
     const auto* Layout = PassageLayout.Get();
@@ -117,7 +123,7 @@ void UVanguardRadiationVerification::CheckStep(const AVanguardSegment& Route, AV
             Fail(TEXT("the entrance should be outside exposure with a fresh forecast and dose"));
             return;
         }
-        if (Session->bRecoveredFromRadiation)
+        if (Run->bObservedLethalDose)
         {
             UE_LOG(LogRadiationVerification, Display, TEXT("Radiation checkpoint restored: safe position, zero dose and fresh forecast."));
             Player.SetSprint(true);

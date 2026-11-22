@@ -319,7 +319,7 @@ void AVanguardSegment::Equip(AVanguardCharacter& Pawn)
     Pawn.Segment = this;
     RouteState->ResetMovement();
     const UVanguardSession* Session = UVanguardSession::Find(*this);
-    Pawn.ConfigureWristTerminal(BaseMaterial);
+    Pawn.ConfigureWristTerminal();
     const UVanguardFlashlightSettings& Settings = *GetDefault<UVanguardFlashlightSettings>();
     USpotLightComponent& Light = *Pawn.ShoulderLight;
     Light.SetRelativeLocation(Settings.ShoulderOffset);

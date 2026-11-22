@@ -190,7 +190,7 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
     case EPhase::PullUp:
         if (Player.IsMantling())
         {
-            if (Player.IsWristTerminalOpen() || Player.WristDisplay->IsVisible())
+            if (Player.IsWristTerminalOpen() || Player.WristCasing->IsVisible())
             {
                 return Fail(TEXT("the wrist terminal did not lower for the climb"));
             }
