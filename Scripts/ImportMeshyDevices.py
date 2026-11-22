@@ -58,6 +58,9 @@ for row in devices:
         isinstance(mesh, unreal.StaticMesh) and mesh.get_num_triangles(0) == int(row["source_triangles"])
         for mesh in (unreal.load_asset(path) for path in existing))
     if not existing or old_casing:
+        # For the casing upgrade keep the installed PBR instance and all three maps loaded.
+        pipeline.material_pipeline.import_materials = not old_casing
+        pipeline.material_pipeline.texture_pipeline.import_textures = not old_casing
         unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
         registry.scan_paths_synchronous([folder], True)
     objects = [unreal.load_asset(path) for path in assets.list_assets(folder)]
@@ -66,7 +69,8 @@ for row in devices:
         raise RuntimeError(f"{code}: unexpected mesh count {len(static_meshes)}")
     count = sum(mesh.get_num_triangles(0) for mesh in static_meshes)
     textures = [o for o in objects if isinstance(o, unreal.Texture2D)]
-    if count != triangles or count != int(row["ue_lod0_triangles"]) or len(textures) != len(gltf["images"]) or not all(m.get_material(0) for m in static_meshes):
+    if (count != triangles or count != int(row["ue_lod0_triangles"])
+            or len(textures) != len(gltf["images"]) or not all(m.get_material(0) for m in static_meshes)):
         raise RuntimeError(f"{code}: {count}/{triangles} triangles, {len(textures)}/{len(gltf['images'])} textures")
     for mesh in static_meshes:
         unreal.log(f"MESHY_DEVICE {code} {mesh.get_path_name()} {mesh.get_num_triangles(0)} triangles {mesh.get_bounds()}")
