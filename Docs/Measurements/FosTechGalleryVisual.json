@@ -1,0 +1,81 @@
+{
+  "scenario": "FosTechGallery",
+  "capture": "VULKAN_SM6, 1920x1080, fixed camera, gallery tick 480 after a 300-frame sample",
+  "metricOrder": ["mean absolute RGB difference (8-bit)", "mean luminance SSIM (non-overlapping 8x8 tiles, C1=(0.01*255)^2, C2=(0.03*255)^2)", "pixels with any channel error >8 (%)", "unmatched luminance edges within one pixel (%)"],
+  "edgeMetric": "Use centered x/y differences in 8-bit luminance and select magnitude >32. Count edges in either image without a matching edge within one pixel (Chebyshev distance); divide by the combined edge count. Includes texture, shadow and silhouette edges.",
+  "pairing": "firstOffOn compares the first measured run of each variant. Other metrics are medians per column over all within-variant pairs or cross-variant runs paired in acquisition order. Warm-ups excluded.",
+  "fallbackCheck": {"method": "First final A vs one packaged final B with r.Nanite=0. This switch also affects the scene renderer. All 13 B assets have built Nanite data and conventional proxies.", "screenshotSha256": "998f0acb97728587879043982a2ca8865272a1f18e1ef9314462fc6d823bd8b7"},
+  "regions": "Pixel bounds [left, top, right, bottom), including the exhibit background and cast shadow. Edge and SSIM results depend on the lighting, screen size and viewing angle.",
+  "sourceRuns": {
+    "A": [
+      {
+        "run": "20261122-131707-FosTechGallery-de1e609b0c204be7bcd5e1b6ec16ce7d",
+        "screenshotSha256": "466c8e1e297d9994f86ef2fa98706463843b0df68379f76421b8b966f6dd6379"
+      },
+      {
+        "run": "20261122-131741-FosTechGallery-9115e03bba074f9eb5920184ea604727",
+        "screenshotSha256": "7b75408c27967cd623cf825a6ef103aec9cbf793ca6e63ad11b9dc2c7f2e2643"
+      },
+      {
+        "run": "20261122-131803-FosTechGallery-9c34bb34ce2540cf8619eece56ce32ac",
+        "screenshotSha256": "4bb1b3bd4bc295e6e1cc0a3a839ff675ed9baf5c4be14cb14d0a75a11ecefba1"
+      },
+      {
+        "run": "20261122-131815-FosTechGallery-abc370220c7944e2b08d64411ec11a04",
+        "screenshotSha256": "6ef7b610e136a014c1fc28473f77971563b52201deda457711469d193fb7f8aa"
+      }
+    ],
+    "B": [
+      {
+        "run": "20261122-131718-FosTechGallery-b8d029a7e7234e6fa73d6e002d10b363",
+        "screenshotSha256": "73e5af25a230582a7d24e8325b6732e59f4e7b772133e822adfecb40d1f6ab22"
+      },
+      {
+        "run": "20261122-131729-FosTechGallery-348469149ab441afaea2f7515337ea23",
+        "screenshotSha256": "2be3cd2f4593d7d1200e0509640492b1d8337dd7a086b94fdbbdcc71d9c47680"
+      },
+      {
+        "run": "20261122-131752-FosTechGallery-5bee2c47f1d6442ea3144bffb5fbddf4",
+        "screenshotSha256": "ce57a66b48b37124eda56390ad67d7233a0c501ab3191fc01ca4e195e2cb8bbb"
+      },
+      {
+        "run": "20261122-131825-FosTechGallery-b250c1a8bd064cca9de227c205375c30",
+        "screenshotSha256": "389befcd52a208b1f9a4b900d315be674ec25846322b2c858fe4f7474b42505e"
+      }
+    ],
+    "originalOff": [
+      {
+        "run": "20261122-130846-FosTechGallery-4a19baaf5fb9481fbc11d367413484f6",
+        "screenshotSha256": "34c6bc3ba6af692d1b65c29ac218cec07e39afff41bf171cb5c12165d49cbe0d"
+      },
+      {
+        "run": "20261122-130918-FosTechGallery-ec117bc747a94fc7a7910b4167724e5f",
+        "screenshotSha256": "5b520c48bf9bf872994331fbcac5ed42899cc9e7175aa14aaac3115f334bd903"
+      },
+      {
+        "run": "20261122-130939-FosTechGallery-0fec10909904424c967ed8d77c6c4d3b",
+        "screenshotSha256": "13e3aa0c96c60a0164a7da86803322c89ba59c9c90b3dad6d342746ce07435c9"
+      },
+      {
+        "run": "20261122-130949-FosTechGallery-d0d87725a19044b5a789b1be0f4110ee",
+        "screenshotSha256": "8a84b4d1ebbdd46d1101dd40b212a5bdfde15add6202e7b3a10c8ba9125b4fdf"
+      }
+    ]
+  },
+  "measures": {
+    "Frame": {"region": [0, 0, 1920, 1080], "firstOffOn": [0.6996, 0.984169, 1.812, 1.312], "offOff": [0.03305, 0.999699, 0.0, 0.0185], "onOn": [0.0348, 0.99967, 0.002, 0.0215], "offOn": [0.69975, 0.984167, 1.812, 1.3135], "originalOffFinalOff": [0.1331, 0.99932, 0.005, 0.0775], "offVsForcedFallback": [0.0622, 0.999425, 0.0, 0.029]},
+    "DEV-01A": {"region": [104, 71, 446, 384], "firstOffOn": [0.9323, 0.98309, 2.065, 3.555], "offOff": [0.0718, 0.999197, 0.0, 0.025], "onOn": [0.07985, 0.999098, 0.001, 0.076], "offOn": [0.93575, 0.983106, 2.0795, 3.516], "originalOffFinalOff": [0.12365, 0.998837, 0.0, 0.0415], "offVsForcedFallback": [0.2535, 0.998329, 0.0, 0.041]},
+    "DEV-01B": {"region": [446, 71, 789, 384], "firstOffOn": [1.7523, 0.947767, 4.187, 4.246], "offOff": [0.08115, 0.999169, 0.0, 0.045], "onOn": [0.07695, 0.999192, 0.001, 0.03], "offOn": [1.75105, 0.947814, 4.187, 4.207], "originalOffFinalOff": [0.16655, 0.998676, 0.0, 0.052], "offVsForcedFallback": [0.1445, 0.998602, 0.0, 0.067]},
+    "DEV-02 Base": {"region": [789, 71, 1131, 384], "firstOffOn": [0.7347, 0.982353, 1.441, 0.496], "offOff": [0.04475, 0.999567, 0.0, 0.0], "onOn": [0.06605, 0.999397, 0.012, 0.02], "offOn": [0.7439, 0.982244, 1.439, 0.4995], "originalOffFinalOff": [0.93865, 0.997597, 0.0115, 0.0865], "offVsForcedFallback": [0.079, 0.999215, 0.0, 0.013]},
+    "DEV-02 Top": {"region": [1131, 71, 1474, 384], "firstOffOn": [0.5184, 0.994561, 0.56, 0.623], "offOff": [0.04515, 0.999637, 0.0, 0.0], "onOn": [0.0635, 0.99948, 0.003, 0.029], "offOn": [0.5232, 0.99449, 0.567, 0.643], "originalOffFinalOff": [0.50985, 0.998366, 0.012, 0.426], "offVsForcedFallback": [0.0539, 0.999535, 0.0, 0.017]},
+    "DEV-03": {"region": [1474, 71, 1816, 384], "firstOffOn": [0.4791, 0.992493, 1.052, 0.113], "offOff": [0.0424, 0.999526, 0.0005, 0.0055], "onOn": [0.0489, 0.999487, 0.0, 0.0], "offOn": [0.48135, 0.992474, 1.0515, 0.113], "originalOffFinalOff": [0.09245, 0.999216, 0.0005, 0.011], "offVsForcedFallback": [0.0766, 0.999164, 0.0, 0.023]},
+    "DEV-04": {"region": [104, 384, 446, 696], "firstOffOn": [0.2024, 0.99276, 0.452, 0.654], "offOff": [0.0145, 0.999814, 0.0, 0.0725], "onOn": [0.01895, 0.999765, 0.0, 0.0545], "offOn": [0.20205, 0.992762, 0.4505, 0.69], "originalOffFinalOff": [0.05325, 0.999549, 0.001, 0.1625], "offVsForcedFallback": [0.0261, 0.999693, 0.0, 0.145]},
+    "DEV-05": {"region": [446, 384, 789, 696], "firstOffOn": [0.8429, 0.97359, 2.447, 1.559], "offOff": [0.0304, 0.999791, 0.0, 0.028], "onOn": [0.03695, 0.999744, 0.0, 0.044], "offOn": [0.8415, 0.97368, 2.446, 1.607], "originalOffFinalOff": [0.0707, 0.999621, 0.0, 0.161], "offVsForcedFallback": [0.0499, 0.999635, 0.0, 0.016]},
+    "DEV-06": {"region": [789, 384, 1131, 696], "firstOffOn": [1.4203, 0.947859, 4.134, 4.564], "offOff": [0.03555, 0.999721, 0.0, 0.0225], "onOn": [0.04005, 0.999674, 0.0015, 0.0515], "offOn": [1.42085, 0.947859, 4.1335, 4.5635], "originalOffFinalOff": [0.0987, 0.999416, 0.0, 0.0575], "offVsForcedFallback": [0.0564, 0.999364, 0.0, 0.018]},
+    "DEV-07": {"region": [1131, 384, 1474, 696], "firstOffOn": [1.6276, 0.96365, 4.016, 1.915], "offOff": [0.0795, 0.999226, 0.0, 0.079], "onOn": [0.07875, 0.999162, 0.003, 0.035], "offOn": [1.6187, 0.963621, 4.026, 1.915], "originalOffFinalOff": [0.16215, 0.997632, 0.065, 0.206], "offVsForcedFallback": [0.0872, 0.998976, 0.0, 0.061]},
+    "DEV-12": {"region": [1474, 384, 1816, 696], "firstOffOn": [0.6525, 0.990733, 1.814, 0.793], "offOff": [0.0326, 0.999727, 0.0, 0.014], "onOn": [0.0359, 0.999686, 0.0025, 0.0035], "offOn": [0.65385, 0.990701, 1.813, 0.8105], "originalOffFinalOff": [0.084, 0.999569, 0.0, 0.0755], "offVsForcedFallback": [0.0511, 0.999513, 0.0, 0.021]},
+    "DEV-13": {"region": [446, 696, 789, 1009], "firstOffOn": [1.8492, 0.980146, 5.869, 0.01], "offOff": [0.03465, 0.999932, 0.0005, 0.002], "onOn": [0.0385, 0.999906, 0.0, 0.0], "offOn": [1.8494, 0.980151, 5.8715, 0.007], "originalOffFinalOff": [0.06835, 0.999893, 0.001, 0.003], "offVsForcedFallback": [0.0419, 0.999919, 0.001, 0.004]},
+    "EQP-01": {"region": [789, 696, 1131, 1009], "firstOffOn": [1.0106, 0.983111, 2.871, 1.374], "offOff": [0.03695, 0.999854, 0.003, 0.006], "onOn": [0.03115, 0.999854, 0.0155, 0.008], "offOn": [1.0099, 0.983111, 2.865, 1.3635], "originalOffFinalOff": [0.03475, 0.999858, 0.0025, 0.0085], "offVsForcedFallback": [0.0354, 0.999815, 0.0, 0.006]},
+    "EQP-05": {"region": [1131, 696, 1474, 1009], "firstOffOn": [0.8444, 0.976833, 2.692, 1.251], "offOff": [0.0146, 0.99991, 0.0, 0.009], "onOn": [0.01525, 0.999904, 0.0, 0.0], "offOn": [0.8441, 0.976868, 2.6875, 1.2505], "originalOffFinalOff": [0.085, 0.999722, 0.0, 0.05], "offVsForcedFallback": [0.0194, 0.99983, 0.0, 0.009]}
+  }
+}

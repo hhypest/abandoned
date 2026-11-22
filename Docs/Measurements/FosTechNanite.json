@@ -1,0 +1,430 @@
+{
+  "packages": {
+    "off": {
+      "ExecutableSha256": "CA2A8985C7F98D8E39BC36DB012006C2446038FD6390B2F13C180F12F2413EBE",
+      "ContentContainers": [
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.pak",
+          "Bytes": 10579923,
+          "Sha256": "6DAA623D9FBE16B1DFE85469969DE9009903F80111AF2D8F351C1CCFEB684B92"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.ucas",
+          "Bytes": 613814640,
+          "Sha256": "53F64842ACF0CA75F1126AE876040DE862BB85C2522002D8FF4D9559F56025B1"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.utoc",
+          "Bytes": 314920,
+          "Sha256": "85EEB01D4EA9220B9400E054066E91BF2F18829ABDD3CFBA5EFCA3A0A0B41D89"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/global.ucas",
+          "Bytes": 2649600,
+          "Sha256": "53E22542E69814BD61B1BF21B35E0DA9A57C409512A8721CA5C720182B57E5CF"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/global.utoc",
+          "Bytes": 686,
+          "Sha256": "299CE45546379E9308F639B30D08FD2EA475479647900704882AE8935332C3D9"
+        }
+      ]
+    },
+    "on": {
+      "ExecutableSha256": "CA2A8985C7F98D8E39BC36DB012006C2446038FD6390B2F13C180F12F2413EBE",
+      "ContentContainers": [
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.pak",
+          "Bytes": 10579923,
+          "Sha256": "367497C50BB9254667F3E3C4DD2626907138CEB6AA2FCFCD3B3C59F3DF31D44B"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.ucas",
+          "Bytes": 627716224,
+          "Sha256": "24BE57A93ECE43CEC20FF44727784DD75D3534DD62730ADC3B486C124F0CF865"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.utoc",
+          "Bytes": 319672,
+          "Sha256": "F43BFD731BDAC32F45E698267C20E492E9DEE0307A02BA58D01C8A5B3FD99B26"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/global.ucas",
+          "Bytes": 2649600,
+          "Sha256": "53E22542E69814BD61B1BF21B35E0DA9A57C409512A8721CA5C720182B57E5CF"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/global.utoc",
+          "Bytes": 686,
+          "Sha256": "299CE45546379E9308F639B30D08FD2EA475479647900704882AE8935332C3D9"
+        }
+      ]
+    }
+  },
+  "timingColumns": [
+    "p95_ms",
+    "p99_ms"
+  ],
+  "pooled": {
+    "off": {
+      "frames": 1200,
+      "FrameTime": [
+        8.1451,
+        9.3458
+      ],
+      "GameThreadTime": [
+        1.1773,
+        1.3628
+      ],
+      "RenderThreadTime": [
+        4.1111,
+        4.7729
+      ],
+      "RHIThreadTime": [
+        2.9744,
+        3.8682
+      ],
+      "GPUTime": [
+        7.7408,
+        8.618
+      ],
+      "CPU": [
+        4.1464,
+        4.9548
+      ]
+    },
+    "on": {
+      "frames": 1200,
+      "FrameTime": [
+        9.1339,
+        10.5466
+      ],
+      "GameThreadTime": [
+        1.3109,
+        1.7398
+      ],
+      "RenderThreadTime": [
+        5.2676,
+        5.8378
+      ],
+      "RHIThreadTime": [
+        2.3963,
+        3.159
+      ],
+      "GPUTime": [
+        8.9164,
+        10.0001
+      ],
+      "CPU": [
+        5.2907,
+        6.0577
+      ]
+    }
+  },
+  "runs": [
+    {
+      "run": "20261122-131707-FosTechGallery-de1e609b0c204be7bcd5e1b6ec16ce7d",
+      "nanite": "off",
+      "timings": {
+        "frames": 300,
+        "FrameTime": [
+          8.3361,
+          8.7554
+        ],
+        "GameThreadTime": [
+          1.2191,
+          1.4632
+        ],
+        "RenderThreadTime": [
+          4.1111,
+          4.6755
+        ],
+        "RHIThreadTime": [
+          3.0205,
+          3.7272
+        ],
+        "GPUTime": [
+          7.8404,
+          8.5999
+        ],
+        "CPU": [
+          4.1523,
+          4.7381
+        ]
+      },
+      "wddmSamples": 18,
+      "medianDedicatedMiB": 2094.14453125,
+      "maxDedicatedMiB": 2094.1484375,
+      "lifetimeMaxDedicatedMiB": 2094.1484375,
+      "csvSha256": "7a8d0cb6c32bc581e467de84a68e93aa1c5f5b265d446632b04b56ae47e4de1f",
+      "memorySha256": "0fe427aff8c7360139839055059965374f0ca279e16c045171d3e8c7dc8b1acc",
+      "screenshotSha256": "466c8e1e297d9994f86ef2fa98706463843b0df68379f76421b8b966f6dd6379"
+    },
+    {
+      "run": "20261122-131718-FosTechGallery-b8d029a7e7234e6fa73d6e002d10b363",
+      "nanite": "on",
+      "timings": {
+        "frames": 300,
+        "FrameTime": [
+          9.0434,
+          10.3853
+        ],
+        "GameThreadTime": [
+          1.3489,
+          1.8807
+        ],
+        "RenderThreadTime": [
+          5.3877,
+          5.9167
+        ],
+        "RHIThreadTime": [
+          2.1455,
+          2.8754
+        ],
+        "GPUTime": [
+          8.862,
+          10.8498
+        ],
+        "CPU": [
+          5.4362,
+          7.3696
+        ]
+      },
+      "wddmSamples": 22,
+      "medianDedicatedMiB": 3145.19921875,
+      "maxDedicatedMiB": 3145.19921875,
+      "lifetimeMaxDedicatedMiB": 3185.3984375,
+      "csvSha256": "55cb582bc6edcf54e963690f4326a4dea190ded9d24c70e7c2bfe1c489908f10",
+      "memorySha256": "e31e9c6c78c3f069b83980c31802f930af376187f31a69d3bd6871745e92f6c1",
+      "screenshotSha256": "73e5af25a230582a7d24e8325b6732e59f4e7b772133e822adfecb40d1f6ab22"
+    },
+    {
+      "run": "20261122-131729-FosTechGallery-348469149ab441afaea2f7515337ea23",
+      "nanite": "on",
+      "timings": {
+        "frames": 300,
+        "FrameTime": [
+          9.06,
+          9.6807
+        ],
+        "GameThreadTime": [
+          1.305,
+          2.0372
+        ],
+        "RenderThreadTime": [
+          5.0725,
+          5.5378
+        ],
+        "RHIThreadTime": [
+          2.4214,
+          2.9675
+        ],
+        "GPUTime": [
+          8.8237,
+          9.2064
+        ],
+        "CPU": [
+          5.0725,
+          5.5641
+        ]
+      },
+      "wddmSamples": 21,
+      "medianDedicatedMiB": 3145.20703125,
+      "maxDedicatedMiB": 3145.20703125,
+      "lifetimeMaxDedicatedMiB": 3220.9140625,
+      "csvSha256": "faba48345076e28d8504c4a2c4e7aaa54dfd32f823faaeb1f5a1a3b305665346",
+      "memorySha256": "8600ef647c398ac6775b7021382ea986cfe6b021f9afbf67d91e270a29a70401",
+      "screenshotSha256": "2be3cd2f4593d7d1200e0509640492b1d8337dd7a086b94fdbbdcc71d9c47680"
+    },
+    {
+      "run": "20261122-131741-FosTechGallery-9115e03bba074f9eb5920184ea604727",
+      "nanite": "off",
+      "timings": {
+        "frames": 300,
+        "FrameTime": [
+          8.1137,
+          9.4351
+        ],
+        "GameThreadTime": [
+          1.2133,
+          1.3062
+        ],
+        "RenderThreadTime": [
+          3.9763,
+          4.4378
+        ],
+        "RHIThreadTime": [
+          3.1208,
+          3.957
+        ],
+        "GPUTime": [
+          7.866,
+          8.618
+        ],
+        "CPU": [
+          4.0197,
+          4.8213
+        ]
+      },
+      "wddmSamples": 19,
+      "medianDedicatedMiB": 2094.1484375,
+      "maxDedicatedMiB": 2094.1484375,
+      "lifetimeMaxDedicatedMiB": 2124.30859375,
+      "csvSha256": "53f5b4da0cd6f7b46fa6bfe8e2d78c73d3628a8285323cebc736c6b26705eaf8",
+      "memorySha256": "f99a7cd66e88d5cd0389ba43f9ac46b2d5b7ead1f104eda25b78b94947ff7ab6",
+      "screenshotSha256": "7b75408c27967cd623cf825a6ef103aec9cbf793ca6e63ad11b9dc2c7f2e2643"
+    },
+    {
+      "run": "20261122-131752-FosTechGallery-5bee2c47f1d6442ea3144bffb5fbddf4",
+      "nanite": "on",
+      "timings": {
+        "frames": 300,
+        "FrameTime": [
+          9.2164,
+          12.1172
+        ],
+        "GameThreadTime": [
+          1.327,
+          1.6727
+        ],
+        "RenderThreadTime": [
+          4.7017,
+          5.2098
+        ],
+        "RHIThreadTime": [
+          2.5822,
+          3.2873
+        ],
+        "GPUTime": [
+          9.0164,
+          10.5165
+        ],
+        "CPU": [
+          4.7017,
+          5.2225
+        ]
+      },
+      "wddmSamples": 21,
+      "medianDedicatedMiB": 3145.296875,
+      "maxDedicatedMiB": 3145.296875,
+      "lifetimeMaxDedicatedMiB": 3157.31640625,
+      "csvSha256": "28fa7f74f3615a33757838952e0702e8242dd6be0f779d389a6ff0918ae290dd",
+      "memorySha256": "e87cf2994ff0bb7ca743c321b4c3e11604385f6d1a5a6f0eea97d5f7513e65c7",
+      "screenshotSha256": "ce57a66b48b37124eda56390ad67d7233a0c501ab3191fc01ca4e195e2cb8bbb"
+    },
+    {
+      "run": "20261122-131803-FosTechGallery-9c34bb34ce2540cf8619eece56ce32ac",
+      "nanite": "off",
+      "timings": {
+        "frames": 300,
+        "FrameTime": [
+          8.2996,
+          9.3458
+        ],
+        "GameThreadTime": [
+          1.1275,
+          1.2138
+        ],
+        "RenderThreadTime": [
+          4.1525,
+          4.8234
+        ],
+        "RHIThreadTime": [
+          2.8949,
+          3.7951
+        ],
+        "GPUTime": [
+          7.8523,
+          8.6258
+        ],
+        "CPU": [
+          4.1749,
+          5.0322
+        ]
+      },
+      "wddmSamples": 17,
+      "medianDedicatedMiB": 2094.13671875,
+      "maxDedicatedMiB": 2094.13671875,
+      "lifetimeMaxDedicatedMiB": 2094.13671875,
+      "csvSha256": "3a604db75451489f911a8bb27d86025e12d1b39dd9fbeaab078551091002ca37",
+      "memorySha256": "de063a32312667adb937dc5944f5a237a43e2259a4832f7b937e6371ee6dd834",
+      "screenshotSha256": "4bb1b3bd4bc295e6e1cc0a3a839ff675ed9baf5c4be14cb14d0a75a11ecefba1"
+    },
+    {
+      "run": "20261122-131815-FosTechGallery-abc370220c7944e2b08d64411ec11a04",
+      "nanite": "off",
+      "timings": {
+        "frames": 300,
+        "FrameTime": [
+          7.3258,
+          8.6657
+        ],
+        "GameThreadTime": [
+          1.0977,
+          1.1857
+        ],
+        "RenderThreadTime": [
+          4.0427,
+          4.8963
+        ],
+        "RHIThreadTime": [
+          2.324,
+          2.5867
+        ],
+        "GPUTime": [
+          6.9302,
+          8.1019
+        ],
+        "CPU": [
+          4.0644,
+          4.8963
+        ]
+      },
+      "wddmSamples": 18,
+      "medianDedicatedMiB": 1998.2265625,
+      "maxDedicatedMiB": 1998.2265625,
+      "lifetimeMaxDedicatedMiB": 2019.97265625,
+      "csvSha256": "b1f08b647b8cd12d7f3261c04de92c243f80d444757e6efb53f201f775158de7",
+      "memorySha256": "c8e9cd6dcb2d744479e78e09825928218009a323541dfb5ca86f59a8278c6c34",
+      "screenshotSha256": "6ef7b610e136a014c1fc28473f77971563b52201deda457711469d193fb7f8aa"
+    },
+    {
+      "run": "20261122-131825-FosTechGallery-b250c1a8bd064cca9de227c205375c30",
+      "nanite": "on",
+      "timings": {
+        "frames": 300,
+        "FrameTime": [
+          9.1493,
+          10.5792
+        ],
+        "GameThreadTime": [
+          1.1928,
+          1.5472
+        ],
+        "RenderThreadTime": [
+          5.3946,
+          5.9689
+        ],
+        "RHIThreadTime": [
+          2.1205,
+          2.6941
+        ],
+        "GPUTime": [
+          8.987,
+          9.6158
+        ],
+        "CPU": [
+          5.4071,
+          6.0577
+        ]
+      },
+      "wddmSamples": 22,
+      "medianDedicatedMiB": 3145.1875,
+      "maxDedicatedMiB": 3145.1875,
+      "lifetimeMaxDedicatedMiB": 3161.1796875,
+      "csvSha256": "67d199e30e5514455dcfb907d84ef42905f1db666454f39120785ac4f9439d93",
+      "memorySha256": "1b8e5ab00a458fd90926aa9ccca8419f6ee89b1c8957c08574ed4e880db23445",
+      "screenshotSha256": "389befcd52a208b1f9a4b900d315be674ec25846322b2c858fe4f7474b42505e"
+    }
+  ]
+}
