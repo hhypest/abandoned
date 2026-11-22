@@ -22,7 +22,7 @@ public:
 private:
     enum class EPhase
     {
-        Approach, ReleaseTap, WaitForLanding, DuckRunUp, DuckJump, DuckLanding,
+        Approach, ReleaseTap, WaitForLanding, DuckRunUp, DuckJump, DuckLanding, InspectCrouch,
         PlaceBlocker, BlockedHold, Hold, PullUp, WaitForTop, Done
     };
     void ReleaseTestInputsAndBlocker();
@@ -30,6 +30,8 @@ private:
     EPhase Phase = EPhase::Approach;
     float Elapsed = 0.0f;
     double Front = 0.0;
+    double MaxContactError = 0.0;
+    double StandingLegHeight = 0.0;
     double Top = 0.0;
     bool bCapture = false;
     bool bTapLeftGround = false;

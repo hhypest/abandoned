@@ -14,6 +14,7 @@ public class Abandoned : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new[]
         {
+            "AnimationCore",
             "Core",
             "CoreUObject",
             "Engine",

@@ -1,6 +1,8 @@
 #include "AbandonedCharacter.h"
 #include "Domain/Puzzles/BallastRules.h"
 #include "MovementProfile.h"
+#include "Player/FosTechBody.h"
+#include "Engine/World.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "EnhancedInputComponent.h"
@@ -34,6 +36,22 @@ AAbandonedCharacter::AAbandonedCharacter()
     Movement->SetCrouchedHalfHeight(CrouchedHalfHeight);
     Movement->GetNavAgentPropertiesRef().bCanCrouch = true;
     Movement->bOrientRotationToMovement = false;
+
+    SuitBody = CreateDefaultSubobject<UFosTechBody>(TEXT("FosTechBody"));
+    SuitBody->SetupAttachment(GetCapsuleComponent());
+    Camera->SetEnableFirstPersonScale(true);
+    Camera->SetFirstPersonScale(0.90f);
+}
+
+UPoseableMeshComponent* AAbandonedCharacter::GetSuitBody() const
+{
+    return SuitBody;
+}
+
+void AAbandonedCharacter::PostInitializeComponents()
+{
+    Super::PostInitializeComponents();
+    if (GetWorld()->IsGameWorld()) { SuitBody->FitToWearer(*this); }
 }
 
 void AAbandonedCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -187,11 +205,13 @@ void AAbandonedCharacter::OnStartCrouch(float HalfHeightAdjust, float ScaledHalf
 {
     Super::OnStartCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
     Camera->SetRelativeLocation(FVector(0.0, 0.0, CameraHeight - HalfHeightAdjust));
+    SuitBody->SetStance(*this);
 }
 
 void AAbandonedCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
 {
     Super::OnEndCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
+    SuitBody->SetStance(*this);
     Camera->SetRelativeLocation(FVector(0.0, 0.0, CameraHeight));
 }
 
