@@ -7,6 +7,7 @@ param(
     [switch]$TraceTravel,
     [switch]$StockDisplay,
     [ValidateSet(1, 2)][int]$OcclusionQueryFrames,
+    [ValidateSet(0, 1)][int]$HzbOcclusion,
     [ValidateSet('Separate', 'Instanced')][string]$ChamberDecor,
     [ValidateSet('Separate', 'Compound')][string]$WeightShell,
     [switch]$PreloadWeightShell,
@@ -89,10 +90,11 @@ if ($map) { $start.ArgumentList.Add($map) }
 $syncControl = if ($DisableRenderThreadLag) { 'r.OneFrameThreadLag 0,r.OneFrameThreadLag,' } else { '' }
 $gcControl = if ($DisableSmallGCPolicy) { 'gc.SmallFullGCSerialSlots 0,gc.SmallFullGCSerialSlots,' } else { '' }
 $occlusionCommand = if ($OcclusionQueryFrames) { "r.NumBufferedOcclusionQueries $OcclusionQueryFrames,r.NumBufferedOcclusionQueries," } else { '' }
+$hzbCommand = if ($PSBoundParameters.ContainsKey('HzbOcclusion')) { "r.HZBOcclusion $HzbOcclusion," } else { '' }
 $displayCommand = if ($StockDisplay) { 'r.VSync,t.MaxFPS' } else { 'r.VSync 0,t.MaxFPS 0' }
 foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1080',
     "-UserDir=$dir", "-abslog=$dir/Game.log", '-ExitAfterCsvProfiling',
-    "-ExecCmds=${syncControl}${gcControl}${occlusionCommand}${displayCommand},r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
+    "-ExecCmds=${syncControl}${gcControl}${occlusionCommand}${hzbCommand}r.HZBOcclusion,${displayCommand},r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
 }
 if ($DisableChamberMeshReuse) { $start.ArgumentList.Add('-NoChamberMeshReuse') }
@@ -167,6 +169,14 @@ if ($measureReserve -and !($log -match "MapPageReserve configured=$MapPageReserv
 if ($OcclusionQueryFrames -and !($log -match "r\.NumBufferedOcclusionQueries = `"$OcclusionQueryFrames`"\s+LastSetBy: Console")) {
     throw "Requested occlusion-query buffer was not confirmed in $dir/Game.log"
 }
+$hzbReadback = $log -match 'r\.HZBOcclusion = "\d+"\s+LastSetBy:' | Select-Object -Last 1
+if ($hzbReadback -notmatch 'r\.HZBOcclusion = "(\d+)"\s+LastSetBy: (\w+)') {
+    throw "Missing HZB readback in $dir/Game.log"
+}
+$actualHzb = [int]$Matches[1]
+if ($PSBoundParameters.ContainsKey('HzbOcclusion') -and ($actualHzb -ne $HzbOcclusion -or $Matches[2] -ne 'Console')) {
+    throw "Requested HZB setting was not applied in $dir/Game.log"
+}
 $displaySettings = if ($StockDisplay) { @('r\.VSync = "1"', 't\.MaxFPS = "60(?:\.0+)?"') } else { @('r\.VSync = "0"', 't\.MaxFPS = "0"') }
 foreach ($setting in @($displaySettings) + @( 'r\.ScreenPercentage = "100"', 'sg\.ShadowQuality = "2"')) {
     if (!($log -match $setting)) { throw "Unexpected profile in $dir/Game.log ($setting)" }
@@ -239,6 +249,7 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     BootUtc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString("o")
     StockDisplay = [bool]$StockDisplay
     OcclusionQueryFrames = if ($OcclusionQueryFrames) { $OcclusionQueryFrames } else { $null }
+    HzbOcclusion = $actualHzb
     VisiblePhysicalMemoryKiB = (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize
     Scenario = $Scenario
     ExecutableSha256 = (Get-FileHash -LiteralPath $exe).Hash

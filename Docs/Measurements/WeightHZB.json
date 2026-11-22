@@ -1,0 +1,534 @@
+{
+  "platform": {
+    "ue": "5.7.4",
+    "build": "Win64 Development",
+    "gpu": "RTX 4070 Ti SUPER",
+    "rhi": "Vulkan SM6",
+    "profile": "High 1920x1080 100%",
+    "systemRAMGiB": 32,
+    "buffer": 1
+  },
+  "method": "Each mode uses 0-1-1-0. Nearest rank, 300 frames starting 120 frames after second Weight visit per process. Timed runs exclude screenshot and GPU-profiler captures.",
+  "runtimeOverride": {
+    "executableSHA256": "52DBBAC21D687BD5B7C0C00F904FA9AAC1C4162B28F24DDE02C8FDDD034C8754",
+    "runs": [
+      {
+        "mode": "Uncapped",
+        "HZB": 0,
+        "run": "20261122-191421-Travel-8c832d65f0974af2bf76143276a6c574",
+        "csvSHA256": "dfe6a072011e0b0b36de6cc6ed773af12cc7d648e5fe5cc26aeb3fbd5e208e57",
+        "frames": 300,
+        "fps": 163.797,
+        "p95": 10.5152,
+        "p99": 10.9545,
+        "gpu95": 6.4339,
+        "over20": 0,
+        "over25": 0,
+        "max": 11.229
+      },
+      {
+        "mode": "Uncapped",
+        "HZB": 1,
+        "run": "20261122-191441-Travel-b2d2d7037ec645fda34eb4f5a60984bf",
+        "csvSHA256": "3733e83085c272e346f2569aaecb836925d3fb93a2bdfca36ca2dfeb96e58776",
+        "frames": 300,
+        "fps": 163.102,
+        "p95": 7.0394,
+        "p99": 7.4171,
+        "gpu95": 6.8119,
+        "over20": 0,
+        "over25": 0,
+        "max": 7.72
+      },
+      {
+        "mode": "Uncapped",
+        "HZB": 1,
+        "run": "20261122-191501-Travel-fefa8f84fc944cd2af4d72c8cef17967",
+        "csvSHA256": "a73148b6f5d2d1783b2d2a3d60ed6a5b1e27a071242f6645efbce46892452954",
+        "frames": 300,
+        "fps": 164.343,
+        "p95": 6.7768,
+        "p99": 7.1164,
+        "gpu95": 6.443,
+        "over20": 0,
+        "over25": 0,
+        "max": 8.032
+      },
+      {
+        "mode": "Uncapped",
+        "HZB": 0,
+        "run": "20261122-191521-Travel-658e777b9f824b8c917692503d9a5b8e",
+        "csvSHA256": "ef4ff21d852bada049c2bb75c615846d3de0e6354d65a48176b070036d6adb3b",
+        "frames": 300,
+        "fps": 167.234,
+        "p95": 10.0092,
+        "p99": 10.517,
+        "gpu95": 6.2839,
+        "over20": 0,
+        "over25": 0,
+        "max": 10.867
+      },
+      {
+        "mode": "Stock",
+        "HZB": 0,
+        "run": "20261122-191541-Travel-a92a6769c48341129393c7da9e3d94c2",
+        "csvSHA256": "914080a634d04e18b448b34e15e0ed578e639caab9598003448c186f55063e54",
+        "frames": 300,
+        "fps": 60.0,
+        "p95": 17.1069,
+        "p99": 17.3452,
+        "gpu95": 6.7007,
+        "over20": 0,
+        "over25": 0,
+        "max": 17.601
+      },
+      {
+        "mode": "Stock",
+        "HZB": 1,
+        "run": "20261122-191624-Travel-1faf9fbef9c641f88de7714e81bfd27f",
+        "csvSHA256": "24cdddc1575d2dce814a4412e8c683e32137d7bc61eaffccac43a92cd0600e18",
+        "frames": 300,
+        "fps": 60.011,
+        "p95": 17.3997,
+        "p99": 17.5768,
+        "gpu95": 6.6638,
+        "over20": 0,
+        "over25": 0,
+        "max": 17.869
+      },
+      {
+        "mode": "Stock",
+        "HZB": 1,
+        "run": "20261122-191707-Travel-dc048f90dbd94671a8a91dfa00dec896",
+        "csvSHA256": "75a8602a9f6e465ae569f1aaa83b41eed2a12d67c75b39b860a9c0111adbdfc6",
+        "frames": 300,
+        "fps": 59.994,
+        "p95": 17.2103,
+        "p99": 17.5662,
+        "gpu95": 6.7477,
+        "over20": 0,
+        "over25": 0,
+        "max": 17.664
+      },
+      {
+        "mode": "Stock",
+        "HZB": 0,
+        "run": "20261122-191750-Travel-0218d58f63c244ce842d083e38882e6c",
+        "csvSHA256": "9d335d6123e839d40134e56d76e5c6727666dbe9233dd6d16f11508d6bc22e4e",
+        "frames": 300,
+        "fps": 59.998,
+        "p95": 17.0135,
+        "p99": 17.1892,
+        "gpu95": 6.6999,
+        "over20": 0,
+        "over25": 0,
+        "max": 17.345
+      }
+    ],
+    "pooled": {
+      "Uncapped0": {
+        "frames": 600,
+        "fps": 165.498,
+        "p95": 10.2216,
+        "p99": 10.8665,
+        "gpu95": 6.399,
+        "over20": 0,
+        "over25": 0,
+        "max": 11.229
+      },
+      "Uncapped1": {
+        "frames": 600,
+        "fps": 163.72,
+        "p95": 6.9484,
+        "p99": 7.3269,
+        "gpu95": 6.552,
+        "over20": 0,
+        "over25": 0,
+        "max": 8.032
+      },
+      "Stock0": {
+        "frames": 600,
+        "fps": 59.999,
+        "p95": 17.0866,
+        "p99": 17.3359,
+        "gpu95": 6.7007,
+        "over20": 0,
+        "over25": 0,
+        "max": 17.601
+      },
+      "Stock1": {
+        "frames": 600,
+        "fps": 60.002,
+        "p95": 17.346,
+        "p99": 17.5749,
+        "gpu95": 6.7154,
+        "over20": 0,
+        "over25": 0,
+        "max": 17.869
+      }
+    }
+  },
+  "packagedDefault": {
+    "executableSHA256": "FB3CBEEEBF52F7F9555D8DD6556953CF794C1F3B7EE6FB0AA757404F958CA377",
+    "runs": [
+      {
+        "mode": "Uncapped",
+        "HZB": 0,
+        "run": "20261122-192402-Travel-66766f8ccc5144589eda0a46181f2854",
+        "csvSHA256": "e2f1397fdb6b192d05bcdac618adf47d14b37f418bdd76bae6e1d148d04b85ce",
+        "frames": 300,
+        "fps": 164.298,
+        "p95": 10.3938,
+        "p99": 11.0041,
+        "gpu95": 6.4173,
+        "over20": 0,
+        "over25": 0,
+        "max": 11.891
+      },
+      {
+        "mode": "Uncapped",
+        "HZB": 1,
+        "run": "20261122-192425-Travel-ca71ec006a9d44278313abc716418e3e",
+        "csvSHA256": "520ec02c3f80b5e0f699dade2b138b02224887684cf32e9ae28f0bb3d2e6ac7d",
+        "frames": 300,
+        "fps": 162.338,
+        "p95": 6.8226,
+        "p99": 7.2603,
+        "gpu95": 6.4387,
+        "over20": 0,
+        "over25": 0,
+        "max": 8.078
+      },
+      {
+        "mode": "Uncapped",
+        "HZB": 1,
+        "run": "20261122-192446-Travel-11ceee7b32324819afc253e77aaf8d48",
+        "csvSHA256": "1428f10f309c91605a3a7028094ac43dbf277d9d0844d6735fceb0e15b302a13",
+        "frames": 300,
+        "fps": 162.338,
+        "p95": 6.836,
+        "p99": 7.1939,
+        "gpu95": 6.3839,
+        "over20": 0,
+        "over25": 0,
+        "max": 7.34
+      },
+      {
+        "mode": "Uncapped",
+        "HZB": 0,
+        "run": "20261122-192505-Travel-1a02337b27ee4944bae18d5ac61c7604",
+        "csvSHA256": "27517fa63739474e81e6e70888a08d1cf38739e2b3d3606e57df39d4da91943e",
+        "frames": 300,
+        "fps": 165.679,
+        "p95": 10.3556,
+        "p99": 11.1737,
+        "gpu95": 6.292,
+        "over20": 0,
+        "over25": 0,
+        "max": 11.385
+      },
+      {
+        "mode": "Stock",
+        "HZB": 0,
+        "run": "20261122-192525-Travel-2132bb3fb9aa4135911d7f1a3ccfc484",
+        "csvSHA256": "1798f7037ed1482eb3462befbe41c212bfc36472a8e227a6797be33bdc5583d9",
+        "frames": 300,
+        "fps": 59.998,
+        "p95": 17.1396,
+        "p99": 17.5762,
+        "gpu95": 6.7102,
+        "over20": 0,
+        "over25": 0,
+        "max": 17.759
+      },
+      {
+        "mode": "Stock",
+        "HZB": 1,
+        "run": "20261122-192608-Travel-01c0bee2028a469180d891af76bdcf6e",
+        "csvSHA256": "48e44454dac0e3d28ea11824469b50ca66dfd31772e3f2dbbb444568eb6144a2",
+        "frames": 300,
+        "fps": 60.02,
+        "p95": 17.1754,
+        "p99": 17.294,
+        "gpu95": 6.7548,
+        "over20": 0,
+        "over25": 0,
+        "max": 17.563
+      },
+      {
+        "mode": "Stock",
+        "HZB": 1,
+        "run": "20261122-192651-Travel-dc5fb3c6b65140919c500e20adee38d2",
+        "csvSHA256": "5a89293d30bbe90548de7d992edee44d4d886c2e22fd20f5518e131718d140ac",
+        "frames": 300,
+        "fps": 59.994,
+        "p95": 17.1425,
+        "p99": 17.5238,
+        "gpu95": 6.6785,
+        "over20": 0,
+        "over25": 0,
+        "max": 18.043
+      },
+      {
+        "mode": "Stock",
+        "HZB": 0,
+        "run": "20261122-192734-Travel-b78b0e71fc1a42ff93ed9b89d7e96d4d",
+        "csvSHA256": "4885cadc0afd990dd4bbbee275881ce199cec2f94c08d959f2f4d28b9766828e",
+        "frames": 300,
+        "fps": 60.002,
+        "p95": 17.1453,
+        "p99": 17.5599,
+        "gpu95": 6.7559,
+        "over20": 0,
+        "over25": 0,
+        "max": 18.064
+      }
+    ],
+    "pooled": {
+      "Uncapped0": {
+        "frames": 600,
+        "fps": 164.985,
+        "p95": 10.3813,
+        "p99": 11.1307,
+        "gpu95": 6.3732,
+        "over20": 0,
+        "over25": 0,
+        "max": 11.891
+      },
+      "Uncapped1": {
+        "frames": 600,
+        "fps": 162.338,
+        "p95": 6.8303,
+        "p99": 7.2028,
+        "gpu95": 6.424,
+        "over20": 0,
+        "over25": 0,
+        "max": 8.078
+      },
+      "Stock0": {
+        "frames": 600,
+        "fps": 60.0,
+        "p95": 17.1453,
+        "p99": 17.5701,
+        "gpu95": 6.7273,
+        "over20": 0,
+        "over25": 0,
+        "max": 18.064
+      },
+      "Stock1": {
+        "frames": 600,
+        "fps": 60.007,
+        "p95": 17.1688,
+        "p99": 17.4804,
+        "gpu95": 6.7225,
+        "over20": 0,
+        "over25": 0,
+        "max": 18.043
+      }
+    }
+  },
+  "visualRunOrder": [
+    "hardware",
+    "HZB",
+    "HZB repeat",
+    "hardware repeat",
+    "no queries"
+  ],
+  "visualRuns": [
+    {
+      "run": "20261122-191833-74d80833e3654789b64340fb35bb7f9a",
+      "reportSHA256": "f7c0dee8c06cdb698ee6938d3c3316f5ad90388517903494045694267a19cc6a",
+      "frames": 78,
+      "sortedImageListSHA256": "cff94baf96a12c4cfaac413a68e523c1dff542d5226c5a0edd9390ef147369ad"
+    },
+    {
+      "run": "20261122-191910-3a5766fbe0b842e48a75b08904befe0f",
+      "reportSHA256": "0ac69045952af1cb71257d3c4bf7b713991fb593046e835f45e3d8feab4190eb",
+      "frames": 78,
+      "sortedImageListSHA256": "f78b9cf6c6312998aaf8c66a3a1800d417d9bbde37cb528c592797af311a510a"
+    },
+    {
+      "run": "20261122-191945-132d6569f5884e35bb9515ba3f73bb7b",
+      "reportSHA256": "fac26b1d3a5d6c8391e543c594a083282ba6b2e9fe86a253f988a5a604bd3ed8",
+      "frames": 78,
+      "sortedImageListSHA256": "6c49676182d262a3263d241a5ac0824e6ba1ee4f066a798c22ce44e18d3d888a"
+    },
+    {
+      "run": "20261122-192020-0c8d3eb9c71f4ad39218dbdde323c8a0",
+      "reportSHA256": "23fe4949e021c8bd8a61a98fc714647b50679ce3cf82e8c2e15016a989c15225",
+      "frames": 78,
+      "sortedImageListSHA256": "0d0fc2f45d4edfe388502aabcab33328bb34fb6a839eef006a68665a92cab977"
+    },
+    {
+      "run": "20261122-192112-11f8f49e78bc4b6cabd8f3ca3e7543ae",
+      "reportSHA256": "ea968d10b63e725b23da16dd714f3b76e34f2e92defb56614b63f02c1f41d09d",
+      "frames": 78,
+      "sortedImageListSHA256": "23cd48e85db6ef6425ae5f8640ec4250c00b90e3b4de0680506f34e167f613e4"
+    }
+  ],
+  "controlContainers": [
+    {
+      "Path": "Abandoned/Content/Paks/Abandoned-Windows.pak",
+      "Bytes": 10579923,
+      "Sha256": "10CDBF5554FC8CF127467A21BF1C3AA02DFDEA7CB55FB53C1AD3CFC4C82D6EE0"
+    },
+    {
+      "Path": "Abandoned/Content/Paks/Abandoned-Windows.ucas",
+      "Bytes": 627716464,
+      "Sha256": "34A7C227821C01DBEFE6077B63D78A485B555CD34A0CA6EEFC954D3140E36E0C"
+    },
+    {
+      "Path": "Abandoned/Content/Paks/Abandoned-Windows.utoc",
+      "Bytes": 319672,
+      "Sha256": "BC1BE7394E1C868AB8838C9F567476451BB3BA996E1E772899757639C9D683E4"
+    },
+    {
+      "Path": "Abandoned/Content/Paks/global.ucas",
+      "Bytes": 2649600,
+      "Sha256": "53E22542E69814BD61B1BF21B35E0DA9A57C409512A8721CA5C720182B57E5CF"
+    },
+    {
+      "Path": "Abandoned/Content/Paks/global.utoc",
+      "Bytes": 686,
+      "Sha256": "299CE45546379E9308F639B30D08FD2EA475479647900704882AE8935332C3D9"
+    }
+  ],
+  "doorCropXYXY": [
+    720,
+    530,
+    1140,
+    690
+  ],
+  "doorVsReference": {
+    "Weight-Opening-020.png": [
+      {
+        "meanAbsRGB8": 1.56,
+        "over32pct": 1.54018
+      },
+      {
+        "meanAbsRGB8": 0.2163,
+        "over32pct": 0.00149
+      },
+      {
+        "meanAbsRGB8": 0.2316,
+        "over32pct": 0.0
+      },
+      {
+        "meanAbsRGB8": 1.5969,
+        "over32pct": 1.55357
+      }
+    ],
+    "Weight-Opening-021.png": [
+      {
+        "meanAbsRGB8": 1.2453,
+        "over32pct": 0.66518
+      },
+      {
+        "meanAbsRGB8": 0.2183,
+        "over32pct": 0.0
+      },
+      {
+        "meanAbsRGB8": 0.2563,
+        "over32pct": 0.0
+      },
+      {
+        "meanAbsRGB8": 1.2455,
+        "over32pct": 0.6503
+      }
+    ],
+    "Weight-Opening-022.png": [
+      {
+        "meanAbsRGB8": 1.0706,
+        "over32pct": 0.0625
+      },
+      {
+        "meanAbsRGB8": 0.2286,
+        "over32pct": 0.0
+      },
+      {
+        "meanAbsRGB8": 0.2519,
+        "over32pct": 0.0
+      },
+      {
+        "meanAbsRGB8": 1.0671,
+        "over32pct": 0.05506
+      }
+    ]
+  },
+  "gpuProfile": [
+    {
+      "hzb": 0,
+      "submitHZB": false,
+      "logSHA256": "eb8ef9b316b32cbb4652377a9dfb68c7fbc5780f825bfbab77f43f43985fb32f"
+    },
+    {
+      "hzb": 1,
+      "submitHZB": true,
+      "logSHA256": "7538991c7d9541f0db231c865402e23f93e80a3ab643fb551b98559cfb642170"
+    }
+  ],
+  "packagedVisual": {
+    "run": "20261122-192816-5e2d57805c1f4694a1f85e6045f370e4",
+    "reportSHA256": "7dac354c2f481b531740264d5730a972399083e7d1c741b304c4f6f92f8847fd",
+    "executableSHA256": "FB3CBEEEBF52F7F9555D8DD6556953CF794C1F3B7EE6FB0AA757404F958CA377",
+    "containers": [
+      {
+        "Path": "Abandoned/Content/Paks/Abandoned-Windows.pak",
+        "Bytes": 10579923,
+        "Sha256": "248AAC834D38E2C9AED00494ACD325044380E0FEF13E5557D06AF29BAE661E7A"
+      },
+      {
+        "Path": "Abandoned/Content/Paks/Abandoned-Windows.ucas",
+        "Bytes": 627716464,
+        "Sha256": "59BB7D1EE99D1682D358A3F63059919583EFB868DC318B9C3C00E1D35EB91F61"
+      },
+      {
+        "Path": "Abandoned/Content/Paks/Abandoned-Windows.utoc",
+        "Bytes": 319672,
+        "Sha256": "82A68AA8F201595EFDA7E9D18E03BA28D8D15AA7CC66FAD7D976A4ADBD23BD6F"
+      },
+      {
+        "Path": "Abandoned/Content/Paks/global.ucas",
+        "Bytes": 2649600,
+        "Sha256": "53E22542E69814BD61B1BF21B35E0DA9A57C409512A8721CA5C720182B57E5CF"
+      },
+      {
+        "Path": "Abandoned/Content/Paks/global.utoc",
+        "Bytes": 686,
+        "Sha256": "299CE45546379E9308F639B30D08FD2EA475479647900704882AE8935332C3D9"
+      }
+    ],
+    "scenarios": {
+      "DoorClamp": "Passed",
+      "Portals": "Passed"
+    }
+  },
+  "packagedGame": {
+    "run": "20261122-192853-81dccf06cabe435ea620bd45376c5688",
+    "reportSHA256": "e2b604540badcd662d9efc1ab379a04301b11bcb21b44398326ce6c8fb49e3a1",
+    "executableSHA256": "FB3CBEEEBF52F7F9555D8DD6556953CF794C1F3B7EE6FB0AA757404F958CA377",
+    "scenarios": {
+      "EntryCourse": "Passed",
+      "WristTerminal": "Passed"
+    }
+  },
+  "finalFramesCompared": 78,
+  "finalVsReferenceMaxOver32PctByScenario": {
+    "Weight-Turn": [
+      0.00212,
+      "Weight-Turn-060.png"
+    ],
+    "Weight-Opening": [
+      0.01601,
+      "Weight-Opening-000.png"
+    ],
+    "Door-Clamped": [
+      0.00014,
+      "Door-Clamped-Object.png"
+    ],
+    "Portal": [
+      0.0,
+      "PortalLab-FirstVisible.png"
+    ]
+  }
+}
