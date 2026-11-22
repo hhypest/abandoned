@@ -1,0 +1,267 @@
+{
+  "Commit": "451c10bc1c151ae46c2458d36fb0a6d6adbba001",
+  "Target": "Win64 Development",
+  "Engine": "5.7.4",
+  "Vulkan": "VULKAN_SM6",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "FixedStepFps": 60,
+  "ExecutableSha256": "547028017F6C1E03E85186BA24F41F5D81704C2044CC8AB7FF54B85A074FE331",
+  "GameContentSha256": "54D4EDBE07730096292316F73574E6FC93B730F6AC8538EE1CDC51B31B82200E",
+  "EquipmentMeshes": [
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_01A/DEV-01A/StaticMeshes/DEV-01A",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_01B/DEV-01B/StaticMeshes/DEV-01B",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_02/DEV-02/StaticMeshes/PlateBase",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_02/DEV-02/StaticMeshes/PlateTop",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_03/DEV-03/StaticMeshes/DEV-03",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_04/DEV-04/StaticMeshes/DEV-04",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_05/DEV-05/StaticMeshes/DEV-05",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_06/DEV-06/StaticMeshes/DEV-06",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_07/DEV-07/StaticMeshes/DEV-07",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_12/DEV-12/StaticMeshes/DEV-12",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/DEV_13/DEV-13/StaticMeshes/DEV-13",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/EQP_00/SK_EQP00/SkeletalMeshes/SK_EQP00",
+      "type": "SkeletalMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/EQP_01/EQP-01/StaticMeshes/EQP-01",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    },
+    {
+      "mesh": "/Game/Abandoned/Meshy/EQP_05/EQP-05/StaticMeshes/EQP-05",
+      "type": "StaticMesh",
+      "naniteEnabled": false
+    }
+  ],
+  "Runs": [
+    {
+      "Run": "20261122-125258-b16598e113fa45a5949deafcb7093b9a",
+      "Resolution": "1280x720",
+      "RawReportSha256": "93496DCE477184DD42B2B6C22B2C1CFEEF00157CEFBB95D78CAE0D6F975262DE",
+      "PoseReadings": [
+        "EQP-01 glass at pitch 0.0: 281 x 185 px in 1280x720, rectangle X=395.375 Y=313.219 .. X=676.617 Y=497.784, nearest corner 19.20 cm.",
+        "EQP-01 glass at pitch 45.0: 405 x 275 px in 1280x720, rectangle X=325.535 Y=270.675 .. X=730.643 Y=545.336, nearest corner 12.90 cm.",
+        "EQP-01 glass at pitch 85.0: 466 x 336 px in 1280x720, rectangle X=282.904 Y=243.099 .. X=748.875 Y=579.179, nearest corner 10.55 cm.",
+        "EQP-01 glass at pitch -85.0: 281 x 185 px in 1280x720, rectangle X=395.375 Y=313.219 .. X=676.617 Y=497.784, nearest corner 19.20 cm.",
+        "EQP-01 glass at pitch 45.0: 285 x 191 px in 1280x720, rectangle X=390.323 Y=311.652 .. X=675.389 Y=502.401, nearest corner 18.58 cm.",
+        "EQP-01 glass at pitch 0.0: 281 x 185 px in 1280x720, rectangle X=395.375 Y=313.219 .. X=676.617 Y=497.784, nearest corner 19.20 cm."
+      ],
+      "RenderedText": [
+        {
+          "Capture": "Wrist-Terminal-Status.png",
+          "LitBands": 3,
+          "SampledInkRows": 9,
+          "Visible": true
+        },
+        {
+          "Capture": "Wrist-Terminal-Pitch45.png",
+          "LitBands": 4,
+          "SampledInkRows": 21,
+          "Visible": true
+        },
+        {
+          "Capture": "Wrist-Terminal-Flare.png",
+          "LitBands": 2,
+          "SampledInkRows": 16,
+          "Visible": true
+        },
+        {
+          "Capture": "Wrist-Terminal-Archive.png",
+          "LitBands": 6,
+          "SampledInkRows": 28,
+          "Visible": true
+        }
+      ],
+      "Scenarios": [
+        {
+          "Name": "WristTerminal",
+          "Outcome": "Passed",
+          "ShutdownComplete": true,
+          "LogSha256": "41F576A7113FB4A1AA6FAD3B88055F6EDC2043C073649EC12DB3A60C7FFD0845"
+        },
+        {
+          "Name": "VanguardRoute",
+          "Outcome": "Passed",
+          "ShutdownComplete": true,
+          "LogSha256": "E5332581E55A87D1A15BE57FC749B08B750CEA7FC139FAA9E6394A6FA4A0593C"
+        },
+        {
+          "Name": "EntryCourse",
+          "Outcome": "Passed",
+          "ShutdownComplete": true,
+          "LogSha256": "1C16A7774A46D9307ABC311705878A29086B8504D06B34B37596C7E17EF6EDDB"
+        },
+        {
+          "Name": "WristTerminalNegative",
+          "Outcome": "ExpectedFailure",
+          "ShutdownComplete": true,
+          "LogSha256": "AC683C28962041A53F34590017340A7930BE3546715DAC6C26124A943983051B"
+        }
+      ]
+    },
+    {
+      "Run": "20261122-125356-64a63eaf06484666b960254ac3348193",
+      "Resolution": "1920x1080",
+      "RawReportSha256": "AEBD6381E0234EE28F313AE2234D370EE540BDE49E759B94E6F7709A1B40F5B4",
+      "PoseReadings": [
+        "EQP-01 glass at pitch 0.0: 422 x 277 px in 1920x1080, rectangle X=593.063 Y=469.829 .. X=1014.926 Y=746.676, nearest corner 19.20 cm.",
+        "EQP-01 glass at pitch 45.0: 608 x 412 px in 1920x1080, rectangle X=488.302 Y=406.012 .. X=1095.965 Y=818.005, nearest corner 12.90 cm.",
+        "EQP-01 glass at pitch 85.0: 699 x 504 px in 1920x1080, rectangle X=424.356 Y=364.649 .. X=1123.312 Y=868.768, nearest corner 10.55 cm.",
+        "EQP-01 glass at pitch -85.0: 422 x 277 px in 1920x1080, rectangle X=593.063 Y=469.828 .. X=1014.926 Y=746.676, nearest corner 19.20 cm.",
+        "EQP-01 glass at pitch 45.0: 428 x 286 px in 1920x1080, rectangle X=585.485 Y=467.477 .. X=1013.083 Y=753.601, nearest corner 18.58 cm.",
+        "EQP-01 glass at pitch 0.0: 422 x 277 px in 1920x1080, rectangle X=593.063 Y=469.829 .. X=1014.926 Y=746.676, nearest corner 19.20 cm."
+      ],
+      "RenderedText": [
+        {
+          "Capture": "Wrist-Terminal-Status.png",
+          "LitBands": 4,
+          "SampledInkRows": 12,
+          "Visible": true
+        },
+        {
+          "Capture": "Wrist-Terminal-Pitch45.png",
+          "LitBands": 7,
+          "SampledInkRows": 27,
+          "Visible": true
+        },
+        {
+          "Capture": "Wrist-Terminal-Flare.png",
+          "LitBands": 2,
+          "SampledInkRows": 24,
+          "Visible": true
+        },
+        {
+          "Capture": "Wrist-Terminal-Archive.png",
+          "LitBands": 6,
+          "SampledInkRows": 42,
+          "Visible": true
+        }
+      ],
+      "Scenarios": [
+        {
+          "Name": "WristTerminal",
+          "Outcome": "Passed",
+          "ShutdownComplete": true,
+          "LogSha256": "3E25BB1FE47E30D063BCA0EE47DB3DC637BE864894D9CA57BA256CDEA94879A4"
+        },
+        {
+          "Name": "VanguardRoute",
+          "Outcome": "Passed",
+          "ShutdownComplete": true,
+          "LogSha256": "0BC3488532BB7F0192578A0F89E80167E3F8DB4DFE2231C64FAC5FCB15300D2E"
+        }
+      ]
+    },
+    {
+      "Run": "20261122-125429-571923538f5c4d00afb60e66a73f3068",
+      "Resolution": "1280x720",
+      "RawReportSha256": "F66A6E76FED1B486A8B1037890DC2DA1F394A0340D140CDD2B5F5A640BD0E9C3",
+      "PoseReadings": [
+        "EQP-01 glass at pitch 0.0: 281 x 185 px in 1280x720, rectangle X=395.375 Y=313.219 .. X=676.617 Y=497.784, nearest corner 19.20 cm.",
+        "EQP-01 glass at pitch 45.0: 405 x 275 px in 1280x720, rectangle X=325.535 Y=270.675 .. X=730.643 Y=545.336, nearest corner 12.90 cm.",
+        "EQP-01 glass at pitch 85.0: 466 x 336 px in 1280x720, rectangle X=282.904 Y=243.099 .. X=748.875 Y=579.179, nearest corner 10.55 cm.",
+        "EQP-01 glass at pitch -85.0: 281 x 185 px in 1280x720, rectangle X=395.375 Y=313.219 .. X=676.617 Y=497.784, nearest corner 19.20 cm.",
+        "EQP-01 glass at pitch 45.0: 285 x 191 px in 1280x720, rectangle X=390.323 Y=311.652 .. X=675.389 Y=502.401, nearest corner 18.58 cm.",
+        "EQP-01 glass at pitch 0.0: 281 x 185 px in 1280x720, rectangle X=395.375 Y=313.219 .. X=676.617 Y=497.784, nearest corner 19.20 cm."
+      ],
+      "RenderedText": [
+        {
+          "Capture": "Wrist-Terminal-Status.png",
+          "LitBands": 3,
+          "SampledInkRows": 9,
+          "Visible": true
+        },
+        {
+          "Capture": "Wrist-Terminal-Pitch45.png",
+          "LitBands": 4,
+          "SampledInkRows": 21,
+          "Visible": true
+        },
+        {
+          "Capture": "Wrist-Terminal-Flare.png",
+          "LitBands": 2,
+          "SampledInkRows": 16,
+          "Visible": true
+        },
+        {
+          "Capture": "Wrist-Terminal-Archive.png",
+          "LitBands": 6,
+          "SampledInkRows": 28,
+          "Visible": true
+        }
+      ],
+      "Scenarios": [
+        {
+          "Name": "WristTerminal",
+          "Outcome": "Passed",
+          "ShutdownComplete": true,
+          "LogSha256": "DB609565F5E59EAC600D635812F58F800A56269E76516C1A6EE3E520F61C1357"
+        }
+      ]
+    }
+  ],
+  "Screenshots": [
+    {
+      "Path": "Docs/WristTerminal/eqp01-status.png",
+      "Sha256": "B183D18331DD7C0033C43CF28BF0AC2B1F20CB513FCC215D75CDE57D88F1C675"
+    },
+    {
+      "Path": "Docs/WristTerminal/eqp01-pitch45.png",
+      "Sha256": "3DA670B42D71741649A4F6A7D4D37D182FA22A2DC29026C5D2F412FC566BB342"
+    },
+    {
+      "Path": "Docs/WristTerminal/eqp01-flare.png",
+      "Sha256": "C45A7B74F23A7AF58096627BC8C9F86A4E24B38B1B2D31EC4FB3CD64016AC4DD"
+    },
+    {
+      "Path": "Docs/WristTerminal/eqp01-archive.png",
+      "Sha256": "3CF0309DD20AB4752DC5A67A6862D3619B8DF8BE599C78E5F747F7FCCE7BCC90"
+    }
+  ]
+}
