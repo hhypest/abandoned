@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$PackageRoot,
-    [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
+    [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen', 'FosTechGallery')][string]$Scenario = 'Travel',
     [switch]$TraceTravel,
     [switch]$StockDisplay,
     [ValidateSet('Separate', 'Instanced')][string]$ChamberDecor,
@@ -61,6 +61,10 @@ if ($Scenario -eq 'Travel') {
     }
     $frameCount = $captureFrame + 600
     $flags = @("-csvExecCmds=$($commands -join ',')")
+} elseif ($Scenario -eq 'FosTechGallery') {
+    $map = "${entry}?game=/Script/Abandoned.FosTechGalleryGameMode"
+    $frameCount = $null
+    $flags = @('-VerifyFosTechGallery', '-RenderOffscreen', '-fixedseed')
 } elseif ($Scenario -eq 'Campaign') {
     $map = $null
     $frameCount = $null
@@ -130,6 +134,7 @@ try {
         $vram = if ($counters) { ($counters | ForEach-Object RawValue | Measure-Object -Sum).Sum }
         $samples.Add([pscustomobject]@{
             ElapsedMs = $timer.ElapsedMilliseconds
+            SampleUtc = [DateTime]::UtcNow.ToString("o")
             PrivateBytes = $process.PrivateMemorySize64
             PeakWorkingSetBytes = $process.PeakWorkingSet64
             DedicatedBytes = $vram
@@ -193,6 +198,12 @@ if ($Scenario -eq 'Travel') {
     }
     if ($DisableSmallGCPolicy -and !($log -match 'gc\.SmallFullGCSerialSlots = "0"')) {
         throw 'The small full GC control was not applied'
+    }
+} elseif ($Scenario -eq 'FosTechGallery') {
+    $begin = $log -match 'FosTech\.SampleBegin meshes=13 nanite=(0|13)$'
+    if (@($begin).Count -ne 1 -or !($log -match 'FosTech\.SampleEnd$') -or
+        !(Test-Path "$dir/Saved/Screenshots/Windows/FosTech-Gallery.png")) {
+        throw "Incomplete gallery or mixed raster paths in $dir"
     }
 } elseif ($Scenario -eq 'Campaign') {
     if (!($log -match 'Vanguard verification passed: passage transit and station resupply')) { throw 'Campaign did not finish' }

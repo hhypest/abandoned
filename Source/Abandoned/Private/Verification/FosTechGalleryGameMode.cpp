@@ -13,6 +13,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "NaniteSceneProxy.h"
+#include "StaticMeshSceneProxyDesc.h"
 #include "ProfilingDebugging/CsvProfiler.h"
 
 namespace
@@ -147,7 +148,7 @@ void AFosTechGalleryGameMode::Tick(float DeltaSeconds)
             const UStaticMeshComponent* Exhibit = Handle.Get();
             if (!Exhibit || !Exhibit->GetSceneProxy()) { return Fail(TEXT("missing render proxy")); }
             Nanite::FMaterialAudit Materials;
-            const bool Eligible = Exhibit->ShouldCreateNaniteProxy(&Materials);
+            const bool Eligible = FStaticMeshSceneProxyDesc(Exhibit).ShouldCreateNaniteProxy(&Materials);
             const bool IsNanite = Exhibit->GetSceneProxy()->IsNaniteMesh();
             UE_LOG(LogFosTechGallery, Display,
                 TEXT("FosTech mesh=%s built=%d eligible=%d proxy=%d auditedSlots=%d materialErrors=%d"),
