@@ -1,0 +1,154 @@
+{
+  "Date": "2026-11-22",
+  "Commit": "426d241dc368c56bc7f12e9b01ea81550763a3b3",
+  "TrackedChanges": false,
+  "Target": "Win64 Development",
+  "Unreal": "5.7.4",
+  "Rhi": "VULKAN_SM6",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "OperatingSystem": "Microsoft Windows 10.0.26300",
+  "FixedStepFps": 60,
+  "ExecutableSha256": "A9D9C40056AF30E784C0BAB20953AB5549389366D73CA304D5C9134B1657B2C5",
+  "Containers": [
+    {
+      "File": "Abandoned-Windows.pak",
+      "Sha256": "9D0A27FE19747B7642614FCF486C7CB9D5BCCDF8DE1752233FCC0F18CD98766B"
+    },
+    {
+      "File": "Abandoned-Windows.ucas",
+      "Sha256": "1CC3E776C09607FD3573AD7575822BFB1A2E8F99E89BB00E8AF3F6423F75A755"
+    },
+    {
+      "File": "Abandoned-Windows.utoc",
+      "Sha256": "A9A4395684C7839901572BA8D884F775130691B0DC7D6E6172BA735C3D529178"
+    },
+    {
+      "File": "global.ucas",
+      "Sha256": "353329FB3DD7103130CD22D14210EEF8597D2C86DF12DB6B69087B7D0C4A7016"
+    },
+    {
+      "File": "global.utoc",
+      "Sha256": "F00F9AF06E04AAC149172544D41CD3C2D761BB0293A223F90947CB37F1BFA509"
+    }
+  ],
+  "StagedCreditsSha256": "9306D2213D509911409B333E8E76EB308160A56D76FF50C914937F58C14A1699",
+  "SourceGlbSha256": "25FF43995CB6D6D76F57FAF48700B432685EF9F1C58E8F7E0F98DAC39A1465A2",
+  "SkinnedGlbSha256": "4969AE91E3783D7A39E382185F3E19DED6C83B07A7FF8110813E4B054ED57B52",
+  "Runs": [
+    {
+      "Resolution": "1280x720",
+      "RunId": "20261122-122046-370a8b90eb3a499798d45ce766727dda",
+      "RawReportSha256": "4CE79457AB6AEAFF2CA3709B998297C5025A5230A7010D641086B96F5D92C17A",
+      "PoseMeasurements": [
+        "EQP-00 wrist raised 52.8 cm; glass in view space V(X=16.95, Y=-6.58, Z=-4.50).",
+        "EQP-00 glass occupies 418 x 144 pixels in 1280x720.",
+        "EQP-00 grounded crouch: pelvis 36.5 cm above floor, standing pelvis-ankle span 71.3 cm.",
+        "Passage handhold verified: both EQP-00 hands fixed to the ledge, max error 0.00 cm.",
+        "Passage climb verified: held Space and landed on top."
+      ],
+      "Scenarios": [
+        {
+          "Scenario": "WristTerminal",
+          "Outcome": "Passed",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "13AF0AF2B3B9512766876A4BD0561E0A0332DAF11B5B08428B030B012D20E9B1"
+        },
+        {
+          "Scenario": "VanguardRoute",
+          "Outcome": "Passed",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "73C5C21210CFC334D2D3155807A62CE4225F298CF5DC24551282DFD29FF7D58B"
+        },
+        {
+          "Scenario": "EntryCourse",
+          "Outcome": "Passed",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "C80C8E2B48FD50BF7FFCA883EAD4D1CA124858B3A06E6A33EC95376093928A89"
+        },
+        {
+          "Scenario": "WristTerminalNegative",
+          "Outcome": "ExpectedFailure",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "A4C230524D535F5DB027E9B89C9AFA2A099461D7595A104D0DCA0AF61FFC5685"
+        },
+        {
+          "Scenario": "Dev20",
+          "Outcome": "Passed",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "842ED89A1C4CB544598814BDF33A8D37BFD481B09ED45BCC800916ACF7A4D811"
+        },
+        {
+          "Scenario": "StationAirlock",
+          "Outcome": "Passed",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "9AC915B3A2BE86B71EA92278ED945D1364199F7FE2E60FDE0D880E5E642811D1"
+        },
+        {
+          "Scenario": "StationAirlockMissingSupply",
+          "Outcome": "Passed",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "E04B5910B2107C371459E4DF5F48860D3B475F2FC128BE3A43CF9E24206FF651"
+        },
+        {
+          "Scenario": "VulkanExitControl",
+          "Outcome": "Passed",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "52FC75D37D6F27D6AC0AD562DBE73277922EF672653A75D5C68872D29F851012"
+        }
+      ]
+    },
+    {
+      "Resolution": "1920x1080",
+      "RunId": "20261122-122248-280c202dc007488cb15892464bfd283f",
+      "RawReportSha256": "31C5FD1E81787A8FB7830F42D7E826B5563A54F0981495F821FE8C8FD1C693EA",
+      "PoseMeasurements": [
+        "EQP-00 wrist raised 52.8 cm; glass in view space V(X=16.95, Y=-6.58, Z=-4.50).",
+        "EQP-00 glass occupies 627 x 216 pixels in 1920x1080.",
+        "EQP-00 grounded crouch: pelvis 36.5 cm above floor, standing pelvis-ankle span 71.3 cm.",
+        "Passage handhold verified: both EQP-00 hands fixed to the ledge, max error 0.00 cm.",
+        "Passage climb verified: held Space and landed on top."
+      ],
+      "Scenarios": [
+        {
+          "Scenario": "WristTerminal",
+          "Outcome": "Passed",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "31D07274D2AEC1067D0E6B098B538D22ED97C84EC090A852449ACE939DEB3A3B"
+        },
+        {
+          "Scenario": "VanguardRoute",
+          "Outcome": "Passed",
+          "ExitCode": 0,
+          "ShutdownComplete": true,
+          "LogSha256": "23249DA257D203ADB2CEA57938BD86145A8CFF905B2C547758AA051E05436092"
+        }
+      ]
+    }
+  ],
+  "Captures": [
+    {
+      "File": "Docs/WristTerminal/eqp00-wrist.png",
+      "Resolution": "1280x720",
+      "Sha256": "6464A8F1291C3D1DCA915BB1EE960F10FE7BAE91C3C839EED124AD8F0BDA4D0C"
+    },
+    {
+      "File": "Docs/WristTerminal/eqp00-crouch.png",
+      "Resolution": "1280x720",
+      "Sha256": "21E4C2BD89FDC2E365624FC30D01752A2DF11FB9E6FE2C0C41A8E4F670E34091"
+    },
+    {
+      "File": "Docs/WristTerminal/eqp00-ledge.png",
+      "Resolution": "1280x720",
+      "Sha256": "A3F90E66331970EE5FD1DD4B8BA6D8519AD691C59B27C3FAAB7090EEC33DB9B4"
+    }
+  ]
+}
