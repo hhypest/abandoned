@@ -37,9 +37,22 @@ Win64 Development, UE 5.7.4, Vulkan SM6, Windows 11 26300, Core i5-14400F, 32 Г
 
 ![Большой куб, оптика и терминал в масштабе 1:1](Images/FosTech-Nanite-Crops.png)
 
+## Контроль в игровой камере Weight
+
+В четырёх новых процессах (A–B–B–A) пройден измерительный маршрут Stairs → Weight → Stairs → Weight. Для каждого варианта взяты 600 установившихся кадров: по 300 начиная через 120 кадров после команды повторного входа. Пик VRAM охватывает весь маршрут. Пауза перехода в выборку времени кадра не входит.
+
+| На повторном входе в Weight | Обычные меши | Nanite |
+| --- | ---: | ---: |
+| Кадр p95 / p99, мс | 6,070 / 6,750 | 10,243 / 10,883 |
+| GPU p95 / p99, мс | 5,761 / 6,371 | 6,428 / 6,753 |
+| CPU p95 / p99, мс | 3,134 / 3,334 | 5,537 / 6,411 |
+| Пик выделенной VRAM за маршрут, МиБ | 2 179,9 | 2 984,7 |
+
+В Weight разница p95 кадра составила +4,173 мс. В двух отдельных запусках B p95 составил 10,239 и 10,243 мс. Для повтора используйте `./Scripts/Measure-VulkanPackage.ps1 -PackageRoot <архив>/Windows -Scenario Travel`; штатный сумматор `Scripts/Summarize-VulkanProfile.py` выдаёт окно `Repeat` и пик памяти процесса. [Результаты четырёх запусков](Measurements/FosTechNaniteWeight.json)
+
 ## Игровая проверка
 
-В итоговом пакете прошли Dev20, StationAirlock, StationAirlockMissingSupply, VulkanExitControl, EntryCourse, WristTerminal, DoorClamp и Portals. В контрольном пакете отдельно повторён WristTerminal. На обоих вариантах проверка зарегистрировала светящиеся строки во всех четырёх игровых кадрах: статус, поднятая рука при наклоне камеры на 45°, вспышка и архив. [Наручный терминал от первого лица, фрагмент кадра 1:1](Images/FosTech-Nanite-Wrist.png) · [Проверки, хеши пакета и журналов](Measurements/A11-NaniteHandoff.json)
+В итоговом пакете прошли Dev20, StationAirlock, StationAirlockMissingSupply, VulkanExitControl, EntryCourse, WristTerminal, DoorClamp и Portals. В контрольном пакете отдельно повторён WristTerminal. На обоих вариантах проверка зарегистрировала светящиеся строки во всех четырёх игровых кадрах со статусом, поднятой рукой при наклоне камеры на 45°, вспышкой и архивом. [Наручный терминал от первого лица, фрагмент кадра 1:1](Images/FosTech-Nanite-Wrist.png) · [Проверки, хеши пакета и журналов](Measurements/A11-NaniteHandoff.json)
 
 ## Воспроизведение
 

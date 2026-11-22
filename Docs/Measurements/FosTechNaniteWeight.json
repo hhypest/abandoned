@@ -1,0 +1,207 @@
+{
+  "scene": "Stairs -> Weight -> Stairs -> Weight, 300 steady frames beginning 120 frames after the second Weight command. WDDM peak spans the entire route. Windowed Vulkan 1920x1080 High, uncapped, acquisition order ABBA.",
+  "timingColumns": [
+    "p95_ms",
+    "p99_ms"
+  ],
+  "variants": {
+    "off": {
+      "pooled": {
+        "frames": 600,
+        "FrameTime": [
+          6.0704,
+          6.7503
+        ],
+        "GameThreadTime": [
+          1.2331,
+          1.32
+        ],
+        "RenderThreadTime": [
+          3.1335,
+          3.3343
+        ],
+        "RHIThreadTime": [
+          1.8818,
+          2.2713
+        ],
+        "GPUTime": [
+          5.7612,
+          6.3712
+        ],
+        "CPU": [
+          3.1335,
+          3.3343
+        ]
+      },
+      "runs": [
+        {
+          "run": "20261122-132102-Travel-d609134f37d6413db1c597aff5cf3875",
+          "timing": {
+            "frames": 300,
+            "FrameTime": [
+              6.0598,
+              6.2976
+            ],
+            "GameThreadTime": [
+              1.2623,
+              1.3578
+            ],
+            "RenderThreadTime": [
+              3.1225,
+              3.3011
+            ],
+            "RHIThreadTime": [
+              1.852,
+              2.2454
+            ],
+            "GPUTime": [
+              5.6058,
+              6.3402
+            ],
+            "CPU": [
+              3.1225,
+              3.3011
+            ]
+          },
+          "peakRouteDedicatedMiB": 2175.28515625,
+          "wddmSamples": 146,
+          "csvSha256": "148a6deeb8211b5b47b9acdef21f5133dbfb8b32dee809e3a47ae31f9d2ac837",
+          "memorySha256": "20003a0726f1aa1c6aad09fef473be77d6460f826c2c34b452ff4c35b77dd3a3"
+        },
+        {
+          "run": "20261122-132200-Travel-8afcda3f8ac948f99e64c797b8ce9b9e",
+          "timing": {
+            "frames": 300,
+            "FrameTime": [
+              6.0826,
+              6.9609
+            ],
+            "GameThreadTime": [
+              1.2124,
+              1.2817
+            ],
+            "RenderThreadTime": [
+              3.1376,
+              3.3856
+            ],
+            "RHIThreadTime": [
+              1.9178,
+              2.2713
+            ],
+            "GPUTime": [
+              5.8167,
+              6.3712
+            ],
+            "CPU": [
+              3.1376,
+              3.3856
+            ]
+          },
+          "peakRouteDedicatedMiB": 2179.9296875,
+          "wddmSamples": 153,
+          "csvSha256": "e250c23858581145466de35ee835abe197ab9cbdc2b726f45297050e9d0ac129",
+          "memorySha256": "0bbbce25da45f4e5837b2c031c0a1aa242db0b272e3ae840efabb508d4f56921"
+        }
+      ]
+    },
+    "on": {
+      "pooled": {
+        "frames": 600,
+        "FrameTime": [
+          10.243,
+          10.8828
+        ],
+        "GameThreadTime": [
+          1.6133,
+          2.093
+        ],
+        "RenderThreadTime": [
+          5.5365,
+          6.4106
+        ],
+        "RHIThreadTime": [
+          4.6452,
+          5.0401
+        ],
+        "GPUTime": [
+          6.4284,
+          6.7534
+        ],
+        "CPU": [
+          5.5365,
+          6.4106
+        ]
+      },
+      "runs": [
+        {
+          "run": "20261122-132120-Travel-5341c39138cf4723b54eb7e1e846e6c2",
+          "timing": {
+            "frames": 300,
+            "FrameTime": [
+              10.2394,
+              10.8898
+            ],
+            "GameThreadTime": [
+              1.5651,
+              1.7259
+            ],
+            "RenderThreadTime": [
+              5.7137,
+              6.4008
+            ],
+            "RHIThreadTime": [
+              4.6097,
+              5.0392
+            ],
+            "GPUTime": [
+              6.4062,
+              6.5283
+            ],
+            "CPU": [
+              5.7137,
+              6.4008
+            ]
+          },
+          "peakRouteDedicatedMiB": 2984.734375,
+          "wddmSamples": 170,
+          "csvSha256": "7ca8322503bfcb25beacd34f4ae03418e05534ee9163cb1c4992a5212b620477",
+          "memorySha256": "31d809d2fe3d099b508cec650e9944584e7f80cc987b3a6c66ffbcc8de76b095"
+        },
+        {
+          "run": "20261122-132140-Travel-128dbacf0e984f589d43aa51d561bb59",
+          "timing": {
+            "frames": 300,
+            "FrameTime": [
+              10.243,
+              10.802
+            ],
+            "GameThreadTime": [
+              1.6829,
+              2.1466
+            ],
+            "RenderThreadTime": [
+              5.4738,
+              6.4244
+            ],
+            "RHIThreadTime": [
+              4.6919,
+              5.0401
+            ],
+            "GPUTime": [
+              6.4284,
+              6.9404
+            ],
+            "CPU": [
+              5.4738,
+              6.4244
+            ]
+          },
+          "peakRouteDedicatedMiB": 2972.88671875,
+          "wddmSamples": 167,
+          "csvSha256": "592080a279d83b956ca73d5d0dfb2a580b0dabd01dd5d45a4685413bb7c04a85",
+          "memorySha256": "4dee2ffc931b406b2d96dbcc8efac9aa77ceff1d8e027dd18ed4d90d1636c43a"
+        }
+      ]
+    }
+  }
+}
