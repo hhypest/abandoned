@@ -6,7 +6,11 @@
 #include "Engine/SkeletalMesh.h"
 #include "Components/PoseableMeshComponent.h"
 #include "Camera/CameraComponent.h"
-#include "Components/WidgetComponent.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Expedition/WristDisplayComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Expedition/VanguardSession.h"
@@ -68,6 +72,43 @@ bool UVanguardWristTerminalVerification::CheckExposure(const AVanguardCharacter&
     return true;
 }
 
+bool UVanguardWristTerminalVerification::CheckGlass(const APlayerController& PC, const UWidgetComponent& Display)
+{
+    int32 Width = 0, Height = 0;
+    PC.GetViewportSize(Width, Height);
+    const FMinimalViewInfo& View = PC.PlayerCameraManager->GetCameraCacheView();
+    const FTransform Glass = Display.GetComponentTransform();
+    const FVector2D Size = Display.GetDrawSize();
+    FBox2D Rect(ForceInit);
+    double Nearest = TNumericLimits<double>::Max();
+    for (const double Y : {-0.5, 0.5})
+    {
+        for (const double Z : {-0.5, 0.5})
+        {
+            const FVector Corner = Glass.TransformPosition(FVector(0, Y * Size.X, Z * Size.Y));
+            const FVector Rendered = View.TransformWorldToFirstPerson(Corner, false);
+            Nearest = FMath::Min(Nearest, FVector::DotProduct(Rendered - View.Location, View.Rotation.Vector()));
+            FVector2D Pixel;
+            if (!PC.ProjectWorldLocationToScreen(Rendered, Pixel))
+            {
+                return Fail(TEXT("raised glass corner projected behind the camera"));
+            }
+            Rect += Pixel;
+        }
+    }
+    UE_LOG(LogWristTerminal, Display,
+        TEXT("EQP-01 glass at pitch %.1f: %.0f x %.0f px in %dx%d, rectangle %s .. %s, nearest corner %.2f cm."),
+        View.Rotation.Pitch, Rect.GetSize().X, Rect.GetSize().Y, Width, Height,
+        *Rect.Min.ToString(), *Rect.Max.ToString(), Nearest);
+    if (Nearest <= View.GetFinalPerspectiveNearClipPlane() || Rect.Min.X < 0 || Rect.Min.Y < 0 ||
+        Rect.Max.X >= Width || Rect.Max.Y >= Height || Rect.GetSize().Y < Height * 0.075 ||
+        FVector::DotProduct(Glass.GetUnitAxis(EAxis::X), (View.Location - Glass.GetLocation()).GetSafeNormal()) < 0.7)
+    {
+        return Fail(TEXT("all four EQP-01 glass corners must clear the near plane and viewport and face the eye"));
+    }
+    return true;
+}
+
 bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route, AVanguardCharacter& Player, float DeltaSeconds)
 {
     using Abandoned::Application::Expedition::SuitPage;
@@ -116,13 +157,16 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         }
         {
             const auto* Body = Player.GetSuitBody();
+            const auto* Casing = Player.GetWristCasing();
             const auto& Visuals = *GetDefault<UVanguardMantleVisuals>();
             if (!Body || !Body->IsVisible() || !Body->GetSkinnedAsset() || !Body->GetMaterial(0) ||
                 Body->GetSkinnedAsset()->GetName() != TEXT("SK_EQP00") ||
                 Body->GetParentBone(TEXT("terminal_l")) != FName(TEXT("lowerarm_l")) ||
                 !Player.DisplayPrimary.IsValid() || !Player.WristDisplay->GetSlateWidget().IsValid() ||
                 Player.WristDisplay->GetWidgetSpace() != EWidgetSpace::World ||
-                Player.WristDisplay->GetAttachParent() != Body || Player.WristDisplay->GetAttachSocketName() != FName(TEXT("terminal_l")) ||
+                !Casing || !Casing->GetStaticMesh() || Casing->GetStaticMesh()->GetName() != TEXT("EQP-01") ||
+                Casing->GetAttachParent() != Body || Casing->GetAttachSocketName() != FName(TEXT("terminal_l")) ||
+                Player.WristDisplay->GetAttachParent() != Casing ||
                 !Visuals.WristSurface.IsValid() || Player.WristDisplay->GetMaterial(0) != Visuals.WristSurface.Get())
             {
                 return Fail(TEXT("EQP-00, its left forearm-mounted display and display material are required"));
@@ -169,34 +213,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
             const FVector Center = Glass.GetLocation();
             UE_LOG(LogWristTerminal, Display, TEXT("EQP-00 wrist raised %.1f cm; glass in view space %s."),
                 Rise, *Player.Camera->GetComponentTransform().InverseTransformPosition(Center).ToCompactString());
-            if (bCapture)
-            {
-                int32 Width = 0, Height = 0;
-                PC->GetViewportSize(Width, Height);
-                const FVector2D Size = Player.WristDisplay->GetDrawSize();
-                FBox2D Rect(ForceInit);
-                for (const double Y : {-0.5, 0.5})
-                {
-                    for (const double Z : {-0.5, 0.5})
-                    {
-                        FVector2D Pixel;
-                        if (!PC->ProjectWorldLocationToScreen(Glass.TransformPosition(FVector(0, Y * Size.X, Z * Size.Y)), Pixel))
-                        {
-                            return Fail(TEXT("raised screen corner behind the eye"));
-                        }
-                        Rect += Pixel;
-                    }
-                }
-                if (Rect.Min.X < 0 || Rect.Min.Y < 0 || Rect.Max.X >= Width || Rect.Max.Y >= Height ||
-                    Rect.GetSize().Y < Height * 0.075 || FVector::DotProduct(Glass.GetUnitAxis(EAxis::X), (Eye - Center).GetSafeNormal()) < 0.7)
-                {
-                    UE_LOG(LogWristTerminal, Error, TEXT("EQP-00 glass projects to %s .. %s in %dx%d."),
-                        *Rect.Min.ToString(), *Rect.Max.ToString(), Width, Height);
-                    return Fail(TEXT("full screen must be in view, face the player and be large enough to read"));
-                }
-                UE_LOG(LogWristTerminal, Display, TEXT("EQP-00 glass occupies %.0f x %.0f pixels in %dx%d."),
-                    Rect.GetSize().X, Rect.GetSize().Y, Width, Height);
-            }
+            if (!CheckGlass(*PC, *Player.WristDisplay)) { return false; }
         }
         if (!Player.DisplayPrimary->GetText().ToString().Contains(FString::Printf(TEXT("OXYGEN  %.1f%%"), Route.GetRouteState().GetOxygenPercent())) ||
             (Route.GetRouteState().AtStation() ? !Shows(SuitPage::Status, TEXT("DOSE    0.0%")) :
@@ -207,7 +224,58 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         if (!Route.GetRouteState().AtStation() && !Run->bObservedLethalDose)
         {
             Capture(TEXT("Wrist-Terminal-Status"));
+            StandingView = PC->GetControlRotation();
+            Phase = EPhase::TurnWithWrist;
+            break;
         }
+        Key.Press(*PC, EKeys::Tab);
+        Phase = EPhase::Signal;
+        break;
+    case EPhase::TurnWithWrist:
+    {
+        // Reproduce the review case and both steep limits using the actual controller.
+        constexpr double Pitches[] = {45.0, 85.0, -85.0, 45.0};
+        if (LookStep == UE_ARRAY_COUNT(Pitches))
+        {
+            CrouchKey.Release();
+            PC->SetControlRotation(StandingView);
+            Phase = EPhase::RestoreView;
+            break;
+        }
+        if (LookStep == 3) { CrouchKey.Press(*PC, EKeys::LeftControl); }
+        PC->SetControlRotation(FRotator(Pitches[LookStep], StandingView.Yaw + 25.0, 0.0));
+        Phase = EPhase::MeasureView;
+        break;
+    }
+    case EPhase::MeasureView:
+        if (Elapsed < 0.20f) { return false; }
+        if (!Player.WristDisplay->IsVisible() || Player.bIsCrouched != (LookStep == 3) ||
+            !PC->PlayerCameraManager->GetCameraRotation().Equals(PC->GetControlRotation(), 0.1))
+        {
+            return Fail(TEXT("player view and stance must reach the requested reading pose"));
+        }
+        if (Player.bIsCrouched)
+        {
+            const double Floor = Player.GetActorLocation().Z - Player.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+            for (const FName Foot : {FName(TEXT("foot_l")), FName(TEXT("foot_r"))})
+            {
+                const double Ankle = Player.GetSuitBody()->GetSocketLocation(Foot).Z - Floor;
+                if (Ankle < 0.0 || Ankle > 20.0)
+                {
+                    UE_LOG(LogWristTerminal, Error, TEXT("Crouched reading ankle %s is %.2f cm above the floor."), *Foot.ToString(), Ankle);
+                    return Fail(TEXT("reading in a grounded crouch must keep both boots on the floor"));
+                }
+            }
+        }
+        if (!CheckGlass(*PC, *Player.WristDisplay)) { return false; }
+        if (LookStep == 0) { Capture(TEXT("Wrist-Terminal-Pitch45")); }
+        ++LookStep;
+        Phase = EPhase::TurnWithWrist;
+        break;
+    case EPhase::RestoreView:
+        if (Elapsed < 0.20f) { return false; }
+        if (Player.bIsCrouched) { return Fail(TEXT("player should stand and keep the wrist raised")); }
+        if (!CheckGlass(*PC, *Player.WristDisplay)) { return false; }
         Key.Press(*PC, EKeys::Tab);
         Phase = EPhase::Signal;
         break;

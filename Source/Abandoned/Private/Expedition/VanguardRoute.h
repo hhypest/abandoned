@@ -19,7 +19,7 @@ class UBoxComponent;
 class UMaterialInterface;
 class USpotLightComponent;
 class UStaticMeshComponent;
-class UWidgetComponent;
+class UWristDisplayComponent;
 class STextBlock;
 class UVanguardRouteStateComponent;
 class UVanguardRouteLayout;
@@ -172,7 +172,7 @@ private:
     TObjectPtr<UAudioComponent> InjuryBreath;
 
     UPROPERTY()
-    TObjectPtr<UWidgetComponent> WristDisplay;
+    TObjectPtr<UWristDisplayComponent> WristDisplay;
 
 protected:
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;

@@ -12,4 +12,5 @@ The EQP-01 strap was removed and the cut openings were capped.
 The earlier first-person glove setup mirrored EQP-05 for the right hand.
 
 The game copy of EQP-00 adds a skeleton and skinning for the body, hands and legs.
-The integrated terminal is weighted rigidly to the left forearm. Its live display is supplied by the game.
+The sculpted terminal was removed. A mirrored section of the original right sleeve was stitched to the left wrist and elbow collars. EQP-01 attaches to the left forearm and carries the game display.
+The EQP-00 and EQP-01 game materials combine the original PBR textures with a project-authored fine surface finish. The display and its typography are rendered in-game.

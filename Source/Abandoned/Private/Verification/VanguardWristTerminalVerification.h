@@ -6,6 +6,7 @@
 
 class AVanguardCharacter;
 class AVanguardSegment;
+class UWidgetComponent;
 
 UCLASS()
 class UVanguardWristTerminalVerification final : public UActorComponent
@@ -23,15 +24,17 @@ public:
 private:
     enum class EPhase
     {
-        Open, LookAtKnees, Stand, Status, Signal, Archive, ReadArchive, Resupply, CheckResupply, ReadResupply,
+        Open, LookAtKnees, Stand, Status, TurnWithWrist, MeasureView, RestoreView, Signal, Archive, ReadArchive, Resupply, CheckResupply, ReadResupply,
         PreviousRecord, Close, Failed
     };
+    bool CheckGlass(const APlayerController& PC, const UWidgetComponent& Display);
     bool Fail(const TCHAR* Reason);
 
     EPhase Phase = EPhase::Open;
     FVerificationKeyPress Key;
     FVerificationKeyPress CrouchKey;
     FRotator StandingView = FRotator::ZeroRotator;
+    int32 LookStep = 0;
     double RestTerminalHeight = 0.0;
     double SpawnZ = 0.0;
     float Elapsed = 0.0f;

@@ -606,6 +606,25 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Outcome = 'Passed'
     }
 
+    if ($Capture -and $name -eq 'WristTerminal' -and $result.Outcome -eq 'Passed') {
+        $projections = @($lines -match 'EQP-01 glass at pitch')
+        $up = $projections -match 'pitch 45\.0:' | Select-Object -First 1
+        $frames = @(
+            @{Name='Status';  Page='Status';  Projection=$projections[0]}
+            @{Name='Pitch45'; Page='Status';  Projection=$up}
+            @{Name='Flare';   Page='Flare';   Projection=$projections[-1]}
+            @{Name='Archive'; Page='Archive'; Projection=$projections[-1]}
+        )
+        $result.DisplayInk = @(foreach ($sample in $frames) {
+            $frame = Join-Path $profile "Saved/Screenshots/$screenshotPlatform/Wrist-Terminal-$($sample.Name).png"
+            & (Join-Path $PSScriptRoot 'Read-WristDisplayFrame.ps1') -Path $frame -Projection $sample.Projection -Page $sample.Page
+        })
+        if ($result.DisplayInk.Visible -contains $false) {
+            $result.Outcome = 'Failed'
+            $result.Reason = 'The rendered wrist glass did not show the expected illuminated text in all four captures.'
+        }
+    }
+
     if ($definition.ExpectedError) {
         $expected = [regex]::Escape($definition.ExpectedError)
         $unexpected = $result.FailureMarkers -notmatch "$expected|$exitRequestPattern"

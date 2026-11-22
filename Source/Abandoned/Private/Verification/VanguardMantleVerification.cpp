@@ -8,7 +8,7 @@
 #include "Components/SpotLightComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/PoseableMeshComponent.h"
-#include "Components/WidgetComponent.h"
+#include "Expedition/WristDisplayComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"

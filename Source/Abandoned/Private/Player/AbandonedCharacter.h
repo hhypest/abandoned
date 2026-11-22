@@ -12,8 +12,10 @@ class UEnhancedInputComponent;
 class UEnhancedInputLocalPlayerSubsystem;
 class UInputAction;
 class UInputMappingContext;
+class UStaticMesh;
+class UStaticMeshComponent;
 
-UCLASS()
+UCLASS(Config=Game)
 class AAbandonedCharacter : public ACharacter
 {
     GENERATED_BODY()
@@ -21,6 +23,7 @@ class AAbandonedCharacter : public ACharacter
 public:
     AAbandonedCharacter();
     UPoseableMeshComponent* GetSuitBody() const;
+    UStaticMeshComponent* GetWristCasing() const;
 
 protected:
     void PostInitializeComponents() override;
@@ -46,7 +49,12 @@ protected:
     UPROPERTY(VisibleDefaultsOnly, Category="Suit")
     TObjectPtr<UFosTechBody> SuitBody;
 
+    UPROPERTY(VisibleDefaultsOnly, Category="Suit")
+    TObjectPtr<UStaticMeshComponent> WristCasing;
+
 private:
+    UPROPERTY(Config)
+    TSoftObjectPtr<UStaticMesh> WristCasingAsset;
     void Look(const FInputActionValue& Value);
     void UpdateSpeed();
     float LoadSpeedScale = 1.0f;
