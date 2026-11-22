@@ -18,6 +18,7 @@ param(
 
     [switch]$Capture,
     [ValidateSet(1, 2)][int]$OcclusionQueryFrames,
+    [ValidateSet(0, 1)][int]$HzbOcclusion,
     [switch]$SeparateChamberDecor,
     [switch]$CompoundWeightShell,
     [switch]$PreloadWeightShell,
@@ -72,6 +73,7 @@ $expectedRenderer = [ordered]@{
     'r.Lumen.HardwareRayTracing' = 0
     'r.Nanite.ProjectEnabled' = 1
     'r.NumBufferedOcclusionQueries' = 1
+    'r.HZBOcclusion' = 1
     'r.Shadow.Virtual.Enable' = 1
     'r.AntiAliasingMethod' = 4
     'r.PhysicsField.EnableField' = 0
@@ -79,6 +81,11 @@ $expectedRenderer = [ordered]@{
     'sg.ReflectionQuality' = 2
 }
 $renderQueries = $expectedRenderer.Keys -join ','
+$hasHzbOverride = $PSBoundParameters.ContainsKey('HzbOcclusion')
+if ($hasHzbOverride) {
+    $expectedRenderer['r.HZBOcclusion'] = $HzbOcclusion
+    $renderQueries = "r.HZBOcclusion $HzbOcclusion,$renderQueries"
+}
 if ($OcclusionQueryFrames) {
     $expectedRenderer['r.NumBufferedOcclusionQueries'] = $OcclusionQueryFrames
     $renderQueries = "r.NumBufferedOcclusionQueries $OcclusionQueryFrames,$renderQueries"
@@ -453,7 +460,7 @@ function Invoke-Scenario($name, $definition, $profile) {
     if (($Capture -or $definition.CheckPortalFrame) -and $definition.CaptureFlag) {
         $start.ArgumentList.Add($definition.CaptureFlag)
     }
-    if ($name -eq 'DoorClamp' -and $Capture -and $OcclusionQueryFrames) {
+    if ($name -eq 'DoorClamp' -and $Capture -and ($OcclusionQueryFrames -or $hasHzbOverride)) {
         $start.ArgumentList.Add('-CaptureWeightVisibility')
     }
     foreach ($arg in $definition.ExtraFlag) { $start.ArgumentList.Add($arg) }
