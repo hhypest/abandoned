@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 #include "Expedition/VanguardRoute.h"
 #include "Expedition/VanguardSession.h"
+#include "Verification/AirlockVerificationSession.h"
 #include "Infrastructure/Expedition/UnrealEntryCourse.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Misc/CommandLine.h"
@@ -17,11 +18,6 @@ namespace Abandoned::Verification::StationAirlock
 namespace
 {
 using Domain::Expedition::SuitRecord;
-TWeakObjectPtr<UWorld> PassageWorld;
-TWeakObjectPtr<ULevel> PassageLevel;
-TWeakObjectPtr<AController> Controller;
-float LastOxygen = 0;
-
 bool ExpectedArchive(const Domain::Expedition::SuitArchive& Archive, bool bResupplied)
 {
     return Archive.Size() == (bResupplied ? 2 : 1) && Archive.At(0) == SuitRecord::ForecastSynchronized &&
@@ -40,25 +36,29 @@ bool OriginalSlot() { return CheckSlot(false); }
 
 void ObservePassage(const AVanguardSegment& Passage, const AVanguardCharacter& Player)
 {
-    PassageWorld = Passage.GetWorld();
-    PassageLevel = Passage.GetLevel();
-    Controller = Player.GetController();
-    LastOxygen = Passage.GetRouteState().GetOxygenPercent();
+    auto* Check = UAirlockVerificationSession::Find(Player);
+    if (!Check) { return; }
+    Check->Station.PassageWorld = Passage.GetWorld();
+    Check->Station.PassageLevel = Passage.GetLevel();
+    Check->Station.Controller = Player.GetController();
+    Check->Station.LastOxygen = Passage.GetRouteState().GetOxygenPercent();
 }
 
 bool CheckArrival(const AVanguardSegment& Station, const AVanguardCharacter& Player)
 {
     const auto* Session = UVanguardSession::Find(Player);
+    const auto* Check = UAirlockVerificationSession::Find(Player);
+    if (!Check) { return false; }
     const auto* Floor = Player.GetMovementBase();
     const float Oxygen = Station.GetRouteState().GetOxygenPercent();
-    const bool bPassed = PassageWorld.Get() == Station.GetWorld() && Controller.IsValid() && Player.GetController() == Controller.Get() &&
-        !Station.GetWorld()->GetLevels().Contains(PassageLevel.Get()) && Station.GetLevel() != Station.GetWorld()->PersistentLevel &&
+    const bool bPassed = Check->Station.PassageWorld.Get() == Station.GetWorld() && Check->Station.Controller.IsValid() && Player.GetController() == Check->Station.Controller.Get() &&
+        !Station.GetWorld()->GetLevels().Contains(Check->Station.PassageLevel.Get()) && Station.GetLevel() != Station.GetWorld()->PersistentLevel &&
         Player.GetLevel() == Station.GetLevel() && Floor && Floor->GetOwner()->GetLevel() == Station.GetLevel() &&
-        Station.GetRouteState().AtStation() && LastOxygen < 100.0f && FMath::IsNearlyEqual(Oxygen, LastOxygen, 0.02f) &&
+        Station.GetRouteState().AtStation() && Check->Station.LastOxygen < 100.0f && FMath::IsNearlyEqual(Oxygen, Check->Station.LastOxygen, 0.02f) &&
         Player.IsFlashlightOn() && Session && ExpectedArchive(Session->Suit.Records(), false) && OriginalSlot();
     if (bPassed)
     {
-        UE_LOG(LogStationAirlockTest, Display, TEXT("Station handoff verified: same world and controller, passage removed, oxygen %.3f -> %.3f, light and archive retained."), LastOxygen, Oxygen);
+        UE_LOG(LogStationAirlockTest, Display, TEXT("Station handoff verified: same world and controller, passage removed, oxygen %.3f -> %.3f, light and archive retained."), Check->Station.LastOxygen, Oxygen);
     }
     return bPassed;
 }
