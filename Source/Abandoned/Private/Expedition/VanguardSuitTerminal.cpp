@@ -10,7 +10,7 @@
 #include "Widgets/Text/STextBlock.h"
 #include "Engine/World.h"
 #include "Camera/CameraComponent.h"
-#include "Components/StaticMeshComponent.h"
+#include "Player/FosTechBody.h"
 #include "EnhancedInputComponent.h"
 #include "Materials/MaterialInterface.h"
 
@@ -37,43 +37,14 @@ const TCHAR* RecordText(SuitRecord Record)
 
 void AVanguardCharacter::CreateWristTerminal()
 {
-    WristRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SuitWrist"));
-    WristRoot->SetupAttachment(Camera);
-    WristRoot->SetRelativeLocation(FVector(48.0, -15.0, -12.0));
-    // Keep the raised wrist inside the player's collision envelope without changing its framing.
-    Camera->SetEnableFirstPersonScale(true);
-    Camera->SetFirstPersonScale(0.45f);
-
-    const auto MakePart = [this](const FName& Name, FVector Position, FVector Scale)
-    {
-        UStaticMeshComponent* Part = CreateDefaultSubobject<UStaticMeshComponent>(Name);
-        Part->SetupAttachment(WristRoot);
-        Part->SetRelativeLocation(Position);
-        Part->SetRelativeScale3D(Scale);
-        Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        Part->SetCanEverAffectNavigation(false);
-        Part->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::FirstPerson);
-        Part->SetOnlyOwnerSee(true);
-        Part->SetCastShadow(false);
-        Part->SetVisibility(false);
-        return Part;
-    };
-    // The EQP-01 glass faces local +Y. Seat the rear plate against the raised left sleeve.
-    WristCasing = MakePart(TEXT("WristCasing"), FVector::ZeroVector, FVector(0.15));
-    WristCasing->SetRelativeRotation(FRotator(0, 90, 0));
-    WristSleeve = MakePart(TEXT("WristSleeve"), FVector(-7.6, 3, 0), FVector(1.2, 1, 1));
-    WristSleeve->SetRelativeRotation(FRotationMatrix::MakeFromX(FVector(0, -27, -8)).Rotator());
-    WristGlove = MakePart(TEXT("WristGlove"), FVector(-7.6, 13, 1.6), FVector::OneVector);
-
-    // Mount the display just above the recessed EQP-01 glass. The lower edge tilts towards the wearer.
     WristDisplay = CreateDefaultSubobject<UWidgetComponent>(TEXT("WristDisplay"));
-    WristDisplay->SetupAttachment(WristCasing);
-    WristDisplay->SetRelativeLocation(FVector(-46, 84, 51));
-    WristDisplay->SetRelativeRotation(FRotationMatrix::MakeFromXZ(FVector(0, 48, 11), FVector(0, -11, 48)).Rotator());
-    WristDisplay->SetRelativeScale3D(FVector(0.137));
+    WristDisplay->SetupAttachment(SuitBody, TEXT("terminal_l"));
+    // terminal_l is the glass centre, facing local +X; the long edge follows local -Y.
+    WristDisplay->SetRelativeLocation(FVector(0.20, 0.0, 0.0));
+    WristDisplay->SetRelativeScale3D(FVector(1.0, 12.0 / 600.0, 3.55 / 185.0));
     WristDisplay->SetWidgetSpace(EWidgetSpace::World);
-    WristDisplay->SetDrawSize(FVector2D(512, 336));
-    WristDisplay->SetPivot(FVector2D::ZeroVector);
+    WristDisplay->SetDrawSize(FVector2D(600, 185));
+    WristDisplay->SetPivot(FVector2D(0.5, 0.5));
     WristDisplay->SetBlendMode(EWidgetBlendMode::Opaque);
     WristDisplay->SetBackgroundColor(FLinearColor::Black);
     WristDisplay->SetManuallyRedraw(true);
@@ -84,19 +55,11 @@ void AVanguardCharacter::CreateWristTerminal()
     WristDisplay->SetOnlyOwnerSee(true);
     WristDisplay->SetCastShadow(false);
     WristDisplay->SetVisibility(false);
-    WristRoot->SetVisibility(false);
 }
 
 void AVanguardCharacter::ConfigureWristTerminal()
 {
     const auto& Suit = *GetDefault<UVanguardMantleVisuals>();
-    WristCasing->SetStaticMesh(Suit.WristTerminal.LoadSynchronous());
-    WristGlove->SetStaticMesh(Suit.Glove.LoadSynchronous());
-    const FQuat Hand = FRotationMatrix::MakeFromXZ(FVector(0, 1, 0.18), -FVector::ForwardVector).ToQuat();
-    WristGlove->SetRelativeRotation(Hand * Suit.GloveRotation.Quaternion());
-    WristGlove->SetRelativeScale3D(FVector(Suit.GloveScale));
-    WristSleeve->SetStaticMesh(Suit.Sleeve.LoadSynchronous());
-    WristSleeve->SetMaterial(0, Suit.Finish.LoadSynchronous());
     if (!DisplayBody.IsValid())
     {
         if (UMaterialInterface* Surface = Suit.WristSurface.LoadSynchronous())
@@ -104,25 +67,25 @@ void AVanguardCharacter::ConfigureWristTerminal()
             WristDisplay->SetMaterial(0, Surface);
         }
         WristDisplay->SetSlateWidget(
-            SNew(SBox).Padding(FMargin(14, 10)).Visibility(EVisibility::HitTestInvisible)
+            SNew(SBox).Padding(FMargin(8, 3)).Visibility(EVisibility::HitTestInvisible)
             [
                 SNew(SVerticalBox)
-                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)
+                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 2)
                 [
                     SAssignNew(DisplayHeading, STextBlock)
-                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 30))
+                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 22))
                     .ColorAndOpacity(FLinearColor(0.45f, 0.88f, 0.77f))
                 ]
                 + SVerticalBox::Slot().AutoHeight()
                 [
                     SAssignNew(DisplayPrimary, STextBlock)
-                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 40))
+                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 36))
                     .ColorAndOpacity(FLinearColor(0.38f, 0.72f, 0.56f))
                 ]
                 + SVerticalBox::Slot().AutoHeight()
                 [
                     SAssignNew(DisplayBody, STextBlock)
-                    .Font(FCoreStyle::GetDefaultFontStyle("Regular", 28))
+                    .Font(FCoreStyle::GetDefaultFontStyle("Regular", 23))
                     .ColorAndOpacity(FLinearColor(0.86f, 0.93f, 0.85f))
                 ]
             ]);
@@ -142,14 +105,14 @@ void AVanguardCharacter::ToggleWristTerminal()
     if (!IsMantling())
     {
         WristTerminal.Toggle();
-        WristRoot->SetVisibility(IsWristTerminalOpen(), true);
+        WristDisplay->SetVisibility(IsWristTerminalOpen());
     }
 }
 
 void AVanguardCharacter::CloseWristTerminal()
 {
     WristTerminal.Close();
-    WristRoot->SetVisibility(false, true);
+    WristDisplay->SetVisibility(false);
 }
 
 void AVanguardCharacter::AdvanceTerminalPage()

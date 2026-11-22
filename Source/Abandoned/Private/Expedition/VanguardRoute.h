@@ -150,9 +150,8 @@ private:
     void UpdatePassageMovement(UVanguardRouteStateComponent& Route, bool bEnableMantle, float DeltaSeconds);
     void UpdateMantle(float DeltaSeconds, std::optional<double> SupportHeight);
     void FinishMantle();
-    void CreateMantleVisuals();
-    void LoadMantleVisuals();
-    void UpdateMantleHands();
+    void UpdateSuitPose(float DeltaSeconds);
+    float WristRaiseWeight = 0.0f;
     Abandoned::Application::Expedition::MantleRequest MantleRequest;
     Abandoned::Application::Expedition::SuitTerminal WristTerminal;
     TSharedPtr<STextBlock> DisplayHeading;
@@ -172,26 +171,8 @@ private:
     UPROPERTY(VisibleDefaultsOnly, Category="Suit")
     TObjectPtr<UAudioComponent> InjuryBreath;
 
-    UPROPERTY(VisibleDefaultsOnly, Category="Suit")
-    TObjectPtr<UStaticMeshComponent> MantleGloves[2];
-
-    UPROPERTY(VisibleDefaultsOnly, Category="Suit")
-    TObjectPtr<UStaticMeshComponent> MantleSleeves[2];
-
-    UPROPERTY()
-    TObjectPtr<USceneComponent> WristRoot;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> WristCasing;
-
     UPROPERTY()
     TObjectPtr<UWidgetComponent> WristDisplay;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> WristSleeve;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> WristGlove;
 
 protected:
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;

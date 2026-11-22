@@ -3,100 +3,30 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/SpotLightComponent.h"
-#include "Components/StaticMeshComponent.h"
-#include "Engine/StaticMesh.h"
+#include "Player/FosTechBody.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Materials/MaterialInterface.h"
 
 namespace
 {
-constexpr double ReachPeakSeconds = 0.055;
 constexpr double ReachSeconds = 0.12;
 constexpr double ReleaseStartSeconds = 0.27;
 constexpr double ReleaseEndSeconds = 0.51;
 constexpr float GripLightFraction = 0.001f;
-const FVector GloveWrist(-7.5, 0.0, 2.5);
-constexpr double SleeveMeshLength = 26.0;
 }
 
-void AVanguardCharacter::CreateMantleVisuals()
+void AVanguardCharacter::UpdateSuitPose(float DeltaSeconds)
 {
-    const auto MakePart = [this](const FName& Name)
-    {
-        UStaticMeshComponent* Part = CreateDefaultSubobject<UStaticMeshComponent>(Name);
-        Part->SetupAttachment(GetRootComponent());
-        Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        Part->SetCanEverAffectNavigation(false);
-        Part->SetOnlyOwnerSee(true);
-        Part->SetCastShadow(false);
-        Part->SetVisibility(false);
-        return Part;
-    };
-    MantleGloves[0] = MakePart(TEXT("MantleGloveL"));
-    MantleGloves[1] = MakePart(TEXT("MantleGloveR"));
-    MantleSleeves[0] = MakePart(TEXT("MantleSleeveL"));
-    MantleSleeves[1] = MakePart(TEXT("MantleSleeveR"));
-}
-
-void AVanguardCharacter::LoadMantleVisuals()
-{
-    const UVanguardMantleVisuals& Visuals = *GetDefault<UVanguardMantleVisuals>();
-    UStaticMesh* Glove = Visuals.Glove.LoadSynchronous();
-    UStaticMesh* Sleeve = Visuals.Sleeve.LoadSynchronous();
-    UMaterialInterface* Finish = Visuals.Finish.LoadSynchronous();
-    for (int32 Hand = 0; Hand < 2; ++Hand)
-    {
-        MantleGloves[Hand]->SetStaticMesh(Glove);
-        MantleGloves[Hand]->SetRelativeScale3D(FVector(Hand == 0 ? 1 : -1, 1, 1) * Visuals.GloveScale);
-        MantleSleeves[Hand]->SetStaticMesh(Sleeve);
-        MantleSleeves[Hand]->SetMaterial(0, Finish);
-    }
-}
-
-void AVanguardCharacter::UpdateMantleHands()
-{
-    const float FlashlightIntensity = GetDefault<UVanguardFlashlightSettings>()->IntensityLumens;
-    if (!ActiveMantleHandhold || MantleSeconds >= ReleaseEndSeconds)
-    {
-        ShoulderLight->SetIntensity(FlashlightIntensity);
-        for (int Hand = 0; Hand < 2; ++Hand)
-        {
-            MantleGloves[Hand]->SetVisibility(false);
-            MantleSleeves[Hand]->SetVisibility(false);
-        }
-        return;
-    }
-
-    const FQuat View = GetViewRotation().Quaternion();
-    const FVector Eye = Camera->GetComponentLocation();
-    const double GripWeight = MantleSeconds < ReleaseStartSeconds
-        ? FMath::SmoothStep(ReachPeakSeconds, ReachSeconds, MantleSeconds)
-        : 1.0 - FMath::SmoothStep(ReleaseStartSeconds, ReleaseEndSeconds, MantleSeconds);
-    const double RaiseWeight = MantleSeconds <= ReachSeconds
-        ? FMath::SmoothStep(0.0, ReachPeakSeconds, MantleSeconds)
-        : 0.0;
-    ShoulderLight->SetIntensity(FlashlightIntensity * FMath::Lerp(1.0f, GripLightFraction,
-        static_cast<float>(GripWeight)));
-    const auto& Handhold = *ActiveMantleHandhold;
-    for (int Hand = 0; Hand < 2; ++Hand)
-    {
-        const double Side = Hand == 0 ? -1.0 : 1.0;
-        const FVector Rest(33.0, Side * 24.0, -25.0);
-        const FVector Ready(39.0, Side * 18.0, -12.0);
-        const FVector Reach = Eye + View.RotateVector(FMath::Lerp(Rest, Ready, RaiseWeight));
-        const FVector Pose = FMath::Lerp(Reach, Handhold.Edge[Hand], GripWeight);
-        const FQuat Rotation = FQuat::Slerp(View, Handhold.Orientation, GripWeight);
-        MantleGloves[Hand]->SetWorldLocationAndRotation(Pose, Rotation * GetDefault<UVanguardMantleVisuals>()->GloveRotation.Quaternion());
-        MantleGloves[Hand]->SetVisibility(true);
-
-        const FVector Wrist = Pose + Rotation.RotateVector(GloveWrist);
-        const FVector Elbow = Eye + View.RotateVector(FVector(6.0, Side * 23.0, -44.0));
-        const FVector SleeveDirection = Elbow - Wrist;
-        const FQuat SleeveRotation = FRotationMatrix::MakeFromXZ(SleeveDirection, Rotation.GetUpVector()).ToQuat();
-        const double LengthScale = FMath::Clamp(SleeveDirection.Size() / SleeveMeshLength, 0.65, 1.3);
-        MantleSleeves[Hand]->SetWorldTransform(FTransform(SleeveRotation, Wrist, FVector(LengthScale, 1.0, 1.0)));
-        MantleSleeves[Hand]->SetVisibility(true);
-    }
+    constexpr float RaiseSeconds = 0.18f;
+    WristRaiseWeight = FMath::FInterpConstantTo(WristRaiseWeight, IsWristTerminalOpen() ? 1.f : 0.f,
+        DeltaSeconds, 1.f / RaiseSeconds);
+    const float GripWeight = ActiveMantleHandhold ? static_cast<float>(MantleSeconds < ReleaseStartSeconds
+        ? FMath::SmoothStep(0.0, ReachSeconds, MantleSeconds)
+        : 1.0 - FMath::SmoothStep(ReleaseStartSeconds, ReleaseEndSeconds, MantleSeconds)) : 0.f;
+    const float Flashlight = GetDefault<UVanguardFlashlightSettings>()->IntensityLumens;
+    ShoulderLight->SetIntensity(Flashlight * FMath::Lerp(1.f, GripLightFraction, GripWeight));
+    const FTransform Eye(GetViewRotation(), Camera->GetComponentLocation());
+    SuitBody->PoseArms(Eye, WristRaiseWeight, ActiveMantleHandhold ? ActiveMantleHandhold->Edge : nullptr,
+        ActiveMantleHandhold ? ActiveMantleHandhold->Orientation : FQuat::Identity, GripWeight);
 }
 
 void AVanguardCharacter::Jump()
@@ -142,7 +72,6 @@ void AVanguardCharacter::UpdateMantle(float DeltaSeconds, std::optional<double> 
         const double MotionSeconds = MantleSeconds - Reach;
         if (MotionSeconds <= 0.0)
         {
-            UpdateMantleHands();
             return;
         }
         const auto MoveTo = [this](const FVector& Next)
@@ -166,7 +95,6 @@ void AVanguardCharacter::UpdateMantle(float DeltaSeconds, std::optional<double> 
             FinishMantle();
             return;
         }
-        UpdateMantleHands();
         return;
     }
 
@@ -182,21 +110,16 @@ void AVanguardCharacter::UpdateMantle(float DeltaSeconds, std::optional<double> 
     CloseWristTerminal();
     MantleSeconds = 0.0;
     ActiveMantle = Path;
-    if (MantleGloves[0]->GetStaticMesh() && MantleGloves[1]->GetStaticMesh() && MantleSleeves[0]->GetStaticMesh())
-    {
-        ActiveMantleHandhold = Abandoned::Infrastructure::Expedition::FindMantleHandhold(*this, *Path);
-    }
+    ActiveMantleHandhold = Abandoned::Infrastructure::Expedition::FindMantleHandhold(*this, *Path);
     UCharacterMovementComponent& Movement = *GetCharacterMovement();
     Movement.StopMovementImmediately();
     Movement.DisableMovement();
-    UpdateMantleHands();
 }
 
 void AVanguardCharacter::FinishMantle()
 {
     ActiveMantle.reset();
     ActiveMantleHandhold.reset();
-    UpdateMantleHands();
     bMantleAvailable = false;
     ConsumeMovementInputVector();
     UCharacterMovementComponent& Movement = *GetCharacterMovement();

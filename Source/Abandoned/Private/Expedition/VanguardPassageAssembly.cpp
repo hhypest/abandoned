@@ -25,10 +25,7 @@ bool AVanguardSegment::PollPassageAssets()
         Add(Passage->LeafMesh.ToSoftObjectPath());
         Add(Passage->FrameMesh.ToSoftObjectPath());
         const auto* Suit = GetDefault<UVanguardMantleVisuals>();
-        Add(Suit->WristTerminal.ToSoftObjectPath());
-        Add(Suit->Glove.ToSoftObjectPath());
-        Add(Suit->Sleeve.ToSoftObjectPath());
-        Add(Suit->Finish.ToSoftObjectPath());
+        Add(Suit->WristSurface.ToSoftObjectPath());
         Add(GetDefault<UVanguardInjurySettings>()->BreathSound.ToSoftObjectPath());
         if (!Paths.IsEmpty()) { AssetRequest = UAssetManager::GetStreamableManager().RequestAsyncLoad(Paths); }
     }

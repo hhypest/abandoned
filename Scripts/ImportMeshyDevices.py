@@ -24,6 +24,8 @@ inventory = Path(__file__).resolve().parents[1] / "Docs" / "AssetInventory.csv"
 with inventory.open(encoding="utf-8") as file:
     devices = list(csv.DictReader(file))
 for row in devices:
+    if row["device"] == "EQP-00":
+        continue  # The first-person body uses its own skeletal import pipeline.
     if not row["unreal_folder"]:
         continue  # Reference-only assets await admission to the game.
     code = row["device"]

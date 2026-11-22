@@ -5,10 +5,11 @@ https://creativecommons.org/licenses/by/4.0/
 Source and Meshy task identifiers: https://github.com/hhypest/abandoned/blob/main/Docs/AssetInventory.csv
 
 Included in the game:
-DEV-01A, DEV-01B, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-07, DEV-12, DEV-13, EQP-01, EQP-05.
+DEV-01A, DEV-01B, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-07, DEV-12, DEV-13, EQP-00, EQP-01, EQP-05.
 The assets were imported into Unreal Engine and placed at gameplay scale.
 DEV-02 was split into a housing and moving plate; the cut edges were capped.
 The EQP-01 strap was removed and the cut openings were capped.
-The right-hand EQP-05 instance mirrors the left glove.
+The earlier first-person glove setup mirrored EQP-05 for the right hand.
 
-The same license applies to the separately reviewed EQP-00 body.
+The game copy of EQP-00 adds a skeleton and skinning for the body, hands and legs.
+The integrated terminal is weighted rigidly to the left forearm. Its live display is supplied by the game.

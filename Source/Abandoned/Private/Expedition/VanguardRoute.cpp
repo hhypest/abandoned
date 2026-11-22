@@ -330,10 +330,6 @@ void AVanguardSegment::Equip(AVanguardCharacter& Pawn)
     Light.SetVisibility(Session && Session->Suit.IsFlashlightOn());
     if (!RouteState->AtStation())
     {
-        if (CastChecked<UVanguardPassageLayout>(Layout.Get())->bEnableMantle)
-        {
-            Pawn.LoadMantleVisuals();
-        }
         const UVanguardInjurySettings& Injury = *GetDefault<UVanguardInjurySettings>();
         if (USoundBase* Sound = Injury.BreathSound.LoadSynchronous())
         {
@@ -415,6 +411,7 @@ void AVanguardSegment::Tick(float DeltaSeconds)
             return;
         }
     }
+    Player->UpdateSuitPose(DeltaSeconds);
     Player->UpdateWristTerminal(*RouteState);
 #if WITH_DEV_AUTOMATION_TESTS
     if (auto* RadiationTest = RadiationCheck.Get())
@@ -445,7 +442,6 @@ AVanguardCharacter::AVanguardCharacter()
     InjuryBreath->bAutoActivate = false;
     InjuryBreath->bAllowSpatialization = false;
 
-    CreateMantleVisuals();
     CreateWristTerminal();
 }
 

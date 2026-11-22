@@ -3,7 +3,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Expedition/VanguardRoute.h"
 #include "Expedition/VanguardRouteLayout.h"
-#include "Engine/StaticMesh.h"
+#include "Engine/SkeletalMesh.h"
+#include "Components/PoseableMeshComponent.h"
+#include "Camera/CameraComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
@@ -11,7 +13,6 @@
 #include "Verification/RadiationVerificationSession.h"
 
 #include "Components/BoxComponent.h"
-#include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
@@ -35,6 +36,7 @@ UVanguardWristTerminalVerification* UVanguardWristTerminalVerification::Attach(A
 void UVanguardWristTerminalVerification::EndPlay(const EEndPlayReason::Type Reason)
 {
     Key.Release();
+    CrouchKey.Release();
     Super::EndPlay(Reason);
 }
 
@@ -44,13 +46,14 @@ bool UVanguardWristTerminalVerification::Fail(const TCHAR* Reason)
         Reason, static_cast<int>(Phase));
     Phase = EPhase::Failed;
     Key.Release();
+    CrouchKey.Release();
     URadiationVerificationSession::Finish(*this, false);
     return false;
 }
 
 bool UVanguardWristTerminalVerification::CheckExposure(const AVanguardCharacter& Player, double DosePercent)
 {
-    if (!Player.IsWristTerminalOpen() || !Player.WristCasing->IsVisible() || !Player.WristDisplay->IsVisible() || !Player.DisplayBody.IsValid() ||
+    if (!Player.IsWristTerminalOpen() || !Player.WristDisplay->IsVisible() || !Player.DisplayBody.IsValid() ||
         !Player.DisplayHeading->GetText().EqualTo(FText::FromString(TEXT("FLARE / EXPOSED"))) ||
         !Player.DisplayPrimary->GetText().ToString().StartsWith(TEXT("ENDS IN")) ||
         !Player.DisplayBody->GetText().ToString().Contains(FString::Printf(TEXT("DOSE    %.1f%%"), DosePercent)))
@@ -94,7 +97,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
 
     const auto Shows = [&](SuitPage Page, const TCHAR* Text)
     {
-        return Player.WristTerminal.Page() == Page && Player.WristCasing->IsVisible() && Player.WristDisplay->IsVisible() && Player.DisplayBody.IsValid() && Player.DisplayBody->GetText().ToString().Contains(Text);
+        return Player.WristTerminal.Page() == Page && Player.WristDisplay->IsVisible() && Player.DisplayBody.IsValid() && Player.DisplayBody->GetText().ToString().Contains(Text);
     };
     const auto Capture = [&](const TCHAR* Name)
     {
@@ -107,27 +110,94 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
     switch (Phase)
     {
     case EPhase::Open:
-        if (Player.IsWristTerminalOpen() || Player.WristCasing->IsVisible() || Player.WristDisplay->IsVisible())
+        if (Player.IsWristTerminalOpen() || Player.WristDisplay->IsVisible())
         {
             return Fail(TEXT("the wrist should start lowered"));
         }
-        if (const auto& Visuals = *GetDefault<UVanguardMantleVisuals>();
-            !Visuals.WristTerminal.IsValid() || !Visuals.Glove.IsValid() ||
-            !Player.DisplayPrimary.IsValid() || !Player.WristDisplay->GetSlateWidget().IsValid() ||
-            Player.WristDisplay->GetWidgetSpace() != EWidgetSpace::World ||
-            Player.WristDisplay->GetAttachParent() != Player.WristCasing ||
-            !Visuals.WristSurface.IsValid() || Player.WristDisplay->GetMaterial(0) != Visuals.WristSurface.Get() ||
-            Player.WristCasing->GetStaticMesh() != Visuals.WristTerminal.Get() ||
-            Player.WristGlove->GetStaticMesh() != Visuals.Glove.Get() ||
-            Player.WristCasing->GetMaterial(0) != Visuals.WristTerminal->GetMaterial(0) ||
-            Player.WristGlove->GetMaterial(0) != Visuals.Glove->GetMaterial(0))
         {
-            return Fail(TEXT("the configured wrist and glove meshes must retain their imported materials"));
+            const auto* Body = Player.GetSuitBody();
+            const auto& Visuals = *GetDefault<UVanguardMantleVisuals>();
+            if (!Body || !Body->IsVisible() || !Body->GetSkinnedAsset() || !Body->GetMaterial(0) ||
+                Body->GetSkinnedAsset()->GetName() != TEXT("SK_EQP00") ||
+                Body->GetParentBone(TEXT("terminal_l")) != FName(TEXT("lowerarm_l")) ||
+                !Player.DisplayPrimary.IsValid() || !Player.WristDisplay->GetSlateWidget().IsValid() ||
+                Player.WristDisplay->GetWidgetSpace() != EWidgetSpace::World ||
+                Player.WristDisplay->GetAttachParent() != Body || Player.WristDisplay->GetAttachSocketName() != FName(TEXT("terminal_l")) ||
+                !Visuals.WristSurface.IsValid() || Player.WristDisplay->GetMaterial(0) != Visuals.WristSurface.Get())
+            {
+                return Fail(TEXT("EQP-00, its left forearm-mounted display and display material are required"));
+            }
+            RestTerminalHeight = Body->GetSocketLocation(TEXT("terminal_l")).Z - Player.Camera->GetComponentLocation().Z;
+        }
+        if (bCapture && !Route.GetRouteState().AtStation() && !Run->bObservedLethalDose)
+        {
+            StandingView = PC->GetControlRotation();
+            PC->SetControlRotation(FRotator(-82.0, StandingView.Yaw, 0.0));
+            CrouchKey.Press(*PC, EKeys::LeftControl);
+            Phase = EPhase::LookAtKnees;
+            break;
         }
         Key.Press(*PC, EKeys::T);
         Phase = EPhase::Status;
         break;
+    case EPhase::LookAtKnees:
+        if (Elapsed < 0.35f) { return false; }
+        if (!Player.bIsCrouched) { return Fail(TEXT("the suit must follow the player's crouch")); }
+        Capture(TEXT("EQP00-Crouch"));
+        Phase = EPhase::Stand;
+        break;
+    case EPhase::Stand:
+        CrouchKey.Release();
+        PC->SetControlRotation(StandingView);
+        if (Player.bIsCrouched) { return false; }
+        Key.Press(*PC, EKeys::T);
+        Phase = EPhase::Status;
+        break;
     case EPhase::Status:
+        // Allow the normal raise animation to settle independently of screenshot capture.
+        if (Elapsed < 0.35f) { return false; }
+        {
+            const auto* Body = Player.GetSuitBody();
+            const FVector Eye = Player.Camera->GetComponentLocation();
+            const FVector Terminal = Body->GetSocketLocation(TEXT("terminal_l"));
+            const double Rise = Terminal.Z - Eye.Z - RestTerminalHeight;
+            if (Rise < 15.0 || FVector::DotProduct(Terminal - Eye, Player.Camera->GetForwardVector()) <= 0.0)
+            {
+                return Fail(TEXT("the terminal bone must rise at least 15 cm into view"));
+            }
+            const FTransform Glass = Player.WristDisplay->GetComponentTransform();
+            const FVector Center = Glass.GetLocation();
+            UE_LOG(LogWristTerminal, Display, TEXT("EQP-00 wrist raised %.1f cm; glass in view space %s."),
+                Rise, *Player.Camera->GetComponentTransform().InverseTransformPosition(Center).ToCompactString());
+            if (bCapture)
+            {
+                int32 Width = 0, Height = 0;
+                PC->GetViewportSize(Width, Height);
+                const FVector2D Size = Player.WristDisplay->GetDrawSize();
+                FBox2D Rect(ForceInit);
+                for (const double Y : {-0.5, 0.5})
+                {
+                    for (const double Z : {-0.5, 0.5})
+                    {
+                        FVector2D Pixel;
+                        if (!PC->ProjectWorldLocationToScreen(Glass.TransformPosition(FVector(0, Y * Size.X, Z * Size.Y)), Pixel))
+                        {
+                            return Fail(TEXT("raised screen corner behind the eye"));
+                        }
+                        Rect += Pixel;
+                    }
+                }
+                if (Rect.Min.X < 0 || Rect.Min.Y < 0 || Rect.Max.X >= Width || Rect.Max.Y >= Height ||
+                    Rect.GetSize().Y < Height * 0.075 || FVector::DotProduct(Glass.GetUnitAxis(EAxis::X), (Eye - Center).GetSafeNormal()) < 0.7)
+                {
+                    UE_LOG(LogWristTerminal, Error, TEXT("EQP-00 glass projects to %s .. %s in %dx%d."),
+                        *Rect.Min.ToString(), *Rect.Max.ToString(), Width, Height);
+                    return Fail(TEXT("full screen must be in view, face the player and be large enough to read"));
+                }
+                UE_LOG(LogWristTerminal, Display, TEXT("EQP-00 glass occupies %.0f x %.0f pixels in %dx%d."),
+                    Rect.GetSize().X, Rect.GetSize().Y, Width, Height);
+            }
+        }
         if (!Player.DisplayPrimary->GetText().ToString().Contains(FString::Printf(TEXT("OXYGEN  %.1f%%"), Route.GetRouteState().GetOxygenPercent())) ||
             (Route.GetRouteState().AtStation() ? !Shows(SuitPage::Status, TEXT("DOSE    0.0%")) :
             !Shows(SuitPage::Status, TEXT("NEXT FLARE IN")) || Route.GetRouteState().GetOxygenPercent() >= 100.0f))
@@ -221,7 +291,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         Phase = EPhase::Close;
         break;
     case EPhase::Close:
-        if (Player.IsWristTerminalOpen() || Player.WristCasing->IsVisible() || Player.WristDisplay->IsVisible())
+        if (Player.IsWristTerminalOpen() || Player.WristDisplay->IsVisible())
         {
             return Fail(TEXT("toggle should lower the wrist and hide its screen"));
         }

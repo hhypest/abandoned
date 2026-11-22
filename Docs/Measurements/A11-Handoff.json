@@ -1,0 +1,45 @@
+{
+  "Date": "2026-11-22",
+  "VerificationCommit": "39a806803c7c044c6fa6de33fa8c42e10ef0e0c9",
+  "PackageSourceCommit": "42e4cea9859ec56a133d715d72db3275d9a16d2b",
+  "RunId": "20261122-120201-4b111e36e8c141428b2f2f26bb7d6de8",
+  "RawReportSha256": "C252921978BF184143E1F2FC865689AEA2F541C245DEBB5AA81E9736FD5FB570",
+  "Target": "Package",
+  "Unreal": "5.7.4",
+  "OperatingSystem": "Microsoft Windows 10.0.26300",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "Rhi": "VULKAN_SM6",
+  "Resolution": "1280x720",
+  "FixedStepFps": 60,
+  "ExecutableSha256": "BE2DF58A12A89714AE67882733AE5D508C5784489BBDCAA1AB7181DF136FAFE3",
+  "Scenarios": [
+    {
+      "Name": "Dev20",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "A4F4BF3B2B9CAC1DABD47B5AA632ABB71B227C9E3EB9914C4297F52CBE4AA8D3"
+    },
+    {
+      "Name": "StationAirlock",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "D3AF849B5AF9C4701B1D82B68E999595D7759AA317625B87B134073E89AE8B69"
+    },
+    {
+      "Name": "StationAirlockMissingSupply",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "20CF12F29E20F74B641C5DD4F70216BB965417AAA8D80ADA8132BD92A0D16C0E"
+    },
+    {
+      "Name": "VulkanExitControl",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "A814F6800920C25F5C642638CF4E15C4E1C569D8E46B6EE237CB1BC0DCDD5A74"
+    }
+  ]
+}

@@ -6,6 +6,8 @@
 #include "AbandonedCharacter.generated.h"
 
 class UCameraComponent;
+class UFosTechBody;
+class UPoseableMeshComponent;
 class UEnhancedInputComponent;
 class UEnhancedInputLocalPlayerSubsystem;
 class UInputAction;
@@ -18,8 +20,10 @@ class AAbandonedCharacter : public ACharacter
 
 public:
     AAbandonedCharacter();
+    UPoseableMeshComponent* GetSuitBody() const;
 
 protected:
+    void PostInitializeComponents() override;
     void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
     void UnPossessed() override;
     void EndPlay(const EEndPlayReason::Type Reason) override;
@@ -38,6 +42,9 @@ protected:
 
     UPROPERTY()
     TObjectPtr<UCameraComponent> Camera;
+
+    UPROPERTY(VisibleDefaultsOnly, Category="Suit")
+    TObjectPtr<UFosTechBody> SuitBody;
 
 private:
     void Look(const FInputActionValue& Value);
