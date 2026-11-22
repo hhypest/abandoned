@@ -2,14 +2,15 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$EngineRoot,
+    [ValidateSet('AirlockSessionIsolation', 'RadiationTerminalReplay')][string]$TestName = 'AirlockSessionIsolation',
     [ValidateRange(1, 3600)][int]$TimeoutSeconds = 180
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $editor = (Resolve-Path -LiteralPath (Join-Path $EngineRoot 'Engine/Binaries/Win64/UnrealEditor-Cmd.exe')).Path
-$name = 'Abandoned.Verification.AirlockSessionIsolation'
-$run = New-Item -ItemType Directory -Path (Join-Path $repo "Saved/AirlockSessionIsolation/$([guid]::NewGuid().ToString('N'))")
+$name = "Abandoned.Verification.$TestName"
+$run = New-Item -ItemType Directory -Path (Join-Path $repo "Saved/$TestName/$([guid]::NewGuid().ToString('N'))")
 $report = Join-Path $run.FullName 'Report'
 $log = Join-Path $run.FullName 'Editor.log'
 $start = [Diagnostics.ProcessStartInfo]::new($editor)

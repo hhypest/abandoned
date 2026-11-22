@@ -12,7 +12,4 @@ class UVanguardSession final : public UGameInstanceSubsystem
 public:
     static UVanguardSession* Find(const UObject& Context);
     Abandoned::Application::Expedition::SuitSession Suit;
-#if WITH_DEV_AUTOMATION_TESTS
-    bool bRecoveredFromRadiation = false;
-#endif
 };

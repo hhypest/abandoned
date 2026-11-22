@@ -8,6 +8,7 @@
 #include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/GameViewportClient.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformMisc.h"
@@ -190,7 +191,7 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
     case EPhase::PullUp:
         if (Player.IsMantling())
         {
-            if (Player.IsWristTerminalOpen() || Player.WristDisplay->IsVisible())
+            if (Player.IsWristTerminalOpen() || Player.WristCasing->IsVisible())
             {
                 return Fail(TEXT("the wrist terminal did not lower for the climb"));
             }
@@ -217,7 +218,10 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
             {
                 const UStaticMeshComponent& Glove = *Player.MantleGloves[Hand];
                 const UStaticMeshComponent& Sleeve = *Player.MantleSleeves[Hand];
-                if (!Glove.GetStaticMesh() || !Sleeve.GetStaticMesh() || !Glove.IsVisible() || !Sleeve.IsVisible() ||
+                const auto* Mesh = GetDefault<UVanguardMantleVisuals>()->Glove.Get();
+                if (!Mesh || Glove.GetStaticMesh() != Mesh || Glove.GetMaterial(0) != Mesh->GetMaterial(0) ||
+                    (Glove.GetRelativeScale3D().X < 0) != (Hand == 1) ||
+                    !Sleeve.GetStaticMesh() || !Glove.IsVisible() || !Sleeve.IsVisible() ||
                     !Glove.GetComponentLocation().Equals(Handhold.Edge[Hand], 0.1) ||
                     !FMath::IsNearlyEqual(Glove.GetComponentLocation().Z, Top, 0.1) ||
                     Glove.GetCollisionEnabled() != ECollisionEnabled::NoCollision ||

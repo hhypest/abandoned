@@ -1,4 +1,4 @@
-"""Run in UE 5.7 with the original DEV-*.glb downloads in Saved/MeshySources."""
+"""Run in UE 5.7 with the original GLB downloads in Saved/MeshySources."""
 import csv
 import hashlib
 import json
@@ -23,11 +23,13 @@ inventory = Path(__file__).resolve().parents[1] / "Docs" / "AssetInventory.csv"
 with inventory.open(encoding="utf-8") as file:
     devices = list(csv.DictReader(file))
 for row in devices:
-    code = row["device"].removeprefix("DEV-")
-    source = root / "MeshySources" / f"DEV-{code}.glb"
+    code = row["device"]
+    if "-MeshyEquipmentOnly" in unreal.SystemLibrary.get_command_line().split() and not code.startswith("EQP-"):
+        continue
+    source = root / "MeshySources" / f"{code}.glb"
     if hashlib.sha256(source.read_bytes()).hexdigest() != row["glb_sha256"]:
         raise ValueError(f"Unexpected source revision: {source.name}")
-    if code == "02":
+    if code == "DEV-02":
         split = root / "MeshySources" / "Assembly" / source.name
         runpy.run_path(str(Path(__file__).with_name("SplitMeshyPlate.py")))["split_plate"](source, split)
         source = split
@@ -36,7 +38,7 @@ for row in devices:
         length, _ = struct.unpack("<II", stream.read(8))
         gltf = json.loads(stream.read(length))
     triangles = sum(gltf["accessors"][p["indices"]]["count"] // 3 for m in gltf["meshes"] for p in m["primitives"])
-    folder = f"/Game/Abandoned/Meshy/DEV_{code}"
+    folder = row["unreal_folder"]
     task = unreal.AssetImportTask()
     task.filename = str(source)
     task.destination_path = folder

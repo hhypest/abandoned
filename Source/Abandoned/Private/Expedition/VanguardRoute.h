@@ -136,7 +136,7 @@ private:
 #endif
     void ResetRadiation();
     void CreateWristTerminal();
-    void ConfigureWristTerminal(UMaterialInterface* Surface);
+    void ConfigureWristTerminal();
     void BindWristTerminalInput(UEnhancedInputComponent& Input);
     void ToggleWristTerminal();
     void CloseWristTerminal();
@@ -177,9 +177,6 @@ private:
 
     UPROPERTY()
     TObjectPtr<UStaticMeshComponent> WristCasing;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> WristDisplay;
 
     UPROPERTY()
     TObjectPtr<UStaticMeshComponent> WristSleeve;

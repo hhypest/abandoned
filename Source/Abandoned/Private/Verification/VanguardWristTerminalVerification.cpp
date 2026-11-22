@@ -2,8 +2,11 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Expedition/VanguardRoute.h"
+#include "Expedition/VanguardRouteLayout.h"
+#include "Engine/StaticMesh.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Expedition/VanguardSession.h"
+#include "Verification/RadiationVerificationSession.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -39,13 +42,13 @@ bool UVanguardWristTerminalVerification::Fail(const TCHAR* Reason)
         Reason, static_cast<int>(Phase));
     Phase = EPhase::Failed;
     Key.Release();
-    FPlatformMisc::RequestExitWithStatus(false, 1);
+    URadiationVerificationSession::Finish(*this, false);
     return false;
 }
 
 bool UVanguardWristTerminalVerification::CheckExposure(const AVanguardCharacter& Player, double DosePercent)
 {
-    if (!Player.IsWristTerminalOpen() || !Player.WristDisplay->IsVisible() ||
+    if (!Player.IsWristTerminalOpen() || !Player.WristCasing->IsVisible() ||
         !Player.WristReadout.Contains(FString::Printf(TEXT("DOSE    %.1f%%"), DosePercent)))
     {
         return Fail(TEXT("the raised wrist should display the accumulating exposure dose"));
@@ -69,7 +72,8 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
     }
     const auto* Session = UGameInstance::GetSubsystem<UVanguardSession>(Route.GetGameInstance());
     APlayerController* PC = Cast<APlayerController>(Player.GetController());
-    if (!Session || !PC)
+    const auto* Run = URadiationVerificationSession::Find(Route);
+    if (!Session || !Run || !PC)
     {
         return Fail(TEXT("session and player controller required"));
     }
@@ -82,7 +86,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
 
     const auto Shows = [&](SuitPage Page, const TCHAR* Text)
     {
-        return Player.WristTerminal.Page() == Page && Player.WristDisplay->IsVisible() && Player.WristReadout.Contains(Text);
+        return Player.WristTerminal.Page() == Page && Player.WristCasing->IsVisible() && Player.WristReadout.Contains(Text);
     };
     const auto Capture = [&](const TCHAR* Name)
     {
@@ -99,9 +103,14 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         {
             return Fail(TEXT("the wrist should start lowered"));
         }
-        if (!Player.WristCasing->GetStaticMesh())
+        if (const auto& Visuals = *GetDefault<UVanguardMantleVisuals>();
+            !Visuals.WristTerminal.IsValid() || !Visuals.Glove.IsValid() ||
+            Player.WristCasing->GetStaticMesh() != Visuals.WristTerminal.Get() ||
+            Player.WristGlove->GetStaticMesh() != Visuals.Glove.Get() ||
+            Player.WristCasing->GetMaterial(0) != Visuals.WristTerminal->GetMaterial(0) ||
+            Player.WristGlove->GetMaterial(0) != Visuals.Glove->GetMaterial(0))
         {
-            return Fail(TEXT("the wrist casing mesh should be available"));
+            return Fail(TEXT("the configured wrist and glove meshes must retain their imported materials"));
         }
         Key.Press(*PC, EKeys::T);
         Phase = EPhase::Status;
@@ -113,7 +122,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         {
             return Fail(TEXT("live status at the safe approach or decontaminated station"));
         }
-        if (!Route.GetRouteState().AtStation() && !Session->bRecoveredFromRadiation)
+        if (!Route.GetRouteState().AtStation() && !Run->bObservedLethalDose)
         {
             Capture(TEXT("Wrist-Terminal-Status"));
         }
@@ -134,7 +143,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         {
             return Fail(TEXT("acquired record should survive travel and occur once"));
         }
-        if (Session->bRecoveredFromRadiation && !Route.GetRouteState().AtStation())
+        if (Run->bObservedLethalDose && !Route.GetRouteState().AtStation())
         {
             UE_LOG(LogWristTerminal, Display, TEXT("Wrist archive after checkpoint recovery: one forecast record."));
         }
@@ -200,7 +209,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         Phase = EPhase::Close;
         break;
     case EPhase::Close:
-        if (Player.IsWristTerminalOpen() || Player.WristDisplay->IsVisible())
+        if (Player.IsWristTerminalOpen() || Player.WristCasing->IsVisible())
         {
             return Fail(TEXT("toggle should lower the wrist and hide its screen"));
         }
