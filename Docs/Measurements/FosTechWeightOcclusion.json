@@ -1,0 +1,457 @@
+{
+  "packageReceipts": "FosTechNanite.json (packages)",
+  "executableSha256": "CA2A8985C7F98D8E39BC36DB012006C2446038FD6390B2F13C180F12F2413EBE",
+  "scenario": "Travel, second Weight command + [120,420), 300 frames per process, uncapped High 1920x1080 VULKAN_SM6",
+  "statistics": [
+    "median",
+    "p95",
+    "p99"
+  ],
+  "quantiles": "nearest rank, pooled within mode",
+  "slowFrameDefinition": "FrameTime >= 9 ms. PrevQueryWait uses RenderThreadIdle/GPUQuery one CSV row earlier in the same run.",
+  "units": "milliseconds except RDGCount/Passes and frame counts",
+  "original": {
+    "runs": [
+      {
+        "mode": "off",
+        "run": "20261122-132102-Travel-d609134f37d6413db1c597aff5cf3875",
+        "csvSha256": "148a6deeb8211b5b47b9acdef21f5133dbfb8b32dee809e3a47ae31f9d2ac837",
+        "frameP95Ms": 6.0598
+      },
+      {
+        "mode": "on",
+        "run": "20261122-132120-Travel-5341c39138cf4723b54eb7e1e846e6c2",
+        "csvSha256": "7ca8322503bfcb25beacd34f4ae03418e05534ee9163cb1c4992a5212b620477",
+        "frameP95Ms": 10.2394
+      },
+      {
+        "mode": "on",
+        "run": "20261122-132140-Travel-128dbacf0e984f589d43aa51d561bb59",
+        "csvSha256": "592080a279d83b956ca73d5d0dfb2a580b0dabd01dd5d45a4685413bb7c04a85",
+        "frameP95Ms": 10.243
+      },
+      {
+        "mode": "off",
+        "run": "20261122-132200-Travel-8afcda3f8ac948f99e64c797b8ce9b9e",
+        "csvSha256": "e250c23858581145466de35ee835abe197ab9cbdc2b726f45297050e9d0ac129",
+        "frameP95Ms": 6.0826
+      }
+    ],
+    "pooled": {
+      "off": {
+        "FrameTime": [
+          5.3089,
+          6.0704,
+          6.7503
+        ],
+        "GPUTime": [
+          5.0558,
+          5.7612,
+          6.3712
+        ],
+        "RenderThreadTime": [
+          2.7439,
+          3.1335,
+          3.3343
+        ],
+        "RHIThreadTime": [
+          1.217,
+          1.8818,
+          2.2713
+        ],
+        "RenderThreadIdle/GPUQuery": [
+          2.5559,
+          3.1823,
+          3.6948
+        ],
+        "Exclusive/RenderThread/FetchVisibilityForPrimitives": [
+          2.576,
+          3.2193,
+          3.7724
+        ],
+        "Exclusive/GameThread/EventWait": [
+          4.1827,
+          4.9263,
+          5.5658
+        ],
+        "RDGCount/Passes": [
+          261.0,
+          297.0,
+          297.0
+        ],
+        "slowFrames": 0,
+        "slowPrevQueryWaitAtLeast5ms": 0
+      },
+      "on": {
+        "FrameTime": [
+          5.9358,
+          10.243,
+          10.8828
+        ],
+        "GPUTime": [
+          5.7435,
+          6.4284,
+          6.7534
+        ],
+        "RenderThreadTime": [
+          3.2576,
+          5.5365,
+          6.4106
+        ],
+        "RHIThreadTime": [
+          1.2984,
+          4.6452,
+          5.0401
+        ],
+        "RenderThreadIdle/GPUQuery": [
+          2.7041,
+          6.5928,
+          7.1638
+        ],
+        "Exclusive/RenderThread/FetchVisibilityForPrimitives": [
+          2.7138,
+          6.6245,
+          7.1843
+        ],
+        "Exclusive/GameThread/EventWait": [
+          4.7386,
+          9.0599,
+          9.6654
+        ],
+        "RDGCount/Passes": [
+          364.0,
+          421.0,
+          423.0
+        ],
+        "slowFrames": 75,
+        "slowPrevQueryWaitAtLeast5ms": 75,
+        "slowPrevQueryWaitMedianMs": 6.4753,
+        "slowGameEventWaitMedianMs": 8.8841
+      }
+    }
+  },
+  "gpuCounters": {
+    "runs": [
+      {
+        "mode": "A",
+        "run": "20261122-182612-Travel-f216c5d4ddaf403d96741106d9a5074a",
+        "csvSha256": "9522e36d2fdab7b33842f819ca30c45da505e0f5696f65b0fe3e9d8369d6cbf2",
+        "frameP95Ms": 5.6627
+      },
+      {
+        "mode": "B",
+        "run": "20261122-182630-Travel-6e422d493c134bc1b1d40436cbfc79ef",
+        "csvSha256": "f2d721e909d43f77a2c456bf3e55c97d3760f60438bfe6bc392c168e86c7b0fd",
+        "frameP95Ms": 9.8145
+      },
+      {
+        "mode": "Fallback",
+        "run": "20261122-182652-Travel-e2897a24b1674e38970bb9b0243a6f40",
+        "csvSha256": "ee05fe9703b53dc4e11b23a17dfc1f2efbd2f5791a58d8513ab9183c1203c81f",
+        "frameP95Ms": 6.3812
+      },
+      {
+        "mode": "Fallback",
+        "run": "20261122-182710-Travel-93bbcd7bc921478cad575fe90efaa90e",
+        "csvSha256": "6571127188caadb4aa9b76d745d08aaf61e1100908277a9763112c7b42037c45",
+        "frameP95Ms": 5.9678
+      },
+      {
+        "mode": "B",
+        "run": "20261122-182728-Travel-4ce89682a7554073868cdd8e1fee4e85",
+        "csvSha256": "d7765370006f0fdf5239e1c7eadf9c5d7cc4bb6d84e19e29fdcddd1c216ba53b",
+        "frameP95Ms": 9.931
+      },
+      {
+        "mode": "A",
+        "run": "20261122-182803-Travel-7ff4626f3b764e3f978adb5c16adfa37",
+        "csvSha256": "316646936292c4ab02cbf90321fa84107e037ec252a3fe42d69da267302d9a32",
+        "frameP95Ms": 5.9101
+      }
+    ],
+    "pooled": {
+      "A": {
+        "FrameTime": [
+          5.1673,
+          5.8567,
+          6.279
+        ],
+        "GPUTime": [
+          4.9627,
+          5.5831,
+          5.846
+        ],
+        "RenderThreadTime": [
+          2.7087,
+          3.117,
+          3.2616
+        ],
+        "RHIThreadTime": [
+          1.1694,
+          1.7795,
+          2.0893
+        ],
+        "RenderThreadIdle/GPUQuery": [
+          2.389,
+          2.9931,
+          3.309
+        ],
+        "Exclusive/RenderThread/FetchVisibilityForPrimitives": [
+          2.4095,
+          3.0155,
+          3.3304
+        ],
+        "Exclusive/GameThread/EventWait": [
+          4.0484,
+          4.7122,
+          5.0443
+        ],
+        "RDGCount/Passes": [
+          261.0,
+          297.0,
+          297.0
+        ],
+        "slowFrames": 0,
+        "slowPrevQueryWaitAtLeast5ms": 0
+      },
+      "B": {
+        "FrameTime": [
+          5.6723,
+          9.8946,
+          10.5711
+        ],
+        "GPUTime": [
+          5.542,
+          6.1283,
+          6.4425
+        ],
+        "RenderThreadTime": [
+          3.3456,
+          5.2417,
+          6.3473
+        ],
+        "RHIThreadTime": [
+          1.2131,
+          4.2977,
+          4.7052
+        ],
+        "RenderThreadIdle/GPUQuery": [
+          2.4097,
+          6.1943,
+          6.6435
+        ],
+        "Exclusive/RenderThread/FetchVisibilityForPrimitives": [
+          2.4185,
+          6.214,
+          6.6752
+        ],
+        "Exclusive/GameThread/EventWait": [
+          4.4154,
+          8.702,
+          9.1975
+        ],
+        "RDGCount/Passes": [
+          364.0,
+          421.0,
+          423.0
+        ],
+        "GPU/NaniteVisBuffer": [
+          0.6436,
+          0.9229,
+          1.0483
+        ],
+        "GPU/NaniteBasePass": [
+          0.1239,
+          0.13,
+          0.3738
+        ],
+        "GPU/NaniteReadback": [
+          0.0551,
+          0.0788,
+          0.081
+        ],
+        "GPU/NaniteStreaming": [
+          0.001,
+          0.0021,
+          0.0021
+        ],
+        "slowFrames": 55,
+        "slowPrevQueryWaitAtLeast5ms": 55,
+        "slowPrevQueryWaitMedianMs": 6.3108,
+        "slowGameEventWaitMedianMs": 8.7793
+      },
+      "Fallback": {
+        "FrameTime": [
+          5.3163,
+          6.1641,
+          6.7555
+        ],
+        "GPUTime": [
+          5.1554,
+          5.8998,
+          6.4845
+        ],
+        "RenderThreadTime": [
+          2.7619,
+          3.2448,
+          3.5417
+        ],
+        "RHIThreadTime": [
+          1.3035,
+          2.0303,
+          2.3058
+        ],
+        "RenderThreadIdle/GPUQuery": [
+          2.5477,
+          3.3599,
+          3.7579
+        ],
+        "Exclusive/RenderThread/FetchVisibilityForPrimitives": [
+          2.5691,
+          3.3897,
+          3.7779
+        ],
+        "Exclusive/GameThread/EventWait": [
+          4.1275,
+          4.9626,
+          5.5949
+        ],
+        "RDGCount/Passes": [
+          290.0,
+          332.0,
+          332.0
+        ],
+        "slowFrames": 0,
+        "slowPrevQueryWaitAtLeast5ms": 0
+      }
+    }
+  },
+  "occlusionQueryFrames": {
+    "runs": [
+      {
+        "mode": "1",
+        "run": "20261122-182824-Travel-fd5c3cb364af469490e41d769f8eb75e",
+        "csvSha256": "e46a2d26be026b02b59fee49125f7928173f97a79a3cee367e359393493d1c8a",
+        "frameP95Ms": 10.4538
+      },
+      {
+        "mode": "2",
+        "run": "20261122-182844-Travel-3a5e530231244e7389759e1e15f10a79",
+        "csvSha256": "41151bf2d2809e38e0b92746c491871ce274dbc0bbd88a3373f4e0e556d8795b",
+        "frameP95Ms": 6.4598
+      },
+      {
+        "mode": "2",
+        "run": "20261122-182904-Travel-abe6921422924da2a324cea95e467ed8",
+        "csvSha256": "4ab908aef07aa1239b397640d4afe9c1abe5eaf980518ecba887259ac0366697",
+        "frameP95Ms": 6.9058
+      },
+      {
+        "mode": "1",
+        "run": "20261122-182924-Travel-eb13e4ddac4e4378905d03c1b8a965ce",
+        "csvSha256": "0846d202f1eb94086abb60d483f9a2aad2d8314351091edae6ff976aa33fc04e",
+        "frameP95Ms": 10.271
+      }
+    ],
+    "pooled": {
+      "1": {
+        "FrameTime": [
+          5.9852,
+          10.3622,
+          11.3102
+        ],
+        "GPUTime": [
+          5.7569,
+          6.4693,
+          7.0676
+        ],
+        "RenderThreadTime": [
+          3.2788,
+          5.4011,
+          6.4706
+        ],
+        "RHIThreadTime": [
+          1.3314,
+          4.7584,
+          5.1439
+        ],
+        "RenderThreadIdle/GPUQuery": [
+          2.6953,
+          6.754,
+          7.4954
+        ],
+        "Exclusive/RenderThread/FetchVisibilityForPrimitives": [
+          2.7077,
+          6.7767,
+          7.5193
+        ],
+        "Exclusive/GameThread/EventWait": [
+          4.7516,
+          9.173,
+          10.1735
+        ],
+        "RDGCount/Passes": [
+          364.0,
+          421.0,
+          423.0
+        ],
+        "slowFrames": 79,
+        "slowPrevQueryWaitAtLeast5ms": 79,
+        "slowPrevQueryWaitMedianMs": 6.6658,
+        "slowGameEventWaitMedianMs": 8.9805
+      },
+      "2": {
+        "FrameTime": [
+          6.04,
+          6.7564,
+          7.2781
+        ],
+        "GPUTime": [
+          5.7777,
+          6.5054,
+          6.9852
+        ],
+        "RenderThreadTime": [
+          3.1213,
+          4.1144,
+          4.5698
+        ],
+        "RHIThreadTime": [
+          4.4648,
+          5.0959,
+          5.6815
+        ],
+        "RenderThreadIdle/GPUQuery": [
+          2.8493,
+          6.3657,
+          6.9567
+        ],
+        "Exclusive/RenderThread/FetchVisibilityForPrimitives": [
+          2.8593,
+          6.3722,
+          6.9755
+        ],
+        "Exclusive/GameThread/EventWait": [
+          4.847,
+          5.5301,
+          5.8451
+        ],
+        "RDGCount/Passes": [
+          364.0,
+          421.0,
+          423.0
+        ],
+        "slowFrames": 0,
+        "slowPrevQueryWaitAtLeast5ms": 0
+      }
+    }
+  },
+  "campaign": {
+    "scenario": "Campaign (VerifyEntryCourse)",
+    "package": "B",
+    "occlusionQueryFrames": 2,
+    "run": "20261122-182944-Campaign-1ef781a91278421686e1b7b8e3e38137",
+    "gameLogSha256": "684731a567a28ff4020a1bef23f014d95b1d6f9ac28e35b4572a7a486891a823",
+    "result": "Vanguard verification passed: passage transit and station resupply"
+  }
+}
