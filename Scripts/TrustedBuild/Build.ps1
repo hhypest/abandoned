@@ -1,7 +1,11 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$EngineRoot, [string]$Commit, [int]$ReviewedPullRequest, [switch]$FunctionalTests)
+param([Parameter(Mandatory)][string]$EngineRoot, [string]$Commit, [int]$ReviewedPullRequest, [switch]$FunctionalTests,
+    [switch]$ReadOnlyLocalShaderCache)
 $ErrorActionPreference = 'Stop'
+if ($ReadOnlyLocalShaderCache -and (!$FunctionalTests -or $ReviewedPullRequest)) {
+    throw 'The read-only loopback cache is restricted to functional tests on accepted main revisions.'
+}
 $run = (Get-Location).Path
 $project = Join-Path $run 'Project'
 $lock = Import-PowerShellDataFile (Join-Path $PSScriptRoot 'Toolchain.psd1')
@@ -118,7 +122,7 @@ try {
         . "$PSScriptRoot/FunctionalTests.ps1"
         $dll = 'Binaries/Win64/UnrealEditor-Abandoned.dll'
         $directory = Join-Path $run 'Functional'
-        $editor = Invoke-UEAutomationEditor $EngineRoot $project $directory $RequiredFunctionalTests 1800 -PrivateDDC
+        $editor = Invoke-UEAutomationEditor $EngineRoot $project $directory $RequiredFunctionalTests 1800 -PrivateDDC -ReadOnlyLocalShaderCache:$ReadOnlyLocalShaderCache
         $digest = Read-UEAutomationReport $directory $RequiredFunctionalTests $editor
         if ((Invoke-Git rev-parse HEAD) -cne $report.Commit -or (Invoke-Git status --porcelain --untracked-files=all) -or
             (Get-FileHash -LiteralPath "$project/$dll").Hash -cne $report.Products[$dll]) {
@@ -129,6 +133,7 @@ try {
             RunId = Split-Path $run -Leaf
             ModuleSha256 = $report.Products[$dll]
             ReportSha256 = $digest
+            DerivedDataCache = if ($ReadOnlyLocalShaderCache) { 'PrivateFileSystemWithReadOnlyLoopback' } else { 'PrivateFileSystem' }
             Editor = $editor
             Tests = $RequiredFunctionalTests
         }

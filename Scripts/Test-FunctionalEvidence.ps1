@@ -28,10 +28,29 @@ try {
     Write-Fixture
     $binding = @{
         Commit = $sha; RunId = Split-Path $root -Leaf; ModuleSha256 = $dll; Editor = $editor
-        Tests = $RequiredFunctionalTests; ReportSha256 = (Get-FileHash -LiteralPath $report).Hash
+        Tests = $RequiredFunctionalTests; ReportSha256 = (Get-FileHash -LiteralPath $report).Hash; DerivedDataCache = 'PrivateFileSystem'
     }
     $check = { Assert-TrustedFunctionalReport $root $sha $dll $binding }
     & $check
+    $binding.DerivedDataCache = 'PrivateFileSystemWithReadOnlyLoopback'
+    Expect-Rejection $check 'Functional evidence does not match*'
+    $binding.DerivedDataCache = 'PrivateFileSystem'
+    $launcher = Join-Path $PSScriptRoot 'Invoke-TrustedUnrealBuild.ps1'
+    Expect-Rejection { & $launcher -EngineRoot . -RunsRoot $root -ReviewedPullRequest 1 -Commit $sha -FunctionalTests -ReadOnlyLocalShaderCache } 'The optional read-only*'
+    Expect-Rejection { & $launcher -EngineRoot . -RunsRoot $root -ExpectedWorkerSid 'fixture' -FunctionalTests -ReadOnlyLocalShaderCache } 'The optional read-only*'
+    Expect-Rejection { & $launcher -EngineRoot . -RunsRoot $root -ReadOnlyLocalShaderCache } 'The optional read-only*'
+    $log = Join-Path $directory 'Editor.log'
+    $lines = @('LogInit: Command Line: /Engine/Maps/Entry -NoZenAutoLaunch=127.0.0.1:0',
+        "Root = $readOnlyZenRoot", "AcceptedLocalCache = $readOnlyZenNode",
+        'LogDerivedDataCache: Display: AcceptedLocalCache: Using ZenServer HTTP service at [::1] with namespace ue.ddc status: OK!.')
+    $lines | Set-Content -LiteralPath $log
+    Assert-ReadOnlyLocalCacheLog $log
+    $lines.Replace('ReadOnly=true','ReadOnly=false') | Set-Content -LiteralPath $log
+    Expect-Rejection { Assert-ReadOnlyLocalCacheLog $log } 'Editor did not confirm*'
+    $lines.Replace('-NoZenAutoLaunch=127.0.0.1:0','') | Set-Content -LiteralPath $log
+    Expect-Rejection { Assert-ReadOnlyLocalCacheLog $log } 'Editor did not confirm*'
+    ($lines + 'LogZenServiceInstance: Local ZenServer AutoLaunch initialization completed in 1 second') | Set-Content -LiteralPath $log
+    Expect-Rejection { Assert-ReadOnlyLocalCacheLog $log } 'Editor did not confirm*'
     Expect-Rejection { Assert-TrustedFunctionalReport $root ('d' * 40) $dll $binding } 'Functional evidence does not match*'
     Expect-Rejection { Assert-TrustedFunctionalReport $root $sha ('E' * 64) $binding } 'Functional evidence does not match*'
     Expect-Rejection { Assert-TrustedFunctionalReport $root $sha $dll $null } 'Functional evidence does not match*'

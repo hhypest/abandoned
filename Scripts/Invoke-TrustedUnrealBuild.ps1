@@ -7,10 +7,14 @@ param(
     [ValidateRange(1,2147483647)][int]$ReviewedPullRequest,
     [ValidatePattern('^[a-f0-9]{32}$')][string]$RunId,
     [string]$ExpectedWorkerSid,
-    [switch]$FunctionalTests
+    [switch]$FunctionalTests,
+    [switch]$ReadOnlyLocalShaderCache
 )
 $ErrorActionPreference = 'Stop'
 if (!$IsWindows) { throw 'A Windows x64 build host is required.' }
+if ($ReadOnlyLocalShaderCache -and (!$FunctionalTests -or $ReviewedPullRequest -or $ExpectedWorkerSid)) {
+    throw 'The optional read-only loopback cache is limited to local functional runs of accepted main revisions.'
+}
 $engine = (Resolve-Path -LiteralPath $EngineRoot).Path
 $root = [IO.Directory]::CreateDirectory($RunsRoot).FullName
 if ($ReviewedPullRequest -and !$Commit) { throw 'A reviewed pull request requires its full approved commit.' }
@@ -62,6 +66,7 @@ if ($ReviewedPullRequest) {
     $info.ArgumentList.Add($ReviewedPullRequest.ToString())
 }
 if ($FunctionalTests -or $ReviewedPullRequest) { $info.ArgumentList.Add('-FunctionalTests') }
+if ($ReadOnlyLocalShaderCache) { $info.ArgumentList.Add('-ReadOnlyLocalShaderCache') }
 Write-Host "Build workspace: $run"
 $child = [Diagnostics.Process]::Start($info)
 try {

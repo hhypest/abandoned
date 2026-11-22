@@ -1,0 +1,256 @@
+{
+  "Date": "2026-11-22",
+  "TrustedMain": {
+    "Commit": "5997b6644871b22610f4a7deace735120d27614e",
+    "Result": "Passed",
+    "RunId": "c8d0529170d3",
+    "ModuleSHA256": "E0813EA78D2BC02FE64BBA38E576C60DC66F970540D0C2ADDBBD99EFB4602E8C",
+    "RawReportSHA256": "B0285B9103E0B90C956291A0FE92AC308EEE332927EC9F678E272824A3862294",
+    "Unreal": "5.7.4",
+    "RHI": "Vulkan_SM6",
+    "Tests": [
+      {
+        "fullTestPath": "Abandoned.Verification.AirlockSessionIsolation",
+        "state": "Success",
+        "errors": 0,
+        "warnings": 0
+      },
+      {
+        "fullTestPath": "Abandoned.Verification.RadiationTerminalReplay",
+        "state": "Success",
+        "errors": 0,
+        "warnings": 0
+      }
+    ],
+    "DerivedDataCache": "PrivateFileSystemWithReadOnlyLoopback",
+    "ShaderCacheReader": "Existing loopback Zen at [::1]:8558, read only. Writes to the private run DDC. Local main only.",
+    "FirstAttempt": "A fresh editor timed out at 300 seconds while compiling shaders using the local Zen service. New run used its own filesystem cache and a 30-minute deadline."
+  },
+  "BaselineAB": {
+    "Windows": "Win64 Development",
+    "Unreal": "5.7.4",
+    "ExecutableSha256": "CA1D2AFCF0F00752459E75515144158E406E600C4A16257D4FCA8773773554FE",
+    "GameSourceCommit": "fee0444a0b73282659d07210c495bf9b4cf192b3",
+    "Stairs": "150 ms after the trigger, hold D for 3600 ms in the target process window only.",
+    "Station": "After the trigger press F for 90 ms in the target process window only.",
+    "Trials": [
+      {
+        "Run": "Stairs-False-aef470d1edd54a40b2c5f9ce075c503b",
+        "Renderer": "VULKAN_SM6",
+        "RenderOffscreen": false,
+        "Key": "D",
+        "Trigger": "Button airlock ready: floor, ballast and circuit registered.",
+        "Window": "HWND 10682410 own PID 19936 virtual key 68 down=True up=True",
+        "Result": "LogEntryChamberTest: Error: Entry test failed: timed out waiting for gameplay or world travel (Stairs, phase 7).",
+        "SHA256": "AF4642723970F1D04C42111EF742AADDA22B44F7F52F22938F2EE6FDE521709C"
+      },
+      {
+        "Run": "Stairs-True-63c0e5375eaf4e6887a0b676738d940f",
+        "Renderer": "VULKAN_SM6",
+        "RenderOffscreen": true,
+        "Key": "D",
+        "Trigger": "Button airlock ready: floor, ballast and circuit registered.",
+        "Window": "No game HWND for PID 34964",
+        "Result": "LogVanguardRouteTest: Display: Vanguard verification passed: passage transit and station resupply. Oxygen 94.90 -> 100.00.",
+        "SHA256": "FA5E36E54BBABBFFD5AB28F003FBE1D735478D50DC0E653236C0309CF3207EED"
+      },
+      {
+        "Run": "Lamp-False-40b3fb6879c94465b5381ba7b94292b7",
+        "Renderer": "VULKAN_SM6",
+        "RenderOffscreen": false,
+        "Key": "F",
+        "Trigger": "Passage climb verified: held Space and landed on top.",
+        "Window": "HWND 5572580 own PID 31548 virtual key 70 down=True up=True",
+        "Result": "LogVanguardRouteTest: Error: Vanguard verification failed: oxygen 94.90 -> 100.00, resupplied 1, flashlight on 0.",
+        "SHA256": "891904286CF225218EFBE07E950FBB036EE829F7ACE1110B1903F994F2CC56E2"
+      },
+      {
+        "Run": "Lamp-True-b062f070cc2e46b38cc6d6f4e8e5476a",
+        "Renderer": "VULKAN_SM6",
+        "RenderOffscreen": true,
+        "Key": "F",
+        "Trigger": "Passage climb verified: held Space and landed on top.",
+        "Window": "No game HWND for PID 27428",
+        "Result": "LogVanguardRouteTest: Display: Vanguard verification passed: passage transit and station resupply. Oxygen 94.90 -> 100.00.",
+        "SHA256": "6F6E7994F2F886B5C6DA1163BE1487DC736C3A152560474640EE10AAFD227F5B"
+      }
+    ]
+  },
+  "Package": {
+    "VerificationCommit": "e1ccaa0bf1cb90e58b39a33c3ed096fc42fafcc7",
+    "GameInputsCommit": "57dce2e90a7530c04f8210fa89f7316fc5e72a02",
+    "Unreal": "5.7.4",
+    "Windows": "Microsoft Windows 10.0.26300",
+    "Gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "RHI": "VULKAN_SM6",
+    "Resolution": "1280x720",
+    "SimulationFPS": 60,
+    "ExecutableSHA256": "6E3C85D14CA7B975E4742EBE8243E29DA0B992CBF9142823A244158EC2506C3B",
+    "IoStoreSHA256": "49C85C9BA073524DF31F5B10392397E5408F35A9D30A40FA331BF88F45C6BFF3",
+    "Runs": [
+      {
+        "Name": "WristTerminal",
+        "Outcome": "Passed",
+        "RenderOffscreen": false,
+        "RunId": "20261122-105152-98aede471c0d450cbf98145ae17201d0",
+        "Capture": true,
+        "LogSHA256": "B9B2063DAC9C5948A8CDA6946926024F3CF243DBD58133C6077FF5CCC94F7504"
+      },
+      {
+        "Name": "VanguardRouteNegative",
+        "Outcome": "ExpectedFailure",
+        "RenderOffscreen": false,
+        "RunId": "20261122-105152-98aede471c0d450cbf98145ae17201d0",
+        "Capture": false,
+        "LogSHA256": "A35CC6FCD30265D4C21FE940C924BDE0628D886ACAE74BDAD8B0E97E312A48C8",
+        "ExpectedMessage": [
+          "Vanguard verification failed: oxygen 100.00 -> 100.00, resupplied 1, flashlight on 0."
+        ]
+      },
+      {
+        "Name": "StationAirlock",
+        "Outcome": "Passed",
+        "RenderOffscreen": false,
+        "RunId": "20261122-105152-98aede471c0d450cbf98145ae17201d0",
+        "Capture": false,
+        "LogSHA256": "0AF7D32457570D20EDC83901EC0B4D7914A9FC5031745E94FE9F8981AB1B0D92",
+        "Resupply": "94.69 -> 100.00"
+      },
+      {
+        "Name": "StationAirlockMissingSupply",
+        "Outcome": "Passed",
+        "RenderOffscreen": false,
+        "RunId": "20261122-105152-98aede471c0d450cbf98145ae17201d0",
+        "Capture": false,
+        "LogSHA256": "2333757887321FACCEE00953D42405C690C1F8E95402C276A6F145ECBAD92114"
+      },
+      {
+        "Name": "EntryWeightNegative",
+        "Outcome": "ExpectedFailure",
+        "RenderOffscreen": false,
+        "RunId": "20261122-105152-98aede471c0d450cbf98145ae17201d0",
+        "Capture": false,
+        "LogSHA256": "B654AB2836A2674D03F0F564F80408A12697F58225200EACAF530A46C78DAB9C",
+        "ExpectedMessage": [
+          "Entry test failed: weight lock must reject the partial stack (Weight, phase 12)."
+        ]
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105317-d99f218ab0214c9e9a992b9603114d35",
+        "Capture": true,
+        "LogSHA256": "C320B5A900DD624491FE347EE7212D09C7B8EA3C30B47C73D53F83C9FB390BC5",
+        "Resupply": "94.90 -> 100.00"
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105339-f2414c5dcd4245069b5fd98a242b2c05",
+        "Capture": false,
+        "LogSHA256": "FAB2B2E8736B0D1699D1EFEBFF46EDFA3B326DD462442666A3C8E253E988274D",
+        "Resupply": "94.90 -> 100.00"
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105401-184912388188495b96fa20cd682ddab0",
+        "Capture": true,
+        "LogSHA256": "266AAAEE8D67510ADA13FA7174E65200D02D23A06EC6C04537CC834E469CEAD1",
+        "Resupply": "94.90 -> 100.00"
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105424-57ccfafb01274895b956dd3a359a5787",
+        "Capture": false,
+        "LogSHA256": "3A1094C4659CE76F246D5AAA890FE33701A4244C2E13B0913D79BBAA3608910A",
+        "Resupply": "94.90 -> 100.00"
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105446-f9587006cb034f6ebadb582e1257612d",
+        "Capture": true,
+        "LogSHA256": "9E41B87AAFC16F646200C566CE4B7887C810F6454E4DB326C4DE642A52AB382B",
+        "Resupply": "94.90 -> 100.00"
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105509-4f36c3b586e549569f06e22f018d279e",
+        "Capture": false,
+        "LogSHA256": "CACFA946597EEA84F1FD267C1D0DB94123FA64C5C06395C35C416F5D88DB6D2F",
+        "Resupply": "94.90 -> 100.00"
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105531-479066a36f8741069f1f3c916b3bd213",
+        "Capture": true,
+        "LogSHA256": "1A5235D3B142F4CE9D4292737C2EB9A906DCD835AC25E6AA03CF835A3FDA446C",
+        "Resupply": "94.90 -> 100.00"
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105553-a693f670a6c849888f81cba860b23780",
+        "Capture": false,
+        "LogSHA256": "FDB3EB7B3A566C87FEFFD8647B4AB75B99E52C6786CD8475528DF94E2AEFE654",
+        "Resupply": "94.90 -> 100.00"
+      },
+      {
+        "Name": "EntryCourseAlternate",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105613-03f309cdc3c640cd897565646a6ec626",
+        "Capture": true,
+        "LogSHA256": "957DDB20F95EF8F4BC6287E18D8C69171E4972C709EE8EB6D2D63EDC8477A714",
+        "Resupply": "94.90 -> 100.00"
+      },
+      {
+        "Name": "EntryCourseAlternate",
+        "Outcome": "Passed",
+        "RenderOffscreen": true,
+        "RunId": "20261122-105636-a5ded4fb80444c82b2988fab481f2fe3",
+        "Capture": false,
+        "LogSHA256": "9023F4F9D55017680E4AAC545AA5ECFEC813249DC4CCE009896891FDC535564A",
+        "Resupply": "94.90 -> 100.00"
+      }
+    ],
+    "BuildCookRunCommit": "f544528527ab5eb973a5ef818c53f5445ddab4e1"
+  },
+  "StraplessWrist": {
+    "Mesh": "EQP-01",
+    "SourceTriangles": 115588,
+    "CookInputLOD0Triangles": 41007,
+    "Screenshot": "../WristTerminal/installed-vulkan.png",
+    "ScreenshotSHA256": "4A2DED4C558575A2108AF6496290045E528C7AEE46C998CCDBE0FE33CC072BA6"
+  },
+  "CandidateEditor": {
+    "ModuleSHA256": "E48278411FE5D1EA2C0D1243DF3696189995E502AE44CC6CC4BF14C50C66369F",
+    "Commit": "e1ccaa0bf1cb90e58b39a33c3ed096fc42fafcc7",
+    "ReportSHA256": "0442D5F116A5A0A3644DA39BB08233C539A2BC89C628F5A61D46A93CB7D6DDC8",
+    "Tests": [
+      "Abandoned.Verification.AirlockSessionIsolation",
+      "Abandoned.Verification.RadiationTerminalReplay"
+    ]
+  },
+  "CleanMainWarmEditor": {
+    "Commit": "5997b6644871b22610f4a7deace735120d27614e",
+    "ReportSHA256": "B7ADEFB1BF29B1F92D35897BE2BCC00F90E7E7C724D690CD5711DEE3DC86442E",
+    "ModuleSHA256": "E0813EA78D2BC02FE64BBA38E576C60DC66F970540D0C2ADDBBD99EFB4602E8C",
+    "Tests": [
+      "Abandoned.Verification.AirlockSessionIsolation",
+      "Abandoned.Verification.RadiationTerminalReplay"
+    ]
+  }
+}

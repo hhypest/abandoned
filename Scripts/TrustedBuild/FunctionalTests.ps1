@@ -1,9 +1,23 @@
 # Shared by the installed controller, build worker and standalone PIE launcher.
 $RequiredFunctionalTests = @('Abandoned.Verification.AirlockSessionIsolation', 'Abandoned.Verification.RadiationTerminalReplay')
+$readOnlyZenNode = '(ReadOnly=true,Type=Zen,Host=http://[::1]:8558,Namespace=ue.ddc)'
+$readOnlyZenRoot = '(Type=Hierarchical,Inner=Local,Inner=AcceptedLocalCache)'
+
+function Assert-ReadOnlyLocalCacheLog([string]$Log) {
+    # GETINI prints the effective graph after all overrides. Validate its final values, not the echoed command line.
+    $lines = [IO.File]::ReadAllLines($Log)
+    if (!($lines -match 'LogInit: Command Line:.*\s-NoZenAutoLaunch=127\.0\.0\.1:0(?:\s|$)') -or
+        !($lines -match ('Root = ' + [regex]::Escape($readOnlyZenRoot) + '$')) -or
+        !($lines -match ('AcceptedLocalCache = ' + [regex]::Escape($readOnlyZenNode) + '$')) -or
+        !($lines -match 'LogDerivedDataCache: Display: AcceptedLocalCache: Using ZenServer HTTP service at \[::1\](:8558)? with namespace ue\.ddc status: OK') -or
+        ($lines -match 'LogZenServiceInstance:.*AutoLaunch initialization completed')) {
+        throw 'Editor did not confirm the private filesystem and the read-only loopback shader cache.'
+    }
+}
 
 function Invoke-UEAutomationEditor {
     param([string]$EngineRoot, [string]$Project, [string]$Directory, [string[]]$Names, [int]$TimeoutSeconds,
-        [switch]$PrivateDDC)
+        [switch]$PrivateDDC, [switch]$ReadOnlyLocalShaderCache)
 
     # An existing report directory never qualifies as output for a new invocation.
     $null = New-Item -ItemType Directory -Path $Directory -ErrorAction Stop
@@ -14,18 +28,29 @@ function Invoke-UEAutomationEditor {
     $start.CreateNoWindow = $true
     $start.ArgumentList.Add((Join-Path $Project 'Abandoned.uproject'))
     $start.ArgumentList.Add('/Engine/Maps/Entry')
+    $commands = "Automation RunTests $($Names -join '+')"
     if ($PrivateDDC) {
         # The pinned source engine supplies this writable filesystem graph.
         # A fresh worker profile must not start or replace the desktop's Zen server.
         $cache = [IO.Directory]::CreateDirectory((Join-Path $Directory 'DDC')).FullName
-        foreach ($arg in @('-DDC=NoZenLocalFallback', "-LocalDataCachePath=$cache", '-NoZenAutoLaunch',
+        # With a warm reader, route any unintended default-service fallback to port zero.
+        $zen = if ($ReadOnlyLocalShaderCache) { '-NoZenAutoLaunch=127.0.0.1:0' } else { '-NoZenAutoLaunch' }
+        foreach ($arg in @('-DDC=NoZenLocalFallback', "-LocalDataCachePath=$cache", $zen,
                 '-SharedDataCachePath=None', '-ZenSharedDataCacheHost=None', '-CloudDataCacheHost=None')) {
             $start.ArgumentList.Add($arg)
         }
     }
+    if ($ReadOnlyLocalShaderCache) {
+        if (!$PrivateDDC) { throw 'A private writable filesystem cache is required.' }
+        $ready = Invoke-WebRequest -Uri 'http://[::1]:8558/health/ready' -NoProxy -MaximumRedirection 0 -TimeoutSec 5 -ErrorAction Stop
+        if ($ready.StatusCode -ne 200) { throw 'The existing loopback Zen cache is unavailable.' }
+        $start.ArgumentList.Add("-ini:Engine:[NoZenLocalFallback]:AcceptedLocalCache=$readOnlyZenNode")
+        $start.ArgumentList.Add("-ini:Engine:[NoZenLocalFallback]:Root=$readOnlyZenRoot")
+        $commands = "GetIni Engine:NoZenLocalFallback Root,GetIni Engine:NoZenLocalFallback AcceptedLocalCache,$commands"
+    }
     foreach ($arg in @('-unattended', '-nop4',
             '-nosound', '-vulkan', '-RenderOffscreen', "-UserDir=$Directory/Profile", "-abslog=$Directory/Editor.log",
-            "-ReportExportPath=$Directory/Report", "-ExecCmds=Automation RunTests $($Names -join '+')",
+            "-ReportExportPath=$Directory/Report", "-ExecCmds=$commands",
             '-TestExit=Automation Test Queue Empty')) {
         $start.ArgumentList.Add($arg)
     }
@@ -38,6 +63,7 @@ function Invoke-UEAutomationEditor {
             throw "Editor timed out. See $Directory/Editor.log"
         }
         if ($process.ExitCode -ne 0) { throw "Editor exited with code $($process.ExitCode). See $Directory/Editor.log" }
+        if ($ReadOnlyLocalShaderCache) { Assert-ReadOnlyLocalCacheLog "$Directory/Editor.log" }
         return [ordered]@{ ProcessId = $process.Id; StartedUnix = $started.ToUnixTimeSeconds(); EndedUnix = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
     } finally { $process.Dispose() }
 }
@@ -74,7 +100,8 @@ function Read-UEAutomationReport {
 function Assert-TrustedFunctionalReport {
     param([string]$RunDirectory, [string]$Commit, [string]$ModuleSha256, $Functional)
 
-    if ($Functional.Commit -cne $Commit -or $Functional.RunId -cne (Split-Path $RunDirectory -Leaf) -or
+    if ($Functional.DerivedDataCache -cne 'PrivateFileSystem' -or
+        $Functional.Commit -cne $Commit -or $Functional.RunId -cne (Split-Path $RunDirectory -Leaf) -or
         $Functional.ModuleSha256 -cne $ModuleSha256 -or !$Functional.Editor -or
         @($Functional.Tests).Count -ne $RequiredFunctionalTests.Count -or
         (Compare-Object $RequiredFunctionalTests $Functional.Tests -CaseSensitive)) {
