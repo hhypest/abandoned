@@ -648,28 +648,39 @@ $runId = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss') + '-' + [guid]
 $root = Join-Path $repo "Saved/UeVerification/$runId"
 $null = New-Item -ItemType Directory -Path $root -Force
 
-$results = @(foreach ($name in ($Scenario | Select-Object -Unique)) {
-    Write-Host "Running $name on Vulkan SM6..."
-    $profile = Join-Path $root $name
-    try {
-        Invoke-Scenario $name $scenarios[$name] $profile
-    } catch {
-        [ordered]@{ Name = $name; Outcome = 'Failed'; Reason = $_.Exception.Message; Log = (Join-Path $profile 'Game.log') }
+$runScenarios = {
+    foreach ($name in ($Scenario | Select-Object -Unique)) {
+        Write-Host "Running $name on Vulkan SM6..."
+        $profile = Join-Path $root $name
+        try {
+            Invoke-Scenario $name $scenarios[$name] $profile
+        } catch {
+            [ordered]@{ Name = $name; Outcome = 'Failed'; Reason = $_.Exception.Message; Log = (Join-Path $profile 'Game.log') }
+        }
     }
-})
+}
+if ($target -eq 'Package') {
+    $receipt = & (Join-Path $PSScriptRoot 'Read-UePackageReceipt.ps1') -PackageRoot $workingDir -Verify $runScenarios
+    $results = $receipt.Scenarios
+    $executableSha256 = $receipt.ExecutableSha256
+} else {
+    $results = @(& $runScenarios)
+    $executableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
+}
 $report = [ordered]@{
     Commit = $commit
     TrackedChanges = [bool]$trackedChanges
     Unreal = ($results.Unreal | Where-Object { $_ } | Select-Object -Unique) -join ', '
     Target = $target
     Executable = $executable
-    ExecutableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
+    ExecutableSha256 = $executableSha256
     OperatingSystem = $PSVersionTable.OS
     Rhi = 'VULKAN_SM6'
     Resolution = $Resolution
     FramesPerSecond = $FramesPerSecond
     Scenarios = $results
 }
+if ($target -eq 'Package') { $report.ContentContainers = $receipt.ContentContainers }
 $reportPath = Join-Path $root 'report.json'
 $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $reportPath -Encoding utf8
 foreach ($result in $results) {

@@ -34,7 +34,19 @@ if ($LASTEXITCODE -ne 0) { throw "BuildCookRun: $LASTEXITCODE" }
 ./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Resolution 1280x720 -Scenario Dev20,StationAirlock,StationAirlockMissingSupply,VulkanExitControl
 ```
 
-Каждый сценарий пишет `Game.log` в свой профиль. Общий `Saved/UeVerification/<запуск>/report.json` содержит результат, RHI, хеш исполняемого файла и SHA рабочей копии запускателя. Если используется ранее собранный пакет, идентифицируйте его по хешу EXE из исходного протокола сборки. В `VulkanExitControl` проверяются пустой мир и завершение процесса. При отказе сначала прочитайте `Reason` провалившегося сценария, затем найдите соответствующие строки в его журнале. При изменениях глобального рендерера дополните эту проверку сценариями переходов из [протокола Vulkan](RenderingVerification.md).
+Каждый сценарий пишет `Game.log` в свой профиль. Общий `Saved/UeVerification/<запуск>/report.json` содержит результат, RHI и SHA рабочей копии запускателя. Для пакета он также содержит `ExecutableSha256` и `ContentContainers` с путём, размером и SHA-256 каждого файла `.pak`, `.utoc` и `.ucas`, включая разбитые контейнеры и каталоги плагинов. Две сборки с одной программой могут содержать разные меши. Это особенно важно для A/B, где меняются только настройки импорта. Запускатель удерживает перечисленные файлы открытыми на чтение до завершения сценариев, затем вычисляет хеши. Момент чтения сохраняет условия холодного запуска.
+
+Чтобы сверить новый отчёт с архивом поставки, укажите путь к `report.json` и подставьте каталог проверяемой сборки:
+
+```powershell
+$tested = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+$archiveReceipt = ./Scripts/Read-UePackageReceipt.ps1 -PackageRoot "$archive/Windows"
+if (!$archiveReceipt.ContentContainers -or !$tested.ContentContainers) { throw 'Для этой проверки нужен отчёт с хешами контейнеров.' }
+$diff = Compare-Object $archiveReceipt.ContentContainers $tested.ContentContainers -Property Path,Bytes,Sha256
+if ($diff -or $archiveReceipt.ExecutableSha256 -cne $tested.ExecutableSha256) { throw 'Архив и проверенный пакет различаются.' }
+```
+
+В `VulkanExitControl` проверяются пустой мир и завершение процесса. При отказе прочитайте `Reason`, затем найдите соответствующие строки в журнале сценария. При изменениях глобального рендерера дополните проверку сценариями переходов из [протокола Vulkan](RenderingVerification.md). [Локальный контроль замены контейнера при прежнем EXE](../Scripts/Test-UePackageReceipt.ps1)
 
 **Контрольный повтор 22 ноября 2026 г.** На RTX 4070 Ti SUPER все четыре сценария завершились с результатом Passed при 1280 × 720. Использован готовый пакет PR #92, собранный из игровой ревизии `42e4cea`; запускатель взят из принятой `main` `39a8068`. Хеш EXE совпал с хешем в протоколе этой сборки. [Результаты, хеши журнала каждого сценария и общего отчёта](Measurements/A11-Handoff.json)
 

@@ -36,11 +36,12 @@ jobs:
         shell: pwsh
         run: ./Scripts/Test-GitLfs.ps1
 
-      - name: Test pre-merge Unreal policy with local fixtures
+      - name: Test Unreal verification with local fixtures
         shell: pwsh
         run: |
           ./Scripts/Test-UnrealMergeCheck.ps1
           ./Scripts/Test-FunctionalEvidence.ps1
+          ./Scripts/Test-UePackageReceipt.ps1
 
       - name: Reject an untrusted revision before Unreal setup
         shell: pwsh
