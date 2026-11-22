@@ -1,4 +1,4 @@
-"""Build the EQP-01 display surface. Composite moving glyphs after temporal reconstruction."""
+"""Build the projected EQP-01 hologram. Composite moving glyphs after temporal reconstruction."""
 import unreal
 
 assets = unreal.EditorAssetLibrary
@@ -22,35 +22,34 @@ default = assets.load_asset("/Engine/EngineResources/DefaultTexture")
 sample.set_editor_property("texture", default)
 sample.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
 uv = materials.create_material_expression(display, unreal.MaterialExpressionTextureCoordinate, -500, 150)
-fresnel = materials.create_material_expression(display, unreal.MaterialExpressionFresnel, -500, 300)
-coating = materials.create_material_expression(display, unreal.MaterialExpressionCustom, -250, 0)
-coating.set_editor_property("description", "EQP-01 anti-reflective cover glass")
+field = materials.create_material_expression(display, unreal.MaterialExpressionCustom, -250, 0)
+field.set_editor_property("description", "EQP-01 projected light field")
 inputs = []
-for label in ("Ink", "GlassUV", "Grazing"):
+for label in ("Ink", "PanelUV"):
     item = unreal.CustomInput()
     item.set_editor_property("input_name", label)
     inputs.append(item)
-coating.set_editor_property("inputs", inputs)
-coating.set_editor_property("code", """
-float2 edgeDistance = min(GlassUV, 1.0 - GlassUV);
-float rim = 1.0 - smoothstep(0.0, 0.04, min(edgeDistance.x, edgeDistance.y));
-float upperReflection = exp2(-5.0 * GlassUV.y);
-float3 cover = float3(0.055, 0.095, 0.100) *
-               (0.12 + 0.35 * upperReflection + 0.32 * rim + 0.7 * Grazing);
-return Ink + cover;
+field.set_editor_property("inputs", inputs)
+field.set_editor_property("code", """
+float2 edge = min(PanelUV, 1.0 - PanelUV);
+float border = 1.0 - smoothstep(0.003, 0.008, min(edge.x, edge.y));
+float lines = 0.5 + 0.5 * cos(PanelUV.y * 48.0 * 6.2831853);
+return Ink + float3(0.015, 0.19, 0.20) * (0.10 + 0.08 * lines + border);
 """)
 exposure = materials.create_material_expression(display, unreal.MaterialExpressionEyeAdaptationInverse, 0, 0)
-if not (materials.connect_material_expressions(sample, "RGB", coating, "Ink")
-        and materials.connect_material_expressions(uv, "", coating, "GlassUV")
-        and materials.connect_material_expressions(fresnel, "", coating, "Grazing")
-        and materials.connect_material_expressions(coating, "", exposure, "")
+if not (materials.connect_material_expressions(sample, "RGB", field, "Ink")
+        and materials.connect_material_expressions(uv, "", field, "PanelUV")
+        and materials.connect_material_expressions(field, "", exposure, "")
         and materials.connect_material_property(exposure, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)):
-    raise RuntimeError("Could not connect the exposure-compensated display")
-# A solid black backing fills the readout. Retain the widget plane's normal depth test.
-solid = materials.create_material_expression(display, unreal.MaterialExpressionConstant, -220, 160)
-solid.set_editor_property("r", 1.0)
-if not materials.connect_material_property(solid, "", unreal.MaterialProperty.MP_OPACITY):
-    raise RuntimeError("Could not connect the display opacity")
+    raise RuntimeError("Could not connect the projected display")
+# Keep the cuff visible through the empty field. Glyphs retain full contrast
+# when the projected readout crosses the bright edge of the physical housing.
+opacity = materials.create_material_expression(display, unreal.MaterialExpressionLinearInterpolate, -180, 250)
+opacity.set_editor_property("const_a", 0.62)
+opacity.set_editor_property("const_b", 1.0)
+if not (materials.connect_material_expressions(sample, "A", opacity, "Alpha")
+        and materials.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY)):
+    raise RuntimeError("Could not connect hologram coverage")
 materials.recompile_material(display)
 if not assets.save_loaded_asset(display):
     raise RuntimeError("Could not save the wrist display material")

@@ -6,6 +6,7 @@ param(
     [ValidateSet('On', 'Off')][string]$GalleryNanite,
     [switch]$TraceTravel,
     [switch]$StockDisplay,
+    [ValidateSet(1, 2)][int]$OcclusionQueryFrames,
     [ValidateSet('Separate', 'Instanced')][string]$ChamberDecor,
     [ValidateSet('Separate', 'Compound')][string]$WeightShell,
     [switch]$PreloadWeightShell,
@@ -87,10 +88,11 @@ $profileCommand = if ($frameCount) { "CsvProfile FRAMES=$frameCount" } else { 'C
 if ($map) { $start.ArgumentList.Add($map) }
 $syncControl = if ($DisableRenderThreadLag) { 'r.OneFrameThreadLag 0,r.OneFrameThreadLag,' } else { '' }
 $gcControl = if ($DisableSmallGCPolicy) { 'gc.SmallFullGCSerialSlots 0,gc.SmallFullGCSerialSlots,' } else { '' }
+$occlusionCommand = if ($OcclusionQueryFrames) { "r.NumBufferedOcclusionQueries $OcclusionQueryFrames,r.NumBufferedOcclusionQueries," } else { '' }
 $displayCommand = if ($StockDisplay) { 'r.VSync,t.MaxFPS' } else { 'r.VSync 0,t.MaxFPS 0' }
 foreach ($arg in @('-vulkan', '-unattended', '-windowed', '-ResX=1920', '-ResY=1080',
     "-UserDir=$dir", "-abslog=$dir/Game.log", '-ExitAfterCsvProfiling',
-    "-ExecCmds=${syncControl}${gcControl}${displayCommand},r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
+    "-ExecCmds=${syncControl}${gcControl}${occlusionCommand}${displayCommand},r.ScreenPercentage,sg.ShadowQuality,$profileCommand") + $flags) {
     $start.ArgumentList.Add($arg)
 }
 if ($DisableChamberMeshReuse) { $start.ArgumentList.Add('-NoChamberMeshReuse') }
@@ -161,6 +163,9 @@ if ($Allocator -ne 'Default' -and $Allocator -ne $actualAllocator) {
 }
 if ($measureReserve -and !($log -match "MapPageReserve configured=$MapPageReserve\s*$")) {
     throw 'The package did not confirm the requested page reserve'
+}
+if ($OcclusionQueryFrames -and !($log -match "r\.NumBufferedOcclusionQueries = `"$OcclusionQueryFrames`"\s+LastSetBy: Console")) {
+    throw "Requested occlusion-query buffer was not confirmed in $dir/Game.log"
 }
 $displaySettings = if ($StockDisplay) { @('r\.VSync = "1"', 't\.MaxFPS = "60(?:\.0+)?"') } else { @('r\.VSync = "0"', 't\.MaxFPS = "0"') }
 foreach ($setting in @($displaySettings) + @( 'r\.ScreenPercentage = "100"', 'sg\.ShadowQuality = "2"')) {
@@ -233,6 +238,7 @@ if ($TraceTravel -and (!(Test-Path -LiteralPath "$dir/Travel.utrace" -PathType L
     ProcessStartUtc = $processStartUtc.ToString("o")
     BootUtc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString("o")
     StockDisplay = [bool]$StockDisplay
+    OcclusionQueryFrames = if ($OcclusionQueryFrames) { $OcclusionQueryFrames } else { $null }
     VisiblePhysicalMemoryKiB = (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize
     Scenario = $Scenario
     ExecutableSha256 = (Get-FileHash -LiteralPath $exe).Hash

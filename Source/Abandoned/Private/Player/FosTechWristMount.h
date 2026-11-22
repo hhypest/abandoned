@@ -14,6 +14,13 @@ inline FTransform GlassInCasing()
     return FTransform(Rotation, TopLeft + Rotation.RotateVector(FVector(0, -Width / 2, -Height / 2)));
 }
 
+inline FTransform ProjectionInCasing()
+{
+    const FTransform Glass = GlassInCasing();
+    // Stand the projection clear of the bezel, along the glass normal and vertical axis.
+    return FTransform(Glass.GetRotation(), Glass.TransformPosition(FVector(2.0, 0.0, 18.0)));
+}
+
 inline FTransform CasingOnForearm()
 {
     const FTransform Glass = GlassInCasing();

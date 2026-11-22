@@ -24,7 +24,7 @@ public:
 private:
     enum class EPhase
     {
-        Open, LookAtKnees, Stand, Status, TurnWithWrist, MeasureView, RestoreView, Signal, Archive, ReadArchive, Resupply, CheckResupply, ReadResupply,
+        Open, LookAtFeet, LookAtKnees, Stand, Status, TurnWithWrist, MeasureView, RestoreView, Signal, Archive, ReadArchive, Resupply, CheckResupply, ReadResupply,
         PreviousRecord, Close, Failed
     };
     bool CheckGlass(const APlayerController& PC, const UWidgetComponent& Display);

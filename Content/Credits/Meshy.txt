@@ -6,7 +6,7 @@ Source and Meshy task identifiers: https://github.com/hhypest/abandoned/blob/mai
 
 Included in the game:
 DEV-01A, DEV-01B, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-07, DEV-12, DEV-13, EQP-00, EQP-01, EQP-05.
-The assets were imported into Unreal Engine and placed at gameplay scale.
+The assets were imported into Unreal Engine and placed at gameplay scale. DEV-01B was rescaled independently along its mesh axes to fit its 80 cm cube collision.
 DEV-02 was split into a housing and moving plate; the cut edges were capped.
 The EQP-01 strap was removed and the cut openings were capped.
 The earlier first-person glove setup mirrored EQP-05 for the right hand.

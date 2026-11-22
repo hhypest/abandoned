@@ -140,7 +140,7 @@ void UFosTechBody::Stance(float ReadingWeight)
     const FVector Forward = GetRelativeRotation().UnrotateVector(FVector::ForwardVector);
     const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward);
     // When reading in a squat, shift the hips over the feet to support the raised arm.
-    Hip.AddToTranslation((FVector::DownVector - Forward * FMath::Lerp(0.92, 0.24, ReadingWeight)) * PelvisDrop);
+    Hip.AddToTranslation((FVector::DownVector - Forward * FMath::Lerp(0.48, 0.24, ReadingWeight)) * PelvisDrop);
     // The eye is above the front of the suit. Keep the open neck behind it when
     // looking straight down while the pelvis moves back over the planted boots.
     Hip.SetRotation(FQuat(Right, FMath::DegreesToRadians(18.0)) * Hip.GetRotation());

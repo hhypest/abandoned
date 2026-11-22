@@ -64,6 +64,16 @@ UStaticMeshComponent* AAbandonedCharacter::GetWristCasing() const
     return WristCasing;
 }
 
+void AAbandonedCharacter::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+    // Nod from the neck. The eyes travel ahead of the collar, staying inside the capsule.
+    const double Pitch = FMath::DegreesToRadians(FMath::Clamp(-FRotator::NormalizeAxis(GetViewRotation().Pitch), 0.0, 90.0));
+    const double StanceHeight = CameraHeight + GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - StandingHalfHeight;
+    const double Lean = FMath::Sin(Pitch);
+    Camera->SetRelativeLocation(FVector((bIsCrouched ? 10.0 : 23.0) * Lean, 0.0, StanceHeight - 4.0 * Lean));
+}
+
 void AAbandonedCharacter::PostInitializeComponents()
 {
     Super::PostInitializeComponents();
