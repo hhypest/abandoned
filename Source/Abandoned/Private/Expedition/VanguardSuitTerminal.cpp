@@ -3,7 +3,7 @@
 
 #include "Expedition/VanguardSession.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
-#include "Components/WidgetComponent.h"
+#include "Expedition/WristDisplayComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Layout/SBox.h"
@@ -12,6 +12,7 @@
 #include "Engine/World.h"
 #include "Camera/CameraComponent.h"
 #include "Player/FosTechWristMount.h"
+#include "Player/FosTechBody.h"
 #include "EnhancedInputComponent.h"
 #include "Materials/MaterialInterface.h"
 
@@ -42,7 +43,7 @@ const TCHAR* RecordText(SuitRecord Record)
 
 void AVanguardCharacter::CreateWristTerminal()
 {
-    WristDisplay = CreateDefaultSubobject<UWidgetComponent>(TEXT("WristDisplay"));
+    WristDisplay = CreateDefaultSubobject<UWristDisplayComponent>(TEXT("WristDisplay"));
     WristDisplay->SetupAttachment(WristCasing);
     // Bounds and occlusion follow the opaque instrument housing through abrupt
     // changes in the wearer's pose, including the first frame the panel lights.
@@ -99,6 +100,10 @@ void AVanguardCharacter::ConfigureWristTerminal()
                     .ColorAndOpacity(FLinearColor(0.86f, 0.93f, 0.85f))
                 ]
             ]);
+        WristDisplay->PrepareGlass();
+        // Request close-up mips early without deprioritizing the level or pinning the atlas permanently.
+        WristCasing->PrestreamTextures(2.0f, false);
+        SuitBody->PrestreamTextures(2.0f, false);
     }
 }
 

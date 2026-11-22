@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$Path,
-    [Parameter(Mandatory)][string]$Projection
+    [Parameter(Mandatory)][string]$Projection,
+    [ValidateSet('Status', 'Flare', 'Archive')][string]$Page = 'Status'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,8 +19,8 @@ try {
         throw "Glass bounds exceed the captured frame in $Path"
     }
     # Sample inside the readout, excluding the bezel and any overlapping HUD at its edge.
-    # Both captures show the green STATUS page before the flare. A blank reflective pane
-    # can pass the corner-projection test but cannot supply two distinct rows of green ink.
+    # A blank reflective pane
+    # can pass the corner-projection test but cannot supply separate rows of luminous glyphs against a dark background.
     $xMin = [int]($left + 0.05 * ($right - $left))
     $xMax = [int]($right - 0.10 * ($right - $left))
     $yMin = [int]($top + 0.05 * ($bottom - $top))
@@ -31,7 +32,12 @@ try {
         $pixels = 0
         for ($x = $xMin; $x -le $xMax; $x += 2) {
             $c = $bitmap.GetPixel($x, $y)
-            if ($c.G -ge 105 -and $c.G -gt ($c.R + 12) -and $c.G -gt ($c.B + 4)) { ++$pixels }
+            $lit = switch ($Page) {
+                'Status' { $c.G -ge 105 -and $c.G -gt ($c.R + 12) -and $c.G -gt ($c.B + 4) }
+                'Flare' { $c.R -gt 140 -and $c.R -gt ($c.G + 10) -and $c.G -gt ($c.B + 15) }
+                'Archive' { $c.G -gt 145 -and $c.R -gt 115 -and $c.B -gt 115 }
+            }
+            if ($lit) { ++$pixels }
         }
         $ink = $pixels -ge [Math]::Max(4, [Math]::Ceiling(($xMax - $xMin) * 0.016))
         if ($ink) {

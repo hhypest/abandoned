@@ -9,7 +9,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
-#include "Components/WidgetComponent.h"
+#include "Expedition/WristDisplayComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
