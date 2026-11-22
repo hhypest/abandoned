@@ -252,7 +252,8 @@ void UVanguardRouteVerification::CheckStation(const AVanguardSegment& Route, AVa
     }
     else
     {
-        UE_LOG(LogVanguardRouteTest, Error, TEXT("Vanguard verification failed: prior oxygen %.2f, current %.2f."), Prior, Current);
+        UE_LOG(LogVanguardRouteTest, Error, TEXT("Vanguard verification failed: oxygen %.2f -> %.2f, resupplied %d, flashlight on %d."),
+            Prior, Current, Route.GetRouteState().HasResupplied(), Player.IsFlashlightOn());
     }
     Finish(bPassed);
 }

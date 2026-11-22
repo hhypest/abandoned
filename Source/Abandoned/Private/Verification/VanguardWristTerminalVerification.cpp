@@ -2,6 +2,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Expedition/VanguardRoute.h"
+#include "Expedition/VanguardRouteLayout.h"
+#include "Engine/StaticMesh.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Expedition/VanguardSession.h"
 #include "Verification/RadiationVerificationSession.h"
@@ -101,9 +103,14 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         {
             return Fail(TEXT("the wrist should start lowered"));
         }
-        if (!Player.WristCasing->GetStaticMesh())
+        if (const auto& Visuals = *GetDefault<UVanguardMantleVisuals>();
+            !Visuals.WristTerminal.IsValid() || !Visuals.Glove.IsValid() ||
+            Player.WristCasing->GetStaticMesh() != Visuals.WristTerminal.Get() ||
+            Player.WristGlove->GetStaticMesh() != Visuals.Glove.Get() ||
+            Player.WristCasing->GetMaterial(0) != Visuals.WristTerminal->GetMaterial(0) ||
+            Player.WristGlove->GetMaterial(0) != Visuals.Glove->GetMaterial(0))
         {
-            return Fail(TEXT("the wrist casing mesh should be available"));
+            return Fail(TEXT("the configured wrist and glove meshes must retain their imported materials"));
         }
         Key.Press(*PC, EKeys::T);
         Phase = EPhase::Status;
