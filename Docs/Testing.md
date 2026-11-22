@@ -2,6 +2,17 @@
 
 Соберите `AbandonedEditor Win64 Development` в UE 5.7 по [инструкции запуска](../Readme.md#запуск-на-windows). В меню **M** можно вернуться к курсу или открыть стенды. Для ручной проверки отдельной камеры используйте приведённый ниже запуск с изолированной папкой сохранений. Задайте пустую строку в `$test` и уберите `-unattended`, `-benchmark` и `-fps`. К карте `/Engine/Maps/Entry` добавьте `?Chamber=Stairs`, `?Chamber=Button`, `?Chamber=Weight` или `?Chamber=Sandbox`.
 
+## A‑04. Состояние проверок шлюзов
+
+В собранном редакторе UE 5.7.4 выберите в **Session Frontend → Automation** тест `Abandoned.Verification.AirlockSessionIsolation`. Запускайте его при остановленном PIE. Для командной строки из корня проекта:
+
+```powershell
+./Scripts/Test-AirlockSessionIsolation.ps1 -EngineRoot $ueRoot
+./Scripts/Invoke-UeVerification.ps1 -PackageRoot "$archive/Windows" -Resolution 1280x720 -Scenario ButtonAirlock,ButtonAirlockIncomplete,WeightAirlock,BalanceAirlock,BalanceAirlockMissingPlate,PassageAirlock,PassageAirlockInvalidDoor,StationAirlock,StationAirlockMissingSupply,EntryCourse,EntryWeightNegative
+```
+
+Первая команда открывает собственный экземпляр редактора с отдельным профилем, запускает и завершает две сессии PIE. Тест заполняет наблюдения и проверяет начальное состояние следующей сессии. Запускатель проверяет код завершения и результат именованного теста в новом `Report/index.json`. Вторая команда проверяет переходы в игре. При повторном входе в той же сессии счётчик должен дойти до двух, а наблюдения о персонаже и контроллере должны пережить смену мира. На переходе к станции дополнительно сверяются кислород и архив. [Протокол Vulkan и PIE](Measurements/A04-AirlockSession.json)
+
 ## Вручную
 
 | Камера или стенд | Действие | Ожидаемый результат |

@@ -1,0 +1,220 @@
+{
+  "Date": "2026-11-22",
+  "GameSourceCommit": "ebeef3ae93627c1203dedecb4e78cb1bef445dca",
+  "PieLauncherCommit": "5fbe6eaf9eb16a811c1b5f9148cc2b4a40a1171a",
+  "Unreal": "5.7.4",
+  "EditorAutomation": {
+    "Test": "Abandoned.Verification.AirlockSessionIsolation",
+    "State": "Success",
+    "Errors": 0,
+    "Warnings": 0,
+    "Rhi": "Vulkan (SM6)",
+    "Observations": [
+      "Checked initial state and recorded observations in PIE session 1.",
+      "Checked initial state and recorded observations in PIE session 2."
+    ]
+  },
+  "Package": {
+    "Target": "Package",
+    "Rhi": "VULKAN_SM6",
+    "Resolution": "1280x720",
+    "ExecutableSha256": "582EB8981C22DFC6C65699835F05518B06812B998E87047FD01AF223F6D9086D",
+    "Gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "Scenarios": [
+      {
+        "Name": "ButtonAirlock",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Stairs",
+          "Button",
+          "Stairs",
+          "Button"
+        ],
+        "SuccessMarkers": [
+          "Airlock visit 1: solved circuit held closed during load.",
+          "Airlock visit 2: solved circuit held closed during load.",
+          "Airlock visit 1: open gate, checkpoint still Stairs.",
+          "Airlock visit 1: reached streamed Button, checkpoint and archive confirmed.",
+          "Airlock visit 2: open gate, checkpoint still Stairs.",
+          "Airlock visit 2: reached streamed Button, checkpoint and archive confirmed."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "ButtonAirlockIncomplete",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Stairs"
+        ],
+        "SuccessMarkers": [
+          "Airlock visit 1: solved circuit held closed during load.",
+          "Incomplete Button circuit rejected: gate closed and Stairs checkpoint preserved."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "WeightAirlock",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Button",
+          "Weight",
+          "Button",
+          "Weight"
+        ],
+        "SuccessMarkers": [
+          "Airlock visit 1: solved circuit held closed during load.",
+          "Airlock visit 2: solved circuit held closed during load.",
+          "Airlock visit 1: open gate, checkpoint still Button.",
+          "Airlock visit 1: reached streamed Weight, checkpoint and archive confirmed.",
+          "Airlock visit 2: open gate, checkpoint still Button.",
+          "Airlock visit 2: reached streamed Weight, checkpoint and archive confirmed."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "BalanceAirlock",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Weight",
+          "Balance",
+          "Weight",
+          "Balance"
+        ],
+        "SuccessMarkers": [
+          "Airlock visit 1: solved circuit held closed during load.",
+          "Airlock visit 2: solved circuit held closed during load.",
+          "Airlock visit 1: open gate, checkpoint still Weight.",
+          "Airlock visit 1: reached streamed Balance, checkpoint and archive confirmed.",
+          "Airlock visit 2: open gate, checkpoint still Weight.",
+          "Airlock visit 2: reached streamed Balance, checkpoint and archive confirmed."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "BalanceAirlockMissingPlate",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Weight"
+        ],
+        "SuccessMarkers": [
+          "Removed the third Balance plate before solving Weight.",
+          "Missing Balance plate rejected: gate closed and Weight checkpoint preserved."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "PassageAirlock",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Balance",
+          "Balance",
+          "Balance"
+        ],
+        "SuccessMarkers": [
+          "Solved Balance held closed while passage hidden.",
+          "Passage visit 1: suit on streamed floor, same world and controller, Balance slot intact.",
+          "Passage return 1: Balance controls, HUD and archive restored.",
+          "Passage visit 2: suit on streamed floor, same world and controller, Balance slot intact.",
+          "Passage return 2: Balance controls, HUD and archive restored.",
+          "Passage checkpoint recovery: Balance (fall)."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "PassageAirlockInvalidDoor",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Balance"
+        ],
+        "SuccessMarkers": [
+          "Solved Balance held closed while passage hidden.",
+          "Invalid passage rejected: Balance gate closed, player and checkpoint retained."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "StationAirlock",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Balance"
+        ],
+        "SuccessMarkers": [
+          "Vanguard shoulder flashlight switched on, off and on with F.",
+          "Verification observed the raised airlock before crossing.",
+          "Verification crossed the moving passage airlock.",
+          "Vanguard segment ready: station.",
+          "Vanguard shoulder flashlight stayed on at the station.",
+          "Vanguard oxygen supply restored.",
+          "Vanguard verification passed: passage transit and station resupply.",
+          "Station gate held the player while the station was hidden.",
+          "Station airlock ready: floor and supply cabinet registered.",
+          "Passage exit crossed: station active in the same world.",
+          "Station handoff verified: same world and controller, passage removed",
+          "Station supply used twice: one resupply record in suit and Balance slot."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "StationAirlockMissingSupply",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Balance"
+        ],
+        "SuccessMarkers": [
+          "Station gate held the player while the station was hidden.",
+          "Unavailable supply rejected: gate closed and archive preserved."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "Chambers": [
+          "Stairs",
+          "Button",
+          "Weight",
+          "Balance"
+        ],
+        "SuccessMarkers": [
+          "Entry test: crossed Stairs exit.",
+          "Entry test: crossed Button exit.",
+          "Entry test: reset restored the weight lock",
+          "Entry test: Weight accepted 20 kg",
+          "Entry test: crossed Weight exit.",
+          "First solution opened the door.",
+          "Alternate arrangement opened the door.",
+          "Entry course verification passed: balance released the passage.",
+          "Passage ledge stopped walking, a short Space jump and a crouch jump.",
+          "Passage climb rejected an obstructed landing.",
+          "Passage handhold verified",
+          "Passage climb verified: held Space and landed on top.",
+          "Vanguard shoulder flashlight switched on, off and on with F.",
+          "Verification observed the raised airlock before crossing.",
+          "Verification crossed the moving passage airlock.",
+          "Vanguard segment ready: station.",
+          "Vanguard shoulder flashlight stayed on at the station.",
+          "Vanguard oxygen supply restored.",
+          "Vanguard verification passed: passage transit and station resupply."
+        ],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      },
+      {
+        "Name": "EntryWeightNegative",
+        "Outcome": "ExpectedFailure",
+        "SuccessMarkers": [],
+        "ExitCode": 0,
+        "ShutdownComplete": true
+      }
+    ]
+  }
+}
