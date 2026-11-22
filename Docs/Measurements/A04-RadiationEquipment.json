@@ -1,0 +1,181 @@
+{
+  "Date": "2026-11-22",
+  "GameSourceCommit": "fee0444a0b73282659d07210c495bf9b4cf192b3",
+  "Package": {
+    "Unreal": "5.7.4",
+    "Target": "Package",
+    "OperatingSystem": "Microsoft Windows 10.0.26300",
+    "ExecutableSha256": "CA1D2AFCF0F00752459E75515144158E406E600C4A16257D4FCA8773773554FE",
+    "Rhi": "VULKAN_SM6",
+    "Resolution": "1280x720",
+    "FramesPerSecond": 60,
+    "Gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "Scenarios": [
+      {
+        "Name": "WristTerminal",
+        "Outcome": "Passed",
+        "Vulkan": true,
+        "SuccessMarkers": [
+          "Wrist terminal verification passed",
+          "Radiation passage verification passed",
+          "Wrist status matched the live exposure dose.",
+          "Wrist archive after checkpoint recovery: one forecast record."
+        ]
+      },
+      {
+        "Name": "Radiation",
+        "Outcome": "Passed",
+        "Vulkan": true,
+        "SuccessMarkers": [
+          "Radiation exposure increased dose during a flare:",
+          "Radiation shelter held dose at",
+          "Radiation recovery outside the zone:",
+          "Radiation dose limit reached. Returning to the passage checkpoint.",
+          "Radiation checkpoint restored: safe position, zero dose and fresh forecast.",
+          "Vanguard station cleared remaining radiation dose:",
+          "Radiation passage verification passed"
+        ]
+      },
+      {
+        "Name": "VanguardRoute",
+        "Outcome": "Passed",
+        "Vulkan": true,
+        "SuccessMarkers": [
+          "Vanguard shoulder flashlight switched on, off and on with F.",
+          "Verification observed the raised airlock before crossing.",
+          "Verification crossed the moving passage airlock.",
+          "Vanguard segment ready: station.",
+          "Vanguard shoulder flashlight stayed on at the station.",
+          "Vanguard oxygen supply restored.",
+          "Vanguard verification passed: passage transit and station resupply."
+        ]
+      },
+      {
+        "Name": "WristTerminalNegative",
+        "Outcome": "ExpectedFailure",
+        "Vulkan": true,
+        "SuccessMarkers": [],
+        "ObservedFailures": [
+          "LogWristTerminal: Error: Wrist terminal verification failed: acquired record should survive travel and occur once (phase 3)."
+        ]
+      },
+      {
+        "Name": "RadiationNegative",
+        "Outcome": "ExpectedFailure",
+        "Vulkan": true,
+        "SuccessMarkers": [],
+        "ObservedFailures": [
+          "LogRadiationVerification: Error: Radiation verification failed: the station should clear the remaining dose after a full passage run (step 0)."
+        ]
+      },
+      {
+        "Name": "EntryCourse",
+        "Outcome": "Passed",
+        "Vulkan": true,
+        "SuccessMarkers": [
+          "Entry test: crossed Stairs exit.",
+          "Entry test: crossed Button exit.",
+          "Entry test: reset restored the weight lock",
+          "Entry test: Weight accepted 20 kg",
+          "Entry test: crossed Weight exit.",
+          "First solution opened the door.",
+          "Alternate arrangement opened the door.",
+          "Entry course verification passed: balance released the passage.",
+          "Passage ledge stopped walking, a short Space jump and a crouch jump.",
+          "Passage climb rejected an obstructed landing.",
+          "Passage handhold verified",
+          "Passage climb verified: held Space and landed on top.",
+          "Vanguard shoulder flashlight switched on, off and on with F.",
+          "Verification observed the raised airlock before crossing.",
+          "Verification crossed the moving passage airlock.",
+          "Vanguard segment ready: station.",
+          "Vanguard shoulder flashlight stayed on at the station.",
+          "Vanguard oxygen supply restored.",
+          "Vanguard verification passed: passage transit and station resupply."
+        ]
+      },
+      {
+        "Name": "StationAirlock",
+        "Outcome": "Passed",
+        "Vulkan": true,
+        "SuccessMarkers": [
+          "Vanguard shoulder flashlight switched on, off and on with F.",
+          "Verification observed the raised airlock before crossing.",
+          "Verification crossed the moving passage airlock.",
+          "Vanguard segment ready: station.",
+          "Vanguard shoulder flashlight stayed on at the station.",
+          "Vanguard oxygen supply restored.",
+          "Vanguard verification passed: passage transit and station resupply.",
+          "Station gate held the player while the station was hidden.",
+          "Station airlock ready: floor and supply cabinet registered.",
+          "Passage exit crossed: station active in the same world.",
+          "Station handoff verified: same world and controller, passage removed",
+          "Station supply used twice: one resupply record in suit and Balance slot."
+        ]
+      }
+    ]
+  },
+  "EditorAutomation": {
+    "Test": "Abandoned.Verification.RadiationTerminalReplay",
+    "State": "Success",
+    "Errors": 0,
+    "Warnings": 0,
+    "Observations": [
+      "Finished radiation and wrist route in PIE session 1.",
+      "Finished radiation and wrist route in PIE session 2."
+    ],
+    "CheckpointRestorations": 2
+  },
+  "Captures": [
+    "../Images/EQP-Wrist-Vulkan.jpg",
+    "../Images/EQP-Gloves-Vulkan.jpg"
+  ],
+  "EntryCourseRuns": [
+    {
+      "GameSourceCommit": "0d03e033eb5c51570d8e98cc5830162fbafc0319",
+      "Outcome": "Failed",
+      "ScreenshotsPresent": true,
+      "Failure": [
+        "Vanguard verification failed: prior oxygen 94.90, current 100.00."
+      ]
+    },
+    {
+      "GameSourceCommit": "0d03e033eb5c51570d8e98cc5830162fbafc0319",
+      "Outcome": "Failed",
+      "ScreenshotsPresent": false,
+      "Failure": [
+        "Entry test failed: timed out waiting for gameplay or world travel (Stairs, phase 7)."
+      ]
+    },
+    {
+      "GameSourceCommit": "0d03e033eb5c51570d8e98cc5830162fbafc0319",
+      "Outcome": "Passed",
+      "ScreenshotsPresent": true,
+      "Failure": []
+    },
+    {
+      "GameSourceCommit": "fee0444a0b73282659d07210c495bf9b4cf192b3",
+      "Outcome": "Passed",
+      "ScreenshotsPresent": true,
+      "Failure": []
+    },
+    {
+      "GameSourceCommit": "fee0444a0b73282659d07210c495bf9b4cf192b3",
+      "Outcome": "Passed",
+      "ScreenshotsPresent": true,
+      "Failure": []
+    },
+    {
+      "GameSourceCommit": "fee0444a0b73282659d07210c495bf9b4cf192b3",
+      "Outcome": "Passed",
+      "ScreenshotsPresent": true,
+      "Failure": []
+    },
+    {
+      "GameSourceCommit": "fee0444a0b73282659d07210c495bf9b4cf192b3",
+      "Outcome": "Passed",
+      "ScreenshotsPresent": false,
+      "Failure": []
+    }
+  ]
+}
