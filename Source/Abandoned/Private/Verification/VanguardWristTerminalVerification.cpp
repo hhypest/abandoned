@@ -177,12 +177,18 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         {
             StandingView = PC->GetControlRotation();
             PC->SetControlRotation(FRotator(-82.0, StandingView.Yaw, 0.0));
-            CrouchKey.Press(*PC, EKeys::LeftControl);
-            Phase = EPhase::LookAtKnees;
+            Phase = EPhase::LookAtFeet;
             break;
         }
         Key.Press(*PC, EKeys::T);
         Phase = EPhase::Status;
+        break;
+    case EPhase::LookAtFeet:
+        if (Elapsed < 0.35f) { return false; }
+        Capture(TEXT("EQP00-Standing"));
+        CrouchKey.Press(*PC, EKeys::LeftControl);
+        Elapsed = 0.0f;
+        Phase = EPhase::LookAtKnees;
         break;
     case EPhase::LookAtKnees:
         if (Elapsed < 0.35f) { return false; }

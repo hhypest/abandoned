@@ -17,6 +17,7 @@ param(
     [string]$Resolution = '1920x1080',
 
     [switch]$Capture,
+    [ValidateSet(1, 2)][int]$OcclusionQueryFrames,
     [switch]$SeparateChamberDecor,
     [switch]$CompoundWeightShell,
     [switch]$PreloadWeightShell,
@@ -70,6 +71,7 @@ $expectedRenderer = [ordered]@{
     'r.GenerateMeshDistanceFields' = 1
     'r.Lumen.HardwareRayTracing' = 0
     'r.Nanite.ProjectEnabled' = 1
+    'r.NumBufferedOcclusionQueries' = 1
     'r.Shadow.Virtual.Enable' = 1
     'r.AntiAliasingMethod' = 4
     'r.PhysicsField.EnableField' = 0
@@ -77,6 +79,10 @@ $expectedRenderer = [ordered]@{
     'sg.ReflectionQuality' = 2
 }
 $renderQueries = $expectedRenderer.Keys -join ','
+if ($OcclusionQueryFrames) {
+    $expectedRenderer['r.NumBufferedOcclusionQueries'] = $OcclusionQueryFrames
+    $renderQueries = "r.NumBufferedOcclusionQueries $OcclusionQueryFrames,$renderQueries"
+}
 $vanguard = "${entry}?game=/Script/Abandoned.VanguardRouteGameMode"
 $radiationPassage = "${vanguard}?Chamber=Passage?RadiationRun=1"
 $radiationSuccess = @('Radiation exposure increased dose during a flare:', 'Radiation shelter held dose at',
@@ -446,6 +452,9 @@ function Invoke-Scenario($name, $definition, $profile) {
     }
     if (($Capture -or $definition.CheckPortalFrame) -and $definition.CaptureFlag) {
         $start.ArgumentList.Add($definition.CaptureFlag)
+    }
+    if ($name -eq 'DoorClamp' -and $Capture -and $OcclusionQueryFrames) {
+        $start.ArgumentList.Add('-CaptureWeightVisibility')
     }
     foreach ($arg in $definition.ExtraFlag) { $start.ArgumentList.Add($arg) }
     $process = [System.Diagnostics.Process]::Start($start)

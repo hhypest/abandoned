@@ -26,6 +26,7 @@ public:
     UStaticMeshComponent* GetWristCasing() const;
 
 protected:
+    void Tick(float DeltaSeconds) override;
     void PostInitializeComponents() override;
     void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
     void UnPossessed() override;

@@ -22,8 +22,8 @@ using Abandoned::Application::Expedition::SuitPage;
 using Abandoned::Application::Expedition::SuitSignal;
 using Abandoned::Domain::Expedition::SuitRecord;
 
-const FLinearColor InstrumentLabel(0.56f, 0.88f, 0.79f);
-const FLinearColor InstrumentValue(0.75f, 0.98f, 0.84f);
+const FLinearColor InstrumentLabel(0.16f, 0.86f, 0.55f);
+const FLinearColor InstrumentValue(0.26f, 0.98f, 0.59f);
 const FLinearColor FlareWarning(1.0f, 0.62f, 0.24f);
 
 const TCHAR* RecordText(SuitRecord Record)
@@ -45,19 +45,15 @@ void AVanguardCharacter::CreateWristTerminal()
 {
     WristDisplay = CreateDefaultSubobject<UWristDisplayComponent>(TEXT("WristDisplay"));
     WristDisplay->SetupAttachment(WristCasing);
-    // Bounds and occlusion follow the opaque instrument housing through abrupt
-    // changes in the wearer's pose, including the first frame the panel lights.
-    WristDisplay->bUseAttachParentBound = true;
     WristDisplay->SetTickWhenOffscreen(true);
-    const FTransform Glass = Abandoned::WristMount::GlassInCasing();
-    WristDisplay->SetRelativeLocationAndRotation(Glass.GetLocation(), Glass.GetRotation());
-    // Square texels on the 70.144 × 46.032 model-space glass.
+    const FTransform Projection = Abandoned::WristMount::ProjectionInCasing();
+    WristDisplay->SetRelativeLocationAndRotation(Projection.GetLocation(), Projection.GetRotation());
     WristDisplay->SetRelativeScale3D(FVector(70.144 / 768.0));
     WristDisplay->SetWidgetSpace(EWidgetSpace::World);
     WristDisplay->SetDrawSize(FVector2D(768, 504));
     WristDisplay->SetPivot(FVector2D(0.5, 0.5));
-    WristDisplay->SetBlendMode(EWidgetBlendMode::Opaque);
-    WristDisplay->SetBackgroundColor(FLinearColor(0.006f, 0.014f, 0.017f));
+    WristDisplay->SetBlendMode(EWidgetBlendMode::Transparent);
+    WristDisplay->SetBackgroundColor(FLinearColor::Transparent);
     WristDisplay->SetManuallyRedraw(true);
     WristDisplay->SetWindowFocusable(false);
     WristDisplay->SetCollisionEnabled(ECollisionEnabled::NoCollision);

@@ -78,5 +78,17 @@ for row in devices:
             or len(textures) != len(gltf["images"]) or not all(m.get_material(0) for m in static_meshes)):
         raise RuntimeError(f"{code}: {count}/{triangles} triangles, {len(textures)}/{len(gltf['images'])} textures")
     for mesh in static_meshes:
+        if code == "DEV-01B":
+            # Fit the admitted mesh to the 80 cm gameplay cube, keeping its source height.
+            # These are the unscaled X, Y and Z half-extents of the SHA-checked model.
+            target = unreal.Vector(85.403160 / 95.139954, 85.403160 / 72.825459, 1)
+            editor = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
+            build = editor.get_lod_build_settings(mesh, 0)
+            scale = build.build_scale3d
+            if max(abs(scale.x - target.x), abs(scale.y - target.y), abs(scale.z - target.z)) > 0.00001:
+                build.build_scale3d = target
+                editor.set_lod_build_settings(mesh, 0, build)
+                if not assets.save_loaded_asset(mesh):
+                    raise RuntimeError(f"Could not save the DEV-01B cube proportions: {mesh.get_path_name()}")
         configure_nanite(mesh, True)
         unreal.log(f"MESHY_DEVICE {code} {mesh.get_path_name()} source_triangles={mesh.get_static_mesh_description(0).get_triangle_count()} {mesh.get_bounds()}")

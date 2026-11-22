@@ -102,6 +102,8 @@ void UDoorClampVerification::Attach(ATrainingChamberGameMode& Chamber)
             }
         }
     }
+    Verification->bCaptureVisibility = FParse::Param(FCommandLine::Get(), TEXT("CaptureWeightVisibility"));
+    if (Verification->bCaptureVisibility) { Verification->Step(EPhase::TurnCapture); }
     Chamber.AddInstanceComponent(Verification);
     Verification->RegisterComponent();
     Verification->AddTickPrerequisiteActor(&Chamber);
@@ -210,6 +212,34 @@ void UDoorClampVerification::Verify(ATrainingChamberGameMode& Chamber, ATraining
     };
     switch (Phase)
     {
+    case EPhase::TurnCapture:
+        if (CaptureFrame == 0)
+        {
+            PlacePlayer(Layout->Spawn + FVector(160, 0, 0), FRotator(0, 180, 0));
+        }
+        // A snap can invalidate all query history. Also sweep back at 15 degrees
+        // per frame after the opposite wall has occluded the puzzle for 24 frames.
+        if (CaptureFrame == 60 || (CaptureFrame >= 90 && CaptureFrame <= 101) ||
+            (CaptureFrame >= 126 && CaptureFrame <= 137))
+        {
+            const double Yaw = CaptureFrame == 60 ? 0.0 :
+                15.0 * (CaptureFrame <= 101 ? CaptureFrame - 89 : 137 - CaptureFrame);
+            const FRotator View(-8, Yaw, 0);
+            Player.GetController()->SetControlRotation(View);
+            Player.FaceRotation(View, DeltaSeconds);
+        }
+        if (CaptureFrame == 59 || (CaptureFrame >= 60 && CaptureFrame <= 64) || CaptureFrame == 85 ||
+            (CaptureFrame >= 126 && CaptureFrame <= 140))
+        {
+            FScreenshotRequest::RequestScreenshot(FString::Printf(TEXT("Weight-Turn-%03d"), CaptureFrame), false, false);
+        }
+        if (++CaptureFrame == 150)
+        {
+            PlacePlayer(FVector(DoorCenter.X - 410, DoorCenter.Y, Layout->Spawn.Z), FRotator(-4, 0, 0));
+            CaptureFrame = 0;
+            Step(EPhase::PowerOn);
+        }
+        break;
     case EPhase::PowerOn:
         if (PhaseSeconds >= 0.25)
         {
@@ -222,6 +252,10 @@ void UDoorClampVerification::Verify(ATrainingChamberGameMode& Chamber, ATraining
         }
         break;
     case EPhase::Open:
+        if (bCaptureVisibility)
+        {
+            FScreenshotRequest::RequestScreenshot(FString::Printf(TEXT("Weight-Opening-%03d"), CaptureFrame++), false, false);
+        }
         if (Chamber.IsDoorOpen())
         {
             Obstruct();

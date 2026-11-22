@@ -27,7 +27,7 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
     enum class EPhase
     {
-        PowerOn, Open, Clamp, Hold, ReleaseBlockedInput, CheckBlockedPickup,
+        TurnCapture, PowerOn, Open, Clamp, Hold, ReleaseBlockedInput, CheckBlockedPickup,
         Release, ReleasePickupInput, CheckPickup, Reopen, ClampForReset,
         ReleaseResetInput, CheckReset, OpenForPlayer, CrushPlayer
     };
@@ -35,6 +35,8 @@ private:
     void Fail(const TCHAR* Reason);
     void Step(EPhase Next);
     EPhase Phase = EPhase::PowerOn;
+    int32 CaptureFrame = 0;
+    bool bCaptureVisibility = false;
     double PhaseSeconds = 0.0;
     double TotalSeconds = 0.0;
     TWeakObjectPtr<APuzzleCube> Cubes[3];
