@@ -131,6 +131,13 @@ def main():
                 built = int(unreal.AssetRegistryHelpers.get_tag_value(data, "NaniteTriangles"))
                 if settings.enabled != (built > 0):
                     raise RuntimeError(f"{path}: Nanite enabled={settings.enabled}, built triangles={built}")
+                source = mesh.get_static_mesh_description(0).get_triangle_count()
+                if render_triangles != source or (settings.enabled and built != source):
+                    raise RuntimeError(f"{path}: source={source}, conventional LOD0={render_triangles}, Nanite={built}")
+                for slot in mesh.get_editor_property("static_materials"):
+                    material = slot.material_interface
+                    if not material or not material.get_base_material().get_editor_property("used_with_nanite"):
+                        raise RuntimeError(f"{path}: {slot.material_slot_name} has no Nanite-compatible parent material")
                 unreal.log(f"FOSTECH_NANITE_MESH {path} enabled={settings.enabled} built={built} "
                            f"render_lod0={render_triangles} explicit_tangents={settings.explicit_tangents}")
                 count += 1
