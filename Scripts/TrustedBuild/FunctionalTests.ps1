@@ -2,7 +2,8 @@
 $RequiredFunctionalTests = @('Abandoned.Verification.AirlockSessionIsolation', 'Abandoned.Verification.RadiationTerminalReplay')
 
 function Invoke-UEAutomationEditor {
-    param([string]$EngineRoot, [string]$Project, [string]$Directory, [string[]]$Names, [int]$TimeoutSeconds)
+    param([string]$EngineRoot, [string]$Project, [string]$Directory, [string[]]$Names, [int]$TimeoutSeconds,
+        [switch]$PrivateDDC)
 
     # An existing report directory never qualifies as output for a new invocation.
     $null = New-Item -ItemType Directory -Path $Directory -ErrorAction Stop
@@ -11,7 +12,18 @@ function Invoke-UEAutomationEditor {
     $start.WorkingDirectory = $Project
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
-    foreach ($arg in @((Join-Path $Project 'Abandoned.uproject'), '/Engine/Maps/Entry', '-unattended', '-nop4',
+    $start.ArgumentList.Add((Join-Path $Project 'Abandoned.uproject'))
+    $start.ArgumentList.Add('/Engine/Maps/Entry')
+    if ($PrivateDDC) {
+        # The pinned source engine supplies this writable filesystem graph.
+        # A fresh worker profile must not start or replace the desktop's Zen server.
+        $cache = [IO.Directory]::CreateDirectory((Join-Path $Directory 'DDC')).FullName
+        foreach ($arg in @('-DDC=NoZenLocalFallback', "-LocalDataCachePath=$cache", '-NoZenAutoLaunch',
+                '-SharedDataCachePath=None', '-ZenSharedDataCacheHost=None', '-CloudDataCacheHost=None')) {
+            $start.ArgumentList.Add($arg)
+        }
+    }
+    foreach ($arg in @('-unattended', '-nop4',
             '-nosound', '-vulkan', '-RenderOffscreen', "-UserDir=$Directory/Profile", "-abslog=$Directory/Editor.log",
             "-ReportExportPath=$Directory/Report", "-ExecCmds=Automation RunTests $($Names -join '+')",
             '-TestExit=Automation Test Queue Empty')) {
