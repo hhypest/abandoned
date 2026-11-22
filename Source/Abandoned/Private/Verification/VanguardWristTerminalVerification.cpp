@@ -116,6 +116,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
             !Player.DisplayPrimary.IsValid() || !Player.WristDisplay->GetSlateWidget().IsValid() ||
             Player.WristDisplay->GetWidgetSpace() != EWidgetSpace::World ||
             Player.WristDisplay->GetAttachParent() != Player.WristCasing ||
+            !Visuals.WristSurface.IsValid() || Player.WristDisplay->GetMaterial(0) != Visuals.WristSurface.Get() ||
             Player.WristCasing->GetStaticMesh() != Visuals.WristTerminal.Get() ||
             Player.WristGlove->GetStaticMesh() != Visuals.Glove.Get() ||
             Player.WristCasing->GetMaterial(0) != Visuals.WristTerminal->GetMaterial(0) ||

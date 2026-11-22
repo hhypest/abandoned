@@ -99,6 +99,10 @@ void AVanguardCharacter::ConfigureWristTerminal()
     WristSleeve->SetMaterial(0, Suit.Finish.LoadSynchronous());
     if (!DisplayBody.IsValid())
     {
+        if (UMaterialInterface* Surface = Suit.WristSurface.LoadSynchronous())
+        {
+            WristDisplay->SetMaterial(0, Surface);
+        }
         WristDisplay->SetSlateWidget(
             SNew(SBox).Padding(FMargin(14, 10)).Visibility(EVisibility::HitTestInvisible)
             [
