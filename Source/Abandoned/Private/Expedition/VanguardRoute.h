@@ -19,6 +19,8 @@ class UBoxComponent;
 class UMaterialInterface;
 class USpotLightComponent;
 class UStaticMeshComponent;
+class UWidgetComponent;
+class STextBlock;
 class UVanguardRouteStateComponent;
 class UVanguardRouteLayout;
 
@@ -153,7 +155,11 @@ private:
     void UpdateMantleHands();
     Abandoned::Application::Expedition::MantleRequest MantleRequest;
     Abandoned::Application::Expedition::SuitTerminal WristTerminal;
+    TSharedPtr<STextBlock> DisplayHeading;
+    TSharedPtr<STextBlock> DisplayPrimary;
+    TSharedPtr<STextBlock> DisplayBody;
     FString WristHeading;
+    FString WristPrimary;
     FString WristReadout;
     std::optional<Abandoned::Infrastructure::Expedition::MantlePath> ActiveMantle;
     std::optional<Abandoned::Infrastructure::Expedition::MantleHandhold> ActiveMantleHandhold;
@@ -179,6 +185,9 @@ private:
     TObjectPtr<UStaticMeshComponent> WristCasing;
 
     UPROPERTY()
+    TObjectPtr<UWidgetComponent> WristDisplay;
+
+    UPROPERTY()
     TObjectPtr<UStaticMeshComponent> WristSleeve;
 
     UPROPERTY()
@@ -198,6 +207,4 @@ class AVanguardHUD final : public AHUD
 public:
     void DrawHUD() override;
 
-private:
-    void DrawWristReadout(const AVanguardCharacter& Player);
 };

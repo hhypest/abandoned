@@ -23,6 +23,7 @@ public class Abandoned : ModuleRules
             "RenderCore",
             "Slate",
             "SlateCore",
+            "UMG",
         });
     }
 }

@@ -19,6 +19,9 @@ public:
     TSoftObjectPtr<UStaticMesh> WristTerminal;
 
     UPROPERTY(Config)
+    TSoftObjectPtr<UMaterialInterface> WristSurface;
+
+    UPROPERTY(Config)
     TSoftObjectPtr<UStaticMesh> Glove;
 
     UPROPERTY(Config)

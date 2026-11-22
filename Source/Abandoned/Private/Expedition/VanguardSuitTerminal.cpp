@@ -3,7 +3,11 @@
 
 #include "Expedition/VanguardSession.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
-#include "Engine/Canvas.h"
+#include "Components/WidgetComponent.h"
+#include "Styling/CoreStyle.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/SBoxPanel.h"
+#include "Widgets/Text/STextBlock.h"
 #include "Engine/World.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -61,6 +65,25 @@ void AVanguardCharacter::CreateWristTerminal()
     WristSleeve->SetRelativeRotation(FRotationMatrix::MakeFromX(FVector(0, -27, -8)).Rotator());
     WristGlove = MakePart(TEXT("WristGlove"), FVector(-7.6, 13, 1.6), FVector::OneVector);
 
+    // Mount the display just above the recessed EQP-01 glass. The lower edge tilts towards the wearer.
+    WristDisplay = CreateDefaultSubobject<UWidgetComponent>(TEXT("WristDisplay"));
+    WristDisplay->SetupAttachment(WristCasing);
+    WristDisplay->SetRelativeLocation(FVector(-46, 84, 51));
+    WristDisplay->SetRelativeRotation(FRotationMatrix::MakeFromXZ(FVector(0, 48, 11), FVector(0, -11, 48)).Rotator());
+    WristDisplay->SetRelativeScale3D(FVector(0.137));
+    WristDisplay->SetWidgetSpace(EWidgetSpace::World);
+    WristDisplay->SetDrawSize(FVector2D(512, 336));
+    WristDisplay->SetPivot(FVector2D::ZeroVector);
+    WristDisplay->SetBlendMode(EWidgetBlendMode::Opaque);
+    WristDisplay->SetBackgroundColor(FLinearColor::Black);
+    WristDisplay->SetManuallyRedraw(true);
+    WristDisplay->SetWindowFocusable(false);
+    WristDisplay->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    WristDisplay->SetCanEverAffectNavigation(false);
+    WristDisplay->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::FirstPerson);
+    WristDisplay->SetOnlyOwnerSee(true);
+    WristDisplay->SetCastShadow(false);
+    WristDisplay->SetVisibility(false);
     WristRoot->SetVisibility(false);
 }
 
@@ -74,6 +97,36 @@ void AVanguardCharacter::ConfigureWristTerminal()
     WristGlove->SetRelativeScale3D(FVector(Suit.GloveScale));
     WristSleeve->SetStaticMesh(Suit.Sleeve.LoadSynchronous());
     WristSleeve->SetMaterial(0, Suit.Finish.LoadSynchronous());
+    if (!DisplayBody.IsValid())
+    {
+        if (UMaterialInterface* Surface = Suit.WristSurface.LoadSynchronous())
+        {
+            WristDisplay->SetMaterial(0, Surface);
+        }
+        WristDisplay->SetSlateWidget(
+            SNew(SBox).Padding(FMargin(14, 10)).Visibility(EVisibility::HitTestInvisible)
+            [
+                SNew(SVerticalBox)
+                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)
+                [
+                    SAssignNew(DisplayHeading, STextBlock)
+                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 30))
+                    .ColorAndOpacity(FLinearColor(0.45f, 0.88f, 0.77f))
+                ]
+                + SVerticalBox::Slot().AutoHeight()
+                [
+                    SAssignNew(DisplayPrimary, STextBlock)
+                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 40))
+                    .ColorAndOpacity(FLinearColor(0.38f, 0.72f, 0.56f))
+                ]
+                + SVerticalBox::Slot().AutoHeight()
+                [
+                    SAssignNew(DisplayBody, STextBlock)
+                    .Font(FCoreStyle::GetDefaultFontStyle("Regular", 28))
+                    .ColorAndOpacity(FLinearColor(0.86f, 0.93f, 0.85f))
+                ]
+            ]);
+    }
 }
 
 void AVanguardCharacter::BindWristTerminalInput(UEnhancedInputComponent& Input)
@@ -133,17 +186,29 @@ void AVanguardCharacter::UpdateWristTerminal(const UVanguardRouteStateComponent&
 
     const auto Reading = Route.GetSuitTelemetry();
     const TCHAR* Heading = TEXT("SUIT / STATUS");
+    FString Primary;
     FString Body;
     switch (*Page)
     {
     case SuitPage::Status:
-        Body = FString::Printf(TEXT("OXYGEN  %.1f%%\nDOSE    %.1f%% OF LIMIT"), Reading.OxygenPercent, Reading.DosePercent);
+        Primary = FString::Printf(TEXT("OXYGEN  %.1f%%"), Reading.OxygenPercent);
+        Body = FString::Printf(TEXT("DOSE    %.1f%% OF LIMIT"), Reading.DosePercent);
         if (Reading.Forecast)
         {
             const auto& Forecast = *Reading.Forecast;
-            Body += FString::Printf(TEXT("\n%s IN %d s"),
-                Forecast.FlareActive ? TEXT("FLARE ENDS") : TEXT("NEXT FLARE"),
-                FMath::CeilToInt(Forecast.SecondsToChange));
+            const int32 Seconds = FMath::CeilToInt(Forecast.SecondsToChange);
+            if (Forecast.FlareActive)
+            {
+                using Abandoned::Domain::Expedition::RadiationPosition;
+                Heading = Forecast.Position == RadiationPosition::Sheltered ? TEXT("FLARE / SHELTERED")
+                    : Forecast.Position == RadiationPosition::Exposed ? TEXT("FLARE / EXPOSED") : TEXT("FLARE / SAFE APPROACH");
+                Body = Primary + TEXT("\n") + Body;
+                Primary = FString::Printf(TEXT("ENDS IN  %d s"), Seconds);
+            }
+            else
+            {
+                Body += FString::Printf(TEXT("\nNEXT FLARE IN %d s"), Seconds);
+            }
         }
         break;
     case SuitPage::Signal:
@@ -174,29 +239,17 @@ void AVanguardCharacter::UpdateWristTerminal(const UVanguardRouteStateComponent&
         }
         break;
     }
-    WristHeading = Heading;
-    WristReadout = MoveTemp(Body);
-}
-
-void AVanguardHUD::DrawWristReadout(const AVanguardCharacter& Player)
-{
-    if (!Player.IsWristTerminalOpen() || !Player.WristCasing->IsVisible())
+    if (DisplayBody.IsValid() && (WristHeading != Heading || WristPrimary != Primary || WristReadout != Body))
     {
-        return;
+        WristHeading = Heading;
+        WristPrimary = MoveTemp(Primary);
+        WristReadout = MoveTemp(Body);
+        DisplayHeading->SetText(FText::FromString(WristHeading));
+        DisplayPrimary->SetVisibility(WristPrimary.IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible);
+        DisplayPrimary->SetText(FText::FromString(WristPrimary));
+        DisplayBody->SetText(FText::FromString(WristReadout));
+        WristDisplay->RequestRenderUpdate();
     }
-    // Project the face of the camera-mounted display so text stays crisp in the dark and while moving.
-    // Inset corners on the recessed EQP-01 glass, measured in imported mesh space (cm).
-    const FTransform& Face = Player.WristCasing->GetComponentTransform();
-    const FVector Top = Project(Face.TransformPosition(FVector(-48, 82, 49)));
-    const FVector Bottom = Project(Face.TransformPosition(FVector(-48, 93, 1)));
-    const float Height = static_cast<float>(Bottom.Y - Top.Y);
-    if (Height <= 0.0f)
-    {
-        return;
-    }
-    const float Scale = Height / 110.0f;
-    DrawText(Player.WristHeading, FLinearColor(0.49f, 0.95f, 0.88f), Top.X, Top.Y, nullptr, Scale * 1.12f);
-    DrawText(Player.WristReadout, FLinearColor(0.9f, 0.95f, 0.98f), Top.X, Top.Y + Height * 0.22f, nullptr, Scale);
 }
 
 void AVanguardHUD::DrawHUD()
@@ -213,7 +266,10 @@ void AVanguardHUD::DrawHUD()
     const TCHAR* Location = Reading.AtStation ? TEXT("VANGUARD / OUTPOST 01") : TEXT("PASSAGE / VANGUARD OUTPOST 01");
     DrawText(Dosimeter ? TEXT("ENERGY TIER / EXTERIOR GALLERY") : Location,
         FLinearColor::White, 24.0f, 24.0f, nullptr, 1.2f);
-    DrawText(FString::Printf(TEXT("Suit oxygen: %.0f%%"), Reading.OxygenPercent), FLinearColor::White, 24.0f, 54.0f);
+    if (!Player->IsWristTerminalOpen())
+    {
+        DrawText(FString::Printf(TEXT("Suit oxygen: %.0f%%"), Reading.OxygenPercent), FLinearColor::White, 24.0f, 54.0f);
+    }
     if (Player->Segment->StationLoadFailed())
     {
         DrawText(TEXT("Station unavailable. [R] Retry airlock"), FLinearColor::Yellow, 24.0f, 80.0f);
@@ -269,5 +325,4 @@ void AVanguardHUD::DrawHUD()
     {
         DrawText(TEXT("Could not save resupply record. Previous data preserved."), FLinearColor::White, 24.0f, 270.0f);
     }
-    DrawWristReadout(*Player);
 }
