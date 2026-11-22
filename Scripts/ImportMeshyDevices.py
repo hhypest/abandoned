@@ -24,6 +24,8 @@ inventory = Path(__file__).resolve().parents[1] / "Docs" / "AssetInventory.csv"
 with inventory.open(encoding="utf-8") as file:
     devices = list(csv.DictReader(file))
 for row in devices:
+    if not row["unreal_folder"]:
+        continue  # Reference-only assets await admission to the game.
     code = row["device"]
     if "-MeshyEquipmentOnly" in unreal.SystemLibrary.get_command_line().split() and not code.startswith("EQP-"):
         continue

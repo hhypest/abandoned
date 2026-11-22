@@ -1,0 +1,14 @@
+Abandoned — FosTech models and textures
+Attribution: hhypest (Abandoned project owner), created using Meshy.
+License: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+Source and Meshy task identifiers: https://github.com/hhypest/abandoned/blob/main/Docs/AssetInventory.csv
+
+Included in the game:
+DEV-01A, DEV-01B, DEV-02, DEV-03, DEV-04, DEV-05, DEV-06, DEV-07, DEV-12, DEV-13, EQP-01, EQP-05.
+The assets were imported into Unreal Engine and placed at gameplay scale.
+DEV-02 was split into a housing and moving plate; the cut edges were capped.
+The EQP-01 strap was removed and the cut openings were capped.
+The right-hand EQP-05 instance mirrors the left glove.
+
+The same license applies to the separately reviewed EQP-00 body.

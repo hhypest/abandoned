@@ -4,6 +4,8 @@
 #include "Expedition/VanguardRoute.h"
 #include "Expedition/VanguardRouteLayout.h"
 #include "Engine/StaticMesh.h"
+#include "Components/WidgetComponent.h"
+#include "Widgets/Text/STextBlock.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Expedition/VanguardSession.h"
 #include "Verification/RadiationVerificationSession.h"
@@ -48,10 +50,16 @@ bool UVanguardWristTerminalVerification::Fail(const TCHAR* Reason)
 
 bool UVanguardWristTerminalVerification::CheckExposure(const AVanguardCharacter& Player, double DosePercent)
 {
-    if (!Player.IsWristTerminalOpen() || !Player.WristCasing->IsVisible() ||
-        !Player.WristReadout.Contains(FString::Printf(TEXT("DOSE    %.1f%%"), DosePercent)))
+    if (!Player.IsWristTerminalOpen() || !Player.WristCasing->IsVisible() || !Player.WristDisplay->IsVisible() || !Player.DisplayBody.IsValid() ||
+        !Player.DisplayHeading->GetText().EqualTo(FText::FromString(TEXT("FLARE / EXPOSED"))) ||
+        !Player.DisplayPrimary->GetText().ToString().StartsWith(TEXT("ENDS IN")) ||
+        !Player.DisplayBody->GetText().ToString().Contains(FString::Printf(TEXT("DOSE    %.1f%%"), DosePercent)))
     {
         return Fail(TEXT("the raised wrist should display the accumulating exposure dose"));
+    }
+    if (bCapture)
+    {
+        FScreenshotRequest::RequestScreenshot(TEXT("Wrist-Terminal-Flare"), false, false);
     }
     UE_LOG(LogWristTerminal, Display, TEXT("Wrist status matched the live exposure dose."));
     return true;
@@ -86,7 +94,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
 
     const auto Shows = [&](SuitPage Page, const TCHAR* Text)
     {
-        return Player.WristTerminal.Page() == Page && Player.WristCasing->IsVisible() && Player.WristReadout.Contains(Text);
+        return Player.WristTerminal.Page() == Page && Player.WristCasing->IsVisible() && Player.WristDisplay->IsVisible() && Player.DisplayBody.IsValid() && Player.DisplayBody->GetText().ToString().Contains(Text);
     };
     const auto Capture = [&](const TCHAR* Name)
     {
@@ -99,12 +107,15 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
     switch (Phase)
     {
     case EPhase::Open:
-        if (Player.IsWristTerminalOpen() || Player.WristCasing->IsVisible())
+        if (Player.IsWristTerminalOpen() || Player.WristCasing->IsVisible() || Player.WristDisplay->IsVisible())
         {
             return Fail(TEXT("the wrist should start lowered"));
         }
         if (const auto& Visuals = *GetDefault<UVanguardMantleVisuals>();
             !Visuals.WristTerminal.IsValid() || !Visuals.Glove.IsValid() ||
+            !Player.DisplayPrimary.IsValid() || !Player.WristDisplay->GetSlateWidget().IsValid() ||
+            Player.WristDisplay->GetWidgetSpace() != EWidgetSpace::World ||
+            Player.WristDisplay->GetAttachParent() != Player.WristCasing ||
             Player.WristCasing->GetStaticMesh() != Visuals.WristTerminal.Get() ||
             Player.WristGlove->GetStaticMesh() != Visuals.Glove.Get() ||
             Player.WristCasing->GetMaterial(0) != Visuals.WristTerminal->GetMaterial(0) ||
@@ -116,7 +127,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         Phase = EPhase::Status;
         break;
     case EPhase::Status:
-        if (!Player.WristReadout.Contains(FString::Printf(TEXT("OXYGEN  %.1f%%"), Route.GetRouteState().GetOxygenPercent())) ||
+        if (!Player.DisplayPrimary->GetText().ToString().Contains(FString::Printf(TEXT("OXYGEN  %.1f%%"), Route.GetRouteState().GetOxygenPercent())) ||
             (Route.GetRouteState().AtStation() ? !Shows(SuitPage::Status, TEXT("DOSE    0.0%")) :
             !Shows(SuitPage::Status, TEXT("NEXT FLARE IN")) || Route.GetRouteState().GetOxygenPercent() >= 100.0f))
         {
@@ -209,7 +220,7 @@ bool UVanguardWristTerminalVerification::CheckStep(const AVanguardSegment& Route
         Phase = EPhase::Close;
         break;
     case EPhase::Close:
-        if (Player.IsWristTerminalOpen() || Player.WristCasing->IsVisible())
+        if (Player.IsWristTerminalOpen() || Player.WristCasing->IsVisible() || Player.WristDisplay->IsVisible())
         {
             return Fail(TEXT("toggle should lower the wrist and hide its screen"));
         }
