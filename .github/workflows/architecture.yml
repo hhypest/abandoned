@@ -38,7 +38,9 @@ jobs:
 
       - name: Test pre-merge Unreal policy with local fixtures
         shell: pwsh
-        run: ./Scripts/Test-UnrealMergeCheck.ps1
+        run: |
+          ./Scripts/Test-UnrealMergeCheck.ps1
+          ./Scripts/Test-FunctionalEvidence.ps1
 
       - name: Reject an untrusted revision before Unreal setup
         shell: pwsh

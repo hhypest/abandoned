@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ФосТех · экраны EQP-01</title>
+<style>
+  * {box-sizing:border-box}
+  :root {color-scheme:light;--sans:Barlow,Bahnschrift,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",Consolas,monospace}
+  body {margin:0;background:#e4e2d8;color:#202827;font-family:var(--sans)}
+  main {max-width:1560px;margin:auto;padding:4vw 3.6vw}
+  header {border-top:5px solid #27312e;border-bottom:1px solid #92958a;display:flex;align-items:baseline;justify-content:space-between;margin-bottom:30px;padding:16px 0 20px;gap:15px}
+  h1,h2,p {margin:0}h1 {font-size:clamp(24px,3vw,44px);font-weight:600;letter-spacing:-.035em}
+  .brand,.unit,.counter {font:600 14px var(--mono);letter-spacing:.06em}
+  .brand {white-space:nowrap}.grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2.1vw}
+  article {container-type:inline-size}
+  .bezel {padding:3.4cqw;border-radius:5cqw;background:linear-gradient(153deg,#646b63,#373e39 46%,#1c2421);box-shadow:inset 0 1px 2px #adb0a4,0 3px 5px #1d2a2338}
+  .screen {--lit:#c7f4de;display:flex;flex-direction:column;justify-content:space-between;aspect-ratio:1.50;padding:4.3cqw;color:var(--lit);border:1px solid #07120e;border-radius:2.7cqw;background:linear-gradient(145deg,#1b322c,#0c1e19 72%);box-shadow:inset 0 2px 7px #0009}
+  .screen.warn {--lit:#ffdb98;background:linear-gradient(145deg,#392e20,#211c15 75%)}
+  .bar {display:flex;align-items:center;justify-content:space-between;gap:1cqw;font:600 3.2cqw var(--mono);letter-spacing:.025em;padding-bottom:2.5cqw;border-bottom:1px solid currentColor}
+  .main-reading {font-size:17cqw;line-height:.98;font-weight:600;letter-spacing:-.07em;font-variant-numeric:tabular-nums}
+  .main-reading span {font-size:6cqw;letter-spacing:0;padding-left:1cqw}
+  .measure {font:600 3.6cqw var(--mono);letter-spacing:.04em}
+  .meter {height:2.6cqw;border:1px solid currentColor;background:repeating-linear-gradient(90deg,var(--lit) 0 5%,transparent 5% 6%) left/94% 100% no-repeat}
+  .footer {display:flex;justify-content:space-between;align-items:center;font:500 3.4cqw var(--mono);gap:2cqw}
+  .warn .measure {background:var(--lit);color:#30271b;align-self:flex-start;padding:.7cqw 1.2cqw}
+  .archive-title {font-size:6.8cqw;font-weight:600;line-height:1.06;letter-spacing:-.02em}
+  .logline {font-size:4.5cqw;line-height:1.15}
+  .caption {margin:17px 0 0;border-top:1px solid #9b9e92;padding-top:12px}
+  h2 {font-size:clamp(18px,1.7vw,28px);font-weight:600}
+  .caption p {font-size:clamp(14px,1.12vw,19px);line-height:1.38;margin:7px 0 0;color:#414a44;max-width:37ch}
+  @media(max-width:790px){main{max-width:560px;padding:26px 18px}.grid{grid-template-columns:1fr;gap:25px}header{align-items:start;flex-direction:column}.brand{font-size:12px}}
+</style>
+<main>
+  <header><h1>Наручный терминал</h1><p class="brand">ФосТех / EQP-01</p></header>
+  <div class="grid">
+    <article>
+      <div class="bezel"><div class="screen" aria-label="Статус. Запас кислорода 94 процента, доза 6 процентов от предела.">
+        <div class="bar"><span>СКАФАНДР</span><span>СТАТУС</span></div>
+        <div><div class="measure">КИСЛОРОД</div><div class="main-reading">94<span>%</span></div></div>
+        <div class="meter" aria-hidden="true"></div><div class="footer"><span>ДОЗА</span><strong>6% ПРЕДЕЛА</strong></div>
+      </div></div>
+      <div class="caption"><h2>Состояние</h2><p>Один взгляд на запястье даёт запас кислорода. Доза остаётся на второй строке.</p></div>
+    </article>
+    <article>
+      <div class="bezel"><div class="screen warn" aria-label="Идёт вспышка. До конца четыре секунды. Игрок в укрытии.">
+        <div class="bar"><span>ДОЗИМЕТР</span><span>▲ ВСПЫШКА</span></div>
+        <div><div class="measure">ДО КОНЦА</div><div class="main-reading">04<span>с</span></div></div>
+        <div class="footer"><span>ПОЗИЦИЯ</span><strong>В УКРЫТИИ</strong></div>
+      </div></div>
+      <div class="caption"><h2>Вспышка</h2><p>Таймер сменяет главное число. Надпись и треугольник дублируют янтарный сигнал.</p></div>
+    </article>
+    <article>
+      <div class="bezel"><div class="screen" aria-label="Архив. Третья запись из трёх. Станция Авангард, кислород пополнен.">
+        <div class="bar"><span>АРХИВ</span><span>03 / 03</span></div>
+        <div><div class="measure">СТАНЦИЯ 01</div><div class="archive-title">Кислород<br>пополнен</div></div>
+        <div class="logline">Резервуар заполнен.</div>
+        <div class="footer"><span>АВАНГАРД</span><span>◀ &nbsp; ▶</span></div>
+      </div></div>
+      <div class="caption"><h2>Архив</h2><p>Аппаратные клавиши листают записи. Индекс указывает место записи в журнале скафандра.</p></div>
+    </article>
+  </div>
+</main>
+</html>

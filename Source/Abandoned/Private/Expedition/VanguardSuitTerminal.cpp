@@ -54,12 +54,12 @@ void AVanguardCharacter::CreateWristTerminal()
         Part->SetVisibility(false);
         return Part;
     };
-    // EQP-01's glass faces local +Y. Its strap surrounds the forearm behind the display.
+    // The EQP-01 glass faces local +Y. Seat the rear plate against the raised left sleeve.
     WristCasing = MakePart(TEXT("WristCasing"), FVector::ZeroVector, FVector(0.15));
     WristCasing->SetRelativeRotation(FRotator(0, 90, 0));
-    WristSleeve = MakePart(TEXT("WristSleeve"), FVector(3, -1, -3), FVector(1.2, 1, 1));
+    WristSleeve = MakePart(TEXT("WristSleeve"), FVector(-7.6, 3, 0), FVector(1.2, 1, 1));
     WristSleeve->SetRelativeRotation(FRotationMatrix::MakeFromX(FVector(0, -27, -8)).Rotator());
-    WristGlove = MakePart(TEXT("WristGlove"), FVector(3, 14, -2), FVector::OneVector);
+    WristGlove = MakePart(TEXT("WristGlove"), FVector(-7.6, 13, 1.6), FVector::OneVector);
 
     WristRoot->SetVisibility(false);
 }

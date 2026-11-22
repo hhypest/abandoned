@@ -88,10 +88,12 @@ try {
         $report.Products.$dll -ne (Get-FileHash -LiteralPath "$run/Project/$dll").Hash) {
         throw 'Build evidence does not match the approved revision, worker, base and DLL.'
     }
+    . "$PSScriptRoot/TrustedBuild/FunctionalTests.ps1"
+    Assert-TrustedFunctionalReport $run $ApprovedHead $report.Products.$dll $report.Functional
     if ((Read-PR).base.sha -ne $base) { throw 'The base moved during the build. Update and review the PR again.' }
 } catch {
     if (!$LocalOnly) { Publish-Status failure 'Build failed or the reviewed PR changed. See the worker report.' }
     throw
 }
-if (!$LocalOnly) { Publish-Status success 'Built AbandonedEditor Win64 Development at this SHA under the dedicated Windows account' }
+if (!$LocalOnly) { Publish-Status success 'Built AbandonedEditor Win64 and passed both Vulkan functional tests for this SHA' }
 Write-Output "$run/report.json"

@@ -4,6 +4,7 @@
 #include "Components/BoxComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "Expedition/VanguardRoute.h"
+#include "Expedition/VanguardSession.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Expedition/VanguardRouteLayout.h"
 #include "HAL/PlatformMisc.h"
@@ -171,6 +172,12 @@ void UVanguardRouteVerification::CheckPassage(AVanguardCharacter& Player, float 
         }
         ++FlashlightStep;
     }
+    else if (!Player.IsFlashlightOn())
+    {
+        UE_LOG(LogVanguardRouteTest, Error, TEXT("Vanguard verification failed: shoulder light switched off in the passage after the F sequence."));
+        Finish(false);
+        return;
+    }
     if (auto* Mantle = MantleCheck.Get(); Mantle && !Mantle->CheckStep(Player, DeltaSeconds))
     {
         // The mantle check has already reported the failure and requested exit.
@@ -223,6 +230,18 @@ void UVanguardRouteVerification::CheckStation(const AVanguardSegment& Route, AVa
     const FVector From(Cabinet.X - 170.0, Cabinet.Y, SpawnZ);
     const FVector Eye = From + FVector(0, 0, Abandoned::MovementProfile::CameraHeight);
     const float Prior = Route.GetRouteState().GetOxygenPercent();
+    if (FParse::Param(FCommandLine::Get(), TEXT("VerifyEntryCourse")))
+    {
+        const UVanguardSession* Session = UVanguardSession::Find(Player);
+        if (!Session || !Session->Suit.IsFlashlightOn() || !Player.IsFlashlightOn())
+        {
+            UE_LOG(LogVanguardRouteTest, Error, TEXT("Vanguard verification failed: station arrival before resupply, session %d, suit light %d, shoulder light %d."),
+                Session != nullptr, Session && Session->Suit.IsFlashlightOn(), Player.IsFlashlightOn());
+            Finish(false);
+            return;
+        }
+        UE_LOG(LogVanguardRouteTest, Display, TEXT("Station arrival: suit and shoulder light both on before resupply."));
+    }
     namespace Airlock = Abandoned::Verification::StationAirlock;
     if (Airlock::Requested() && !Airlock::CheckArrival(Route, Player))
     {

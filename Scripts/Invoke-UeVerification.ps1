@@ -94,7 +94,9 @@ $entryFinish = @('Entry test: reset restored the weight lock', 'Entry test: Weig
                  'Passage ledge stopped walking, a short Space jump and a crouch jump.',
                  'Passage climb rejected an obstructed landing.', 'Passage handhold verified',
                  'Passage climb verified: held Space and landed on top.') + $routeSuccess
-$courseSuccess = @('Entry test: crossed Stairs exit.', 'Entry test: crossed Button exit.') + $entryFinish
+$courseSuccess = @('Entry test: first cube snapped to its Stairs support.',
+                   'Entry test: crossed Stairs exit.', 'Entry test: crossed Button exit.',
+                   'Station arrival: suit and shoulder light both on before resupply.') + $entryFinish
 $dev20Map = "${entry}?game=/Script/Abandoned.PortalLabGameMode?Dev20Run=1"
 $dev20Transit = @('34 kg Chaos mass and carry slowdown confirmed.', 'loss of portal power returned the same item to its cradle.',
                   "occupied exit kept the sole unit in the carrier's grip.", 'same 34 kg body remained in the grip after the portal.', "DEV-20 departed the portal bay in the player's grip.")
@@ -128,7 +130,7 @@ $scenarios = @{
     VanguardRouteNegative = @{
         Map = "${vanguard}?Chamber=Vanguard"
         Flag = '-VerifyVanguard'
-        ExpectedError = 'LogVanguardRouteTest: Error: Vanguard verification failed: prior oxygen 100.00, current 100.00.'
+        ExpectedError = 'LogVanguardRouteTest: Error: Vanguard verification failed: oxygen 100.00 -> 100.00, resupplied 1, flashlight on 0.'
         Success = @('Vanguard verification passed')
     }
     VanguardOxygenRecovery = @{
@@ -239,6 +241,7 @@ $scenarios = @{
     EntryCourse = @{
         Map = $entry
         Flag = '-VerifyEntryCourse'
+        RenderOffscreen = $true
         CaptureFlag = '-CaptureVanguard'
         Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
         QuietChambers = @()
@@ -247,6 +250,7 @@ $scenarios = @{
     EntryCourseAlternate = @{
         Map = $entry
         Flag = '-VerifyEntryCourse'
+        RenderOffscreen = $true
         ExtraFlag = @('-VerifyEntryAlternatePlate', '-VerifyEntryAlternateWeight')
         CaptureFlag = '-CaptureEntryCourse'
         Chambers = @('Stairs', 'Button', 'Weight', 'Balance')
@@ -398,6 +402,7 @@ function Invoke-Scenario($name, $definition, $profile) {
         Name = $name
         Map = $definition.Map
         FixedStepFps = if (!$definition.RealTime) { $FramesPerSecond } else { $null }
+        RenderOffscreen = [bool]$definition.RenderOffscreen
         Flag = $definition.Flag
         Log = $log
         ExitCode = $null
@@ -419,6 +424,8 @@ function Invoke-Scenario($name, $definition, $profile) {
     $start = [System.Diagnostics.ProcessStartInfo]::new($executable)
     $start.UseShellExecute = $false
     $start.WorkingDirectory = $workingDir
+    # A packaged functional course drives the controller itself. Keep desktop input out of the run.
+    if ($result.RenderOffscreen) { $start.ArgumentList.Add('-RenderOffscreen') }
     if ($target -eq 'Editor') { $start.ArgumentList.Add((Join-Path $repo 'Abandoned.uproject')) }
     # Exercise the configured startup map for the packaged campaign, including checkpoint restore.
     if ($target -eq 'Editor' -or $definition.Map -ne $entry) { $start.ArgumentList.Add($definition.Map) }
