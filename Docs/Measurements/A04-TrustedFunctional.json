@@ -252,5 +252,22 @@
       "Abandoned.Verification.AirlockSessionIsolation",
       "Abandoned.Verification.RadiationTerminalReplay"
     ]
+  },
+  "OfflinePrivateCacheReplay": {
+    "Commit": "5997b6644871b22610f4a7deace735120d27614e",
+    "ReportSHA256": "8B04D1AF03BE30B5CDA30853E670FDF3FF31DCBB2A22025456BFE1EC7EB22B47",
+    "ModuleSHA256": "E0813EA78D2BC02FE64BBA38E576C60DC66F970540D0C2ADDBBD99EFB4602E8C",
+    "Tests": [
+      "Abandoned.Verification.AirlockSessionIsolation",
+      "Abandoned.Verification.RadiationTerminalReplay"
+    ],
+    "Cache": "Previously populated private filesystem DDC. Zen local, ZenShared, Shared and Cloud disabled; no loopback reader. New editor process and profile."
+  },
+  "ColdPrivateCache": {
+    "Commit": "5997b6644871b22610f4a7deace735120d27614e",
+    "LimitSecondsTested": 1800,
+    "Result": "Timed out during first Vulkan global shader compilation, before UE Automation discovery. Neither functional test ran in this cold attempt.",
+    "CurrentColdLimitSeconds": 7200,
+    "NewLimitTestedFromEmpty": false
   }
 }

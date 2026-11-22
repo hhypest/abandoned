@@ -122,7 +122,9 @@ try {
         . "$PSScriptRoot/FunctionalTests.ps1"
         $dll = 'Binaries/Win64/UnrealEditor-Abandoned.dll'
         $directory = Join-Path $run 'Functional'
-        $editor = Invoke-UEAutomationEditor $EngineRoot $project $directory $RequiredFunctionalTests 1800 -PrivateDDC -ReadOnlyLocalShaderCache:$ReadOnlyLocalShaderCache
+        # A source engine without a DDC pack builds global Vulkan shaders before it discovers tests.
+        $editorTimeoutSeconds = if ($ReadOnlyLocalShaderCache) { 1800 } else { 7200 }
+        $editor = Invoke-UEAutomationEditor $EngineRoot $project $directory $RequiredFunctionalTests $editorTimeoutSeconds -PrivateDDC -ReadOnlyLocalShaderCache:$ReadOnlyLocalShaderCache
         $digest = Read-UEAutomationReport $directory $RequiredFunctionalTests $editor
         if ((Invoke-Git rev-parse HEAD) -cne $report.Commit -or (Invoke-Git status --porcelain --untracked-files=all) -or
             (Get-FileHash -LiteralPath "$project/$dll").Hash -cne $report.Products[$dll]) {
