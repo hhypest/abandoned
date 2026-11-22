@@ -92,6 +92,21 @@ void UEntryChamberVerification::Advance(EPhase Next)
 
 void UEntryChamberVerification::Fail(const TCHAR* Reason)
 {
+    if (Phase == EPhase::PlaceFirst || Phase == EPhase::PlaceUpper)
+    {
+        const auto* Player = Cast<ATrainingChamberCharacter>(UGameplayStatics::GetPlayerPawn(this, 0));
+        const int32 Index = Phase == EPhase::PlaceFirst ? 0 : UpperIndex;
+        if (Player && Cubes.IsValidIndex(Index) && Cubes[Index].IsValid())
+        {
+            const APuzzleCube* Expected = Cubes[Index].Get();
+            const auto& Preview = Player->GetPlacementPreview();
+            UE_LOG(LogEntryChamberTest, Display,
+                TEXT("Placement at failure: player %s, aim %s, expected cube %s at %s, held %s, speed %.1f cm/s, support %s, prompt %s."),
+                *Player->GetActorLocation().ToCompactString(), *Player->GetViewRotation().ToCompactString(),
+                *GetNameSafe(Expected), *Expected->GetActorLocation().ToCompactString(), *GetNameSafe(Player->GetHeldCube()),
+                Expected->GetBody()->GetPhysicsLinearVelocity().Size(), *GetPathNameSafe(Preview.GetPreviewSupport()), Preview.PlacementPrompt());
+        }
+    }
     UE_LOG(LogEntryChamberTest, Error, TEXT("Entry test failed: %s (%s, phase %d)."),
         Reason, *Abandoned::Infrastructure::Expedition::WriteSegment(Segment), static_cast<int32>(Phase));
     SetComponentTickEnabled(false);
@@ -194,11 +209,15 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
         const FVector Start = Target - Approach * Forward;
         AimFrom(FVector(Start.X, Start.Y, Layout.Spawn.Z), Target);
     };
-    const auto PlaceWhenAligned = [&](const UBoxComponent* Support, EPhase Next)
+    const auto PlaceWhenAligned = [&](const APuzzleCube& Expected, const UBoxComponent* Support, EPhase Next)
     {
-        const APuzzleCube* Held = Player.GetHeldCube();
-        if (Held && Player.GetPlacementPreview().GetPreviewSupport() == Support && !Player.GetPlacementPreview().IsPreviewBlocked() &&
-            Held->GetBody()->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(28.0))
+        if (Player.GetHeldCube() != &Expected)
+        {
+            Fail(TEXT("grip changed while waiting to place the cube"));
+            return;
+        }
+        if (Player.GetPlacementPreview().GetPreviewSupport() == Support && !Player.GetPlacementPreview().IsPreviewBlocked() &&
+            Expected.GetBody()->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(28.0))
         {
             Input.Press(Controller, EKeys::E);
             Advance(Next);
@@ -403,7 +422,7 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
         Advance(EPhase::PlaceFirst);
         break;
     case EPhase::PlaceFirst:
-        PlaceWhenAligned(bStairs ? Cubes[1]->GetBody() : Chamber.GetPlate(ExitPlateIndex), EPhase::CheckFirst);
+        PlaceWhenAligned(First, bStairs ? Cubes[1]->GetBody() : Chamber.GetPlate(ExitPlateIndex), EPhase::CheckFirst);
         break;
     case EPhase::CheckFirst:
         if (First.GetSupport() != (bStairs ? Cubes[1]->GetBody() : Chamber.GetPlate(ExitPlateIndex)))
@@ -413,6 +432,7 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
         }
         if (bStairs)
         {
+            UE_LOG(LogEntryChamberTest, Display, TEXT("Entry test: first cube snapped to its Stairs support."));
             const APuzzleCube& Low = *Cubes[2];
             PlacePlayer(Player, FTransform(FRotator::ZeroRotator, Low.GetActorLocation() + FVector(-6, 0,
                 Low.GetHalfSize() + Abandoned::MovementProfile::StandingHalfHeight + 1)));
@@ -476,7 +496,7 @@ void UEntryChamberVerification::Check(ATrainingChamberGameMode& Chamber, ATraini
         break;
     }
     case EPhase::PlaceUpper:
-        PlaceWhenAligned(UpperIndex == 3 ? Cubes[2]->GetBody() : First.GetBody(), EPhase::CheckUpper);
+        PlaceWhenAligned(*Cubes[UpperIndex], UpperIndex == 3 ? Cubes[2]->GetBody() : First.GetBody(), EPhase::CheckUpper);
         break;
     case EPhase::CheckUpper:
         if (Cubes[UpperIndex]->GetSupport() != (UpperIndex == 3 ? Cubes[2]->GetBody() : First.GetBody()))

@@ -1,6 +1,6 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$EngineRoot, [string]$Commit, [int]$ReviewedPullRequest)
+param([Parameter(Mandatory)][string]$EngineRoot, [string]$Commit, [int]$ReviewedPullRequest, [switch]$FunctionalTests)
 $ErrorActionPreference = 'Stop'
 $run = (Get-Location).Path
 $project = Join-Path $run 'Project'
@@ -113,6 +113,27 @@ try {
     }
     if (Invoke-Git status --porcelain --untracked-files=all) { throw 'Build changed the checked-out sources.' }
     $report.Steps[$step] = 0
+    if ($FunctionalTests) {
+        $step = 'FunctionalTests'
+        . "$PSScriptRoot/FunctionalTests.ps1"
+        $dll = 'Binaries/Win64/UnrealEditor-Abandoned.dll'
+        $directory = Join-Path $run 'Functional'
+        $editor = Invoke-UEAutomationEditor $EngineRoot $project $directory $RequiredFunctionalTests 300
+        $digest = Read-UEAutomationReport $directory $RequiredFunctionalTests $editor
+        if ((Invoke-Git rev-parse HEAD) -cne $report.Commit -or (Invoke-Git status --porcelain --untracked-files=all) -or
+            (Get-FileHash -LiteralPath "$project/$dll").Hash -cne $report.Products[$dll]) {
+            throw 'The tested checkout or module changed during UE Automation.'
+        }
+        $report.Functional = [ordered]@{
+            Commit = $report.Commit
+            RunId = Split-Path $run -Leaf
+            ModuleSha256 = $report.Products[$dll]
+            ReportSha256 = $digest
+            Editor = $editor
+            Tests = $RequiredFunctionalTests
+        }
+        $report.Steps[$step] = 0
+    }
     $report.Result = 'Passed'
 } catch {
     if (!$report.Steps.Contains($step)) { $report.Steps[$step] = 1 }

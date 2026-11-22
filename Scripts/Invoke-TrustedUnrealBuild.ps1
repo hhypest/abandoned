@@ -6,7 +6,8 @@ param(
     [ValidatePattern('^[0-9a-fA-F]{40}$')][string]$Commit,
     [ValidateRange(1,2147483647)][int]$ReviewedPullRequest,
     [ValidatePattern('^[a-f0-9]{32}$')][string]$RunId,
-    [string]$ExpectedWorkerSid
+    [string]$ExpectedWorkerSid,
+    [switch]$FunctionalTests
 )
 $ErrorActionPreference = 'Stop'
 if (!$IsWindows) { throw 'A Windows x64 build host is required.' }
@@ -60,6 +61,7 @@ if ($ReviewedPullRequest) {
     $info.ArgumentList.Add('-ReviewedPullRequest')
     $info.ArgumentList.Add($ReviewedPullRequest.ToString())
 }
+if ($FunctionalTests -or $ReviewedPullRequest) { $info.ArgumentList.Add('-FunctionalTests') }
 Write-Host "Build workspace: $run"
 $child = [Diagnostics.Process]::Start($info)
 try {

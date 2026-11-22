@@ -33,6 +33,10 @@ for row in devices:
         split = root / "MeshySources" / "Assembly" / source.name
         runpy.run_path(str(Path(__file__).with_name("SplitMeshyPlate.py")))["split_plate"](source, split)
         source = split
+    elif code == "EQP-01":
+        casing = root / "MeshySources" / "Assembly" / source.name
+        runpy.run_path(str(Path(__file__).with_name("RemoveWristStrap.py")))["remove_wrist_strap"](source, casing)
+        source = casing
     with source.open("rb") as stream:
         stream.seek(12)
         length, _ = struct.unpack("<II", stream.read(8))
@@ -46,7 +50,12 @@ for row in devices:
     task.automated = True
     task.replace_existing = True
     task.save = True
-    if not assets.list_assets(folder):
+    existing = assets.list_assets(folder)
+    # Upgrade existing EQP-01 game packages produced before the strap was removed.
+    old_casing = code == "EQP-01" and any(
+        isinstance(mesh, unreal.StaticMesh) and mesh.get_num_triangles(0) == int(row["source_triangles"])
+        for mesh in (unreal.load_asset(path) for path in existing))
+    if not existing or old_casing:
         unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
     objects = [unreal.load_asset(path) for path in assets.list_assets(folder)]
     static_meshes = [o for o in objects if isinstance(o, unreal.StaticMesh)]
