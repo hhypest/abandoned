@@ -14,12 +14,13 @@ pipeline = unreal.load_asset("/Interchange/Pipelines/DefaultGLTFAssetsPipeline")
 common = pipeline.get_editor_property("common_meshes_properties")
 for key in ("recompute_normals", "recompute_tangents", "remove_degenerates"):
     common.set_editor_property(key, False)
-pipeline.mesh_pipeline.set_editor_property("build_nanite", False)
+pipeline.mesh_pipeline.set_editor_property("build_nanite", True)
 pipeline.mesh_pipeline.set_editor_property("collision", False)
 stack = unreal.InterchangePipelineStackOverride()
 stack.override_pipelines = [unreal.SoftObjectPath(pipeline.get_path_name()),
                             unreal.SoftObjectPath("/Interchange/Pipelines/DefaultGLTFPipeline.DefaultGLTFPipeline")]
 
+configure_nanite = runpy.run_path(str(Path(__file__).with_name("ConfigureFosTechNanite.py")))["configure_mesh"]
 inventory = Path(__file__).resolve().parents[1] / "Docs" / "AssetInventory.csv"
 with inventory.open(encoding="utf-8") as file:
     devices = list(csv.DictReader(file))
@@ -59,7 +60,7 @@ for row in devices:
     existing = assets.list_assets(folder)
     # Upgrade existing EQP-01 game packages produced before the strap was removed.
     old_casing = code == "EQP-01" and any(
-        isinstance(mesh, unreal.StaticMesh) and mesh.get_num_triangles(0) == int(row["source_triangles"])
+        isinstance(mesh, unreal.StaticMesh) and mesh.get_static_mesh_description(0).get_triangle_count() == int(row["source_triangles"])
         for mesh in (unreal.load_asset(path) for path in existing))
     if not existing or old_casing:
         # For the casing upgrade keep the installed PBR instance and all three maps loaded.
@@ -71,10 +72,11 @@ for row in devices:
     static_meshes = [o for o in objects if isinstance(o, unreal.StaticMesh)]
     if len(static_meshes) != len(gltf["meshes"]):
         raise RuntimeError(f"{code}: unexpected mesh count {len(static_meshes)}")
-    count = sum(mesh.get_num_triangles(0) for mesh in static_meshes)
+    count = sum(mesh.get_static_mesh_description(0).get_triangle_count() for mesh in static_meshes)
     textures = [o for o in objects if isinstance(o, unreal.Texture2D)]
     if (count != triangles or count != int(row["ue_lod0_triangles"])
             or len(textures) != len(gltf["images"]) or not all(m.get_material(0) for m in static_meshes)):
         raise RuntimeError(f"{code}: {count}/{triangles} triangles, {len(textures)}/{len(gltf['images'])} textures")
     for mesh in static_meshes:
-        unreal.log(f"MESHY_DEVICE {code} {mesh.get_path_name()} {mesh.get_num_triangles(0)} triangles {mesh.get_bounds()}")
+        configure_nanite(mesh, True)
+        unreal.log(f"MESHY_DEVICE {code} {mesh.get_path_name()} source_triangles={mesh.get_static_mesh_description(0).get_triangle_count()} {mesh.get_bounds()}")

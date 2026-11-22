@@ -2,7 +2,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$PackageRoot,
-    [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen')][string]$Scenario = 'Travel',
+    [ValidateSet('Travel', 'Campaign', 'PortalActive', 'PortalFrozen', 'FosTechGallery')][string]$Scenario = 'Travel',
+    [ValidateSet('On', 'Off')][string]$GalleryNanite,
     [switch]$TraceTravel,
     [switch]$StockDisplay,
     [ValidateSet('Separate', 'Instanced')][string]$ChamberDecor,
@@ -24,6 +25,9 @@ param(
     [switch]$TestMapReserveTrim
 )
 $ErrorActionPreference = 'Stop'
+if (($Scenario -eq 'FosTechGallery') -ne [bool]$GalleryNanite) {
+    throw 'Specify -GalleryNanite On or Off when measuring the FosTech gallery'
+}
 if ($ChamberDecor -and !$TraceTravel) { throw 'ChamberDecor requires TraceTravel' }
 if ($WeightShell -and !$TraceTravel) { throw 'WeightShell requires TraceTravel' }
 if ($InstanceWeightShellVisuals -and ($WeightShell -ne 'Compound' -or $ChamberDecor -ne 'Instanced')) {
@@ -61,6 +65,10 @@ if ($Scenario -eq 'Travel') {
     }
     $frameCount = $captureFrame + 600
     $flags = @("-csvExecCmds=$($commands -join ',')")
+} elseif ($Scenario -eq 'FosTechGallery') {
+    $map = "${entry}?game=/Script/Abandoned.FosTechGalleryGameMode"
+    $frameCount = $null
+    $flags = @('-VerifyFosTechGallery', '-ForceRes', '-fixedseed')
 } elseif ($Scenario -eq 'Campaign') {
     $map = $null
     $frameCount = $null
@@ -130,6 +138,7 @@ try {
         $vram = if ($counters) { ($counters | ForEach-Object RawValue | Measure-Object -Sum).Sum }
         $samples.Add([pscustomobject]@{
             ElapsedMs = $timer.ElapsedMilliseconds
+            SampleUtc = [DateTime]::UtcNow.ToString("o")
             PrivateBytes = $process.PrivateMemorySize64
             PeakWorkingSetBytes = $process.PeakWorkingSet64
             DedicatedBytes = $vram
@@ -194,6 +203,18 @@ if ($Scenario -eq 'Travel') {
     if ($DisableSmallGCPolicy -and !($log -match 'gc\.SmallFullGCSerialSlots = "0"')) {
         throw 'The small full GC control was not applied'
     }
+} elseif ($Scenario -eq 'FosTechGallery') {
+    $expected = if ($GalleryNanite -eq 'On') { 13 } else { 0 }
+    $flag = [int]($GalleryNanite -eq 'On')
+    $meshRows = @($log -match "FosTech mesh=\S+ built=$flag eligible=$flag proxy=$flag auditedSlots=\d+ materialErrors=0$")
+    $begin = $log -match "FosTech\.SampleBegin meshes=13 nanite=$expected$"
+    if ($meshRows.Count -ne 13 -or @($begin).Count -ne 1 -or !($log -match 'FosTech\.SampleEnd$') -or
+        ($log -match 'missing bUsedWithNanite=True') -or !(Test-Path "$dir/Saved/Screenshots/Windows/FosTech-Gallery.png")) {
+        throw "Gallery did not render all 13 assets on the requested path ($GalleryNanite) in $dir"
+    }
+    $receipt = & "$PSScriptRoot/Read-UePackageReceipt.ps1" -PackageRoot $root
+    $receipt | Select-Object ExecutableSha256, ContentContainers | ConvertTo-Json -Depth 5 |
+        Set-Content -LiteralPath "$dir/PackageReceipt.json"
 } elseif ($Scenario -eq 'Campaign') {
     if (!($log -match 'Vanguard verification passed: passage transit and station resupply')) { throw 'Campaign did not finish' }
 } else {

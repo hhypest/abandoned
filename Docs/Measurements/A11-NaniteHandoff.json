@@ -1,0 +1,101 @@
+{
+  "Date": "2026-11-22",
+  "VerificationCommit": "a135edf34993325f75df7b7979eccd665374e813",
+  "VerifierHadTrackedChanges": false,
+  "PackageSourceCommit": "aeb40477bb2ab7d5ea710f5bcadbe8ac08b18bb3",
+  "RunId": "20261122-131837-d5ba9690d4734effa24e51d838a99f85",
+  "RawReportSha256": "A75F7BBADC475E2901589D66D75A2A818F2B00A3C08F83934DE49B1019B1C066",
+  "Target": "Package",
+  "Unreal": "5.7.4",
+  "OperatingSystem": "Microsoft Windows 10.0.26300",
+  "GPU": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "Rhi": "VULKAN_SM6",
+  "Resolution": "1920x1080",
+  "FixedStepFps": 60,
+  "ExecutableSha256": "CA2A8985C7F98D8E39BC36DB012006C2446038FD6390B2F13C180F12F2413EBE",
+  "ContentContainers": [
+    {
+      "Path": "Abandoned/Content/Paks/Abandoned-Windows.pak",
+      "Bytes": 10579923,
+      "Sha256": "367497C50BB9254667F3E3C4DD2626907138CEB6AA2FCFCD3B3C59F3DF31D44B"
+    },
+    {
+      "Path": "Abandoned/Content/Paks/Abandoned-Windows.ucas",
+      "Bytes": 627716224,
+      "Sha256": "24BE57A93ECE43CEC20FF44727784DD75D3534DD62730ADC3B486C124F0CF865"
+    },
+    {
+      "Path": "Abandoned/Content/Paks/Abandoned-Windows.utoc",
+      "Bytes": 319672,
+      "Sha256": "F43BFD731BDAC32F45E698267C20E492E9DEE0307A02BA58D01C8A5B3FD99B26"
+    },
+    {
+      "Path": "Abandoned/Content/Paks/global.ucas",
+      "Bytes": 2649600,
+      "Sha256": "53E22542E69814BD61B1BF21B35E0DA9A57C409512A8721CA5C720182B57E5CF"
+    },
+    {
+      "Path": "Abandoned/Content/Paks/global.utoc",
+      "Bytes": 686,
+      "Sha256": "299CE45546379E9308F639B30D08FD2EA475479647900704882AE8935332C3D9"
+    }
+  ],
+  "Scenarios": [
+    {
+      "Name": "Dev20",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "15B2158F72371FCEBD50C65A360CC823CBCA8AC2BEC4B9AC98B9BEF9404DFAF3"
+    },
+    {
+      "Name": "StationAirlock",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "0EC017A88B14C02CFB03F7386B071B01DF00E2D6FE50D029574FAAC8EC6B1DDE"
+    },
+    {
+      "Name": "StationAirlockMissingSupply",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "0FDC585AA0BB191A9DC591A4AA7589BE0AB8867F9E256C6A00E7F2DB5D3F1382"
+    },
+    {
+      "Name": "VulkanExitControl",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "03F8C766D5DE2C9E104901D5081A8C2059299C5C3078BE8E743072A73D112AF2"
+    },
+    {
+      "Name": "EntryCourse",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "5A5B6BB2930DE6659660479FA1466A34EFFB367C95771C8D5D6C2A1AF80960B6"
+    },
+    {
+      "Name": "WristTerminal",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "653C382B613F546F1D79ED70268203BD7450AAC6F2783F68A2E5B782FD1A9D62"
+    },
+    {
+      "Name": "DoorClamp",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "0B1BC08C3D7E12BC39726130918074DBAF9521821D0267663B293E67D1257AF9"
+    },
+    {
+      "Name": "Portals",
+      "Outcome": "Passed",
+      "ExitCode": 0,
+      "ShutdownComplete": true,
+      "LogSha256": "873AD055F4D2108E931ED819A2C65FC21DB1FA0803C336FAE0A159D1EC59AF6C"
+    }
+  ]
+}
