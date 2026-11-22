@@ -1,4 +1,4 @@
-"""Add the approved EQP-00 skin to an exact copy of the Meshy GLB (Python 3 + NumPy)."""
+"""Skin EQP-00 and replace its sculpted terminal with an intact sleeve for the EQP-01 mount."""
 import argparse
 import hashlib
 import json
@@ -8,6 +8,8 @@ import struct
 from tempfile import NamedTemporaryFile
 
 import numpy as np
+
+from ReplaceSuitTerminalSleeve import replace_terminal_sleeve
 
 
 SOURCE_SHA = "25ff43995cb6d6d76f57faf48700b432685ef9f1c58e8f7e0f98dac39a1465a2"
@@ -95,9 +97,7 @@ def rig(vertices):
     ue_frame = np.column_stack([ue_x, ue_y, np.cross(ue_x, ue_y)])
     permutation = [0, 2, 1]
     glass_frame = ue_frame[permutation][:, permutation]
-    # This oriented volume includes the entire rigid plate, key bank and bezel,
-    # and ends before either flexible cuff. A small overlap into the rigid sleeve
-    # is intentional (the plate and sleeve share a single surface).
+    # Keep the restored rigid armour under the EQP-01 mounting area tied to its socket.
     normal, long_axis, short_axis = ((vertices-GLASS)[:, permutation] @ ue_frame).T
     plate = ((abs(long_axis) < .110) & (short_axis > -.062) & (short_axis < .082)
              & (normal > -.045) & (normal < .025) & (x > 0))
@@ -164,13 +164,39 @@ def write_skin(source, destination):
         raise ValueError("Unexpected EQP-00 source revision")
     length = struct.unpack_from("<I", raw, 12)[0]
     model = json.loads(raw[20:20+length])
-    payload = bytearray(raw[28+length:28+length+model["buffers"][0]["byteLength"]])
+    original = memoryview(raw)[28+length:]
     mesh = model["meshes"][0]
     primitive = mesh["primitives"][0]
-    pos = model["accessors"][primitive["attributes"]["POSITION"]]
-    view = model["bufferViews"][pos["bufferView"]]
-    positions = np.frombuffer(
-        payload, dtype="<f4", count=pos["count"]*3, offset=view.get("byteOffset", 0)).reshape(-1, 3).copy()
+    attr = primitive["attributes"]
+
+    def array(index, dtype, width):
+        acc = model["accessors"][index]
+        view = model["bufferViews"][acc["bufferView"]]
+        return np.frombuffer(original, dtype=dtype, count=acc["count"] * width,
+                             offset=view.get("byteOffset", 0)).reshape(-1, width)
+
+    positions, normals, uvs, faces = replace_terminal_sleeve(
+        array(attr["POSITION"], "<f4", 3), array(attr["NORMAL"], "<f4", 3),
+        array(attr["TEXCOORD_0"], "<f4", 2), array(primitive["indices"], "<u4", 1).reshape(-1, 3))
+    # Repack geometry and original embedded maps. Superseded triangles and
+    # vertices from the sculpted terminal are absent from the working GLB.
+    payload = bytearray()
+    geometry = {attr["POSITION"]: positions, attr["NORMAL"]: normals, attr["TEXCOORD_0"]: uvs,
+                primitive["indices"]: faces.reshape(-1)}
+    for index, view in enumerate(model["bufferViews"]):
+        offset = view.get("byteOffset", 0)
+        data = original[offset:offset+view["byteLength"]]
+        for acc_index, values in geometry.items():
+            acc = model["accessors"][acc_index]
+            if acc["bufferView"] == index:
+                data = values.tobytes()
+                acc["count"] = len(values)
+                if "min" in acc:
+                    acc.update(min=values.min(axis=0).tolist(), max=values.max(axis=0).tolist())
+                break
+        payload.extend(bytes(-len(payload) % 4))
+        view.update(byteOffset=len(payload), byteLength=len(data))
+        payload.extend(data)
     names, parents, points, glass_frame, joints, w, plate_count = rig(positions)
 
     def accessor(array, component_type, shape):
@@ -230,7 +256,7 @@ def write_skin(source, destination):
                 raise ValueError(f"Destination contains a different asset: {destination}") from None
     finally:
         pending.unlink(missing_ok=True)
-    print(f"EQP00_SKIN vertices={len(positions)} joints={len(nodes)-first} rigid_plate={plate_count} "
+    print(f"EQP00_SKIN vertices={len(positions)} joints={len(nodes)-first} rigid_mount={plate_count} "
           f"max_weights={np.count_nonzero(w, axis=1).max()} sha256={digest}")
 
 

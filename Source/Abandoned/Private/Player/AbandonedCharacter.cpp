@@ -2,9 +2,12 @@
 #include "Domain/Puzzles/BallastRules.h"
 #include "MovementProfile.h"
 #include "Player/FosTechBody.h"
+#include "Player/FosTechWristMount.h"
 #include "Engine/World.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
@@ -39,6 +42,14 @@ AAbandonedCharacter::AAbandonedCharacter()
 
     SuitBody = CreateDefaultSubobject<UFosTechBody>(TEXT("FosTechBody"));
     SuitBody->SetupAttachment(GetCapsuleComponent());
+    WristCasing = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WristCasing"));
+    WristCasing->SetupAttachment(SuitBody, TEXT("terminal_l"));
+    WristCasing->SetRelativeTransform(Abandoned::WristMount::CasingOnForearm());
+    WristCasing->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::FirstPerson);
+    WristCasing->SetOnlyOwnerSee(true);
+    WristCasing->SetCastShadow(false);
+    WristCasing->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    WristCasing->SetCanEverAffectNavigation(false);
     Camera->SetEnableFirstPersonScale(true);
     Camera->SetFirstPersonScale(0.90f);
 }
@@ -48,10 +59,19 @@ UPoseableMeshComponent* AAbandonedCharacter::GetSuitBody() const
     return SuitBody;
 }
 
+UStaticMeshComponent* AAbandonedCharacter::GetWristCasing() const
+{
+    return WristCasing;
+}
+
 void AAbandonedCharacter::PostInitializeComponents()
 {
     Super::PostInitializeComponents();
-    if (GetWorld()->IsGameWorld()) { SuitBody->FitToWearer(*this); }
+    if (GetWorld()->IsGameWorld())
+    {
+        SuitBody->FitToWearer(*this);
+        WristCasing->SetStaticMesh(WristCasingAsset.LoadSynchronous());
+    }
 }
 
 void AAbandonedCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)

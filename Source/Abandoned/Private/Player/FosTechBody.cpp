@@ -122,20 +122,25 @@ void UFosTechBody::SetStance(const ACharacter& Wearer)
     const double Scale = GetRelativeScale3D().Z;
     // A squat shares the eye-height change between the hips and a forward bend at the waist.
     PelvisDrop = 1.48 * (Abandoned::MovementProfile::StandingHalfHeight - HalfHeight) / Scale;
-    SetRelativeLocation(FVector(-10.0, 0.0, -HalfHeight - Scale * (MeshBounds.Origin.Z - MeshBounds.BoxExtent.Z)));
+    // Grounded crouch moves the capsule down by exactly the required upward offset.
+    // A swept/world-delta setter can see zero movement during CharacterMovement's
+    // deferred update and skip writing the new attachment offset. This mesh is cosmetic.
+    SetRelativeLocation_Direct(FVector(-10.0, 0.0, -HalfHeight - Scale * (MeshBounds.Origin.Z - MeshBounds.BoxExtent.Z)));
+    UpdateComponentToWorld();
     Stance();
     RefreshBoneTransforms();
     bArmPoseActive = false;
 }
 
-void UFosTechBody::Stance()
+void UFosTechBody::Stance(float ReadingWeight)
 {
     BoneSpaceTransforms = GetSkinnedAsset()->GetRefSkeleton().GetRefBonePose();
     if (FMath::IsNearlyZero(PelvisDrop)) { return; }
     FTransform Hip = Current(Pelvis);
     const FVector Forward = GetRelativeRotation().UnrotateVector(FVector::ForwardVector);
     const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward);
-    Hip.AddToTranslation((FVector::DownVector - Forward * 0.92) * PelvisDrop);
+    // When reading in a squat, shift the hips over the feet to support the raised arm.
+    Hip.AddToTranslation((FVector::DownVector - Forward * FMath::Lerp(0.92, 0.24, ReadingWeight)) * PelvisDrop);
     // The eye is above the front of the suit. Keep the open neck behind it when
     // looking straight down while the pelvis moves back over the planted boots.
     Hip.SetRotation(FQuat(Right, FMath::DegreesToRadians(18.0)) * Hip.GetRotation());
@@ -151,29 +156,67 @@ void UFosTechBody::Stance()
 void UFosTechBody::RaiseWrist(const FTransform& Eye, float Weight)
 {
     const FLimb& Arm = Arms[0];
-    FTransform Clavicle = Current(LeftClavicle);
-    const FVector CollarToArm = Current(Arm.Upper).GetLocation() - Clavicle.GetLocation();
-    const FVector ReachAcross = GetRelativeRotation().UnrotateVector(FVector(0.58, -0.70, 0.41).GetSafeNormal());
-    const FQuat ShoulderTurn = FQuat::FindBetweenNormals(CollarToArm.GetSafeNormal(), ReachAcross);
-    Clavicle.SetRotation(FQuat::Slerp(FQuat::Identity, ShoulderTurn, Weight) * Clavicle.GetRotation());
-    SetComponentPose(LeftClavicle, Clavicle);
-    const FTransform Screen = Current(Terminal);
-    const FTransform Lower = Current(Arm.Lower);
-    FTransform Upper = Current(Arm.Upper);
     const FTransform& Mesh = GetComponentTransform();
-    // The screen's +X is outward and +Z is reading up. Turn the whole forearm to face the eye.
-    const FQuat WantedScreen = Mesh.InverseTransformRotation(Eye.GetRotation() *
-        FRotationMatrix::MakeFromXZ(FVector(-1, 0.28, 0.33), FVector::UpVector).ToQuat());
-    const FQuat Turn = WantedScreen * Screen.GetRotation().Inverse();
-    const FVector ScreenGoal = Mesh.InverseTransformPosition(Eye.TransformPosition(FVector(27, -9, -2)));
-    const FVector ElbowGoal = ScreenGoal + Turn.RotateVector(Lower.GetLocation() - Screen.GetLocation());
-    const FVector OriginalArm = Lower.GetLocation() - Upper.GetLocation();
-    const FQuat Lift = FQuat::FindBetweenNormals(OriginalArm.GetSafeNormal(), (ElbowGoal - Upper.GetLocation()).GetSafeNormal());
-    Upper.SetRotation(FQuat::Slerp(FQuat::Identity, Lift, Weight) * Upper.GetRotation());
-    SetComponentPose(Arm.Upper, Upper);
-    FTransform Elbow = Current(Arm.Lower);
-    Elbow.SetRotation(FQuat::Slerp(Lower.GetRotation(), Turn * Lower.GetRotation(), Weight));
-    SetComponentPose(Arm.Lower, Elbow);
+    const FTransform Screen = Current(Terminal);
+    const FTransform Elbow = Current(Arm.Lower);
+    const FTransform Shoulder = Current(Arm.Upper);
+    const FTransform Collar = Current(LeftClavicle);
+    FTransform Torso = Current(Spine);
+
+    // Keep the glass square to an ordinary gaze. Roll the cuff slightly toward the eye
+    // when looking overhead, where the forearm approaches the limit of its reach.
+    // Solve for the elbow: the screen is rigidly offset from it on the same forearm.
+    const double Upward = FMath::Max(0.0, Eye.GetUnitAxis(EAxis::X).Z);
+    const double SideAngle = 0.30 * Upward * Upward;
+    const FVector SightInView = FVector(1.0, -0.16, -0.07).GetSafeNormal();
+    const FQuat ScreenRotation = Mesh.InverseTransformRotation(Eye.GetRotation() *
+        FRotationMatrix::MakeFromXZ(FVector(-1.0, SideAngle, 0.0), FVector::UpVector).ToQuat());
+    const FQuat Turn = ScreenRotation * Screen.GetRotation().Inverse();
+    const FVector Sight = Mesh.InverseTransformVectorNoScale(Eye.TransformVectorNoScale(SightInView));
+    const FVector RayStart = Mesh.InverseTransformPosition(Eye.GetLocation()) +
+        Turn.RotateVector(Elbow.GetLocation() - Screen.GetLocation());
+    const double TorsoLength = FVector::Distance(Torso.GetLocation(), Collar.GetLocation());
+    const double ArmReach = FVector::Distance(Collar.GetLocation(), Shoulder.GetLocation()) +
+        FVector::Distance(Shoulder.GetLocation(), Elbow.GetLocation()) - 0.5;
+
+    // Intersect the reading ray with the arm and torso's reach. At high pitch
+    // the wearer can bring the screen closer while keeping its centre in view.
+    const FVector ToSpine = Torso.GetLocation() - RayStart;
+    const double Along = FVector::DotProduct(ToSpine, Sight);
+    const double Reach = TorsoLength + ArmReach;
+    const double HalfChord = FMath::Sqrt(FMath::Max(0.0, Reach * Reach - (ToSpine - Along * Sight).SizeSquared()));
+    const double ReadingDistance = 22.0 / Mesh.GetScale3D().Z;
+    const FVector ElbowGoal = RayStart + Sight * FMath::Clamp(Along + HalfChord, 0.0, ReadingDistance);
+
+    // Retain the original trunk unless the clavicle and upper arm alone cannot
+    // reach the elbow. Swing the spine just enough; the pelvis and feet stay planted.
+    const FQuat RestSpine = BoneSpaceTransforms[Spine].GetRotation();
+    const FQuat RestCollar = BoneSpaceTransforms[LeftClavicle].GetRotation();
+    const FQuat RestUpper = BoneSpaceTransforms[Arm.Upper].GetRotation();
+    const FQuat RestLower = BoneSpaceTransforms[Arm.Lower].GetRotation();
+    if (FVector::DistSquared(Collar.GetLocation(), ElbowGoal) > ArmReach * ArmReach)
+    {
+        FVector NewCollar, ReachableElbow;
+        AnimationCore::SolveTwoBoneIK(Torso.GetLocation(), Collar.GetLocation(), Elbow.GetLocation(),
+            Collar.GetLocation(), ElbowGoal, NewCollar, ReachableElbow, TorsoLength, ArmReach, false, 1.0, 1.0);
+        const FQuat Lean = FQuat::FindBetweenNormals((Collar.GetLocation() - Torso.GetLocation()).GetSafeNormal(),
+            (NewCollar - Torso.GetLocation()).GetSafeNormal());
+        Torso.SetRotation(Lean * Torso.GetRotation());
+        SetComponentPose(Spine, Torso);
+    }
+    const FVector Outward = GetRelativeRotation().UnrotateVector(-FVector::RightVector);
+    const FVector ShoulderPole = Current(LeftClavicle).GetLocation() + 30.0 * Outward + 6.0 * FVector::UpVector;
+    SolveLimb({LeftClavicle, Arm.Upper, Arm.Lower}, ElbowGoal, ShoulderPole, Turn * Elbow.GetRotation());
+
+    // Blend rotations in the hierarchy so each segment keeps its length on the way up.
+    const auto Blend = [this, Weight](int32 Index, const FQuat& Rest) {
+        FTransform& Bone = BoneSpaceTransforms[Index];
+        Bone.SetRotation(FQuat::Slerp(Rest, Bone.GetRotation(), Weight));
+    };
+    Blend(Spine, RestSpine);
+    Blend(LeftClavicle, RestCollar);
+    Blend(Arm.Upper, RestUpper);
+    Blend(Arm.Lower, RestLower);
 }
 
 void UFosTechBody::Grip(int32 Side, const FVector& Palm, const FQuat& Orientation, float Weight)
@@ -223,7 +266,7 @@ void UFosTechBody::PoseArms(const FTransform& Eye, float RaiseWeight, const FVec
     if (Reference.IsEmpty()) { return; }
     const bool bActive = RaiseWeight > 0.f || (Handholds && GripWeight > 0.f);
     if (!bActive && !bArmPoseActive) { return; }
-    Stance();
+    Stance(RaiseWeight);
     if (Handholds && GripWeight > 0.f)
     {
         // The arms bear the weight before the trunk clears the sill. The collision

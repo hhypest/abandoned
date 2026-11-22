@@ -30,7 +30,7 @@ private:
     FTransform Current(int32 Index) const;
     void SetComponentPose(int32 Index, const FTransform& Transform);
     void SolveLimb(const FLimb& Limb, const FVector& Target, const FVector& Pole, const FQuat& EndRotation);
-    void Stance();
+    void Stance(float ReadingWeight = 0.f);
     void RaiseWrist(const FTransform& Eye, float Weight);
     void Grip(int32 Side, const FVector& Palm, const FQuat& Orientation, float Weight);
 

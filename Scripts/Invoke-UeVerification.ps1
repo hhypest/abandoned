@@ -606,6 +606,19 @@ function Invoke-Scenario($name, $definition, $profile) {
         $result.Outcome = 'Passed'
     }
 
+    if ($Capture -and $name -eq 'WristTerminal' -and $result.Outcome -eq 'Passed') {
+        $result.DisplayInk = @(foreach ($sample in @(@('0.0', 'Status'), @('45.0', 'Pitch45'))) {
+            $angle = [regex]::Escape($sample[0])
+            $projection = $lines -match "EQP-01 glass at pitch ${angle}:" | Select-Object -First 1
+            $frame = Join-Path $profile "Saved/Screenshots/$screenshotPlatform/Wrist-Terminal-$($sample[1]).png"
+            & (Join-Path $PSScriptRoot 'Read-WristDisplayFrame.ps1') -Path $frame -Projection $projection
+        })
+        if ($result.DisplayInk.Visible -contains $false) {
+            $result.Outcome = 'Failed'
+            $result.Reason = 'The rendered wrist glass did not show the illuminated status text in both poses.'
+        }
+    }
+
     if ($definition.ExpectedError) {
         $expected = [regex]::Escape($definition.ExpectedError)
         $unexpected = $result.FailureMarkers -notmatch "$expected|$exitRequestPattern"

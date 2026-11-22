@@ -4,13 +4,14 @@
 #include "Expedition/VanguardSession.h"
 #include "Infrastructure/Expedition/VanguardRouteStateComponent.h"
 #include "Components/WidgetComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Engine/World.h"
 #include "Camera/CameraComponent.h"
-#include "Player/FosTechBody.h"
+#include "Player/FosTechWristMount.h"
 #include "EnhancedInputComponent.h"
 #include "Materials/MaterialInterface.h"
 
@@ -19,6 +20,10 @@ namespace
 using Abandoned::Application::Expedition::SuitPage;
 using Abandoned::Application::Expedition::SuitSignal;
 using Abandoned::Domain::Expedition::SuitRecord;
+
+const FLinearColor InstrumentLabel(0.56f, 0.88f, 0.79f);
+const FLinearColor InstrumentValue(0.75f, 0.98f, 0.84f);
+const FLinearColor FlareWarning(1.0f, 0.62f, 0.24f);
 
 const TCHAR* RecordText(SuitRecord Record)
 {
@@ -38,15 +43,20 @@ const TCHAR* RecordText(SuitRecord Record)
 void AVanguardCharacter::CreateWristTerminal()
 {
     WristDisplay = CreateDefaultSubobject<UWidgetComponent>(TEXT("WristDisplay"));
-    WristDisplay->SetupAttachment(SuitBody, TEXT("terminal_l"));
-    // terminal_l is the glass centre, facing local +X; the long edge follows local -Y.
-    WristDisplay->SetRelativeLocation(FVector(0.20, 0.0, 0.0));
-    WristDisplay->SetRelativeScale3D(FVector(1.0, 12.0 / 600.0, 3.55 / 185.0));
+    WristDisplay->SetupAttachment(WristCasing);
+    // Bounds and occlusion follow the opaque instrument housing through abrupt
+    // changes in the wearer's pose, including the first frame the panel lights.
+    WristDisplay->bUseAttachParentBound = true;
+    WristDisplay->SetTickWhenOffscreen(true);
+    const FTransform Glass = Abandoned::WristMount::GlassInCasing();
+    WristDisplay->SetRelativeLocationAndRotation(Glass.GetLocation(), Glass.GetRotation());
+    // Square texels on the 70.144 × 46.032 model-space glass.
+    WristDisplay->SetRelativeScale3D(FVector(70.144 / 768.0));
     WristDisplay->SetWidgetSpace(EWidgetSpace::World);
-    WristDisplay->SetDrawSize(FVector2D(600, 185));
+    WristDisplay->SetDrawSize(FVector2D(768, 504));
     WristDisplay->SetPivot(FVector2D(0.5, 0.5));
     WristDisplay->SetBlendMode(EWidgetBlendMode::Opaque);
-    WristDisplay->SetBackgroundColor(FLinearColor::Black);
+    WristDisplay->SetBackgroundColor(FLinearColor(0.006f, 0.014f, 0.017f));
     WristDisplay->SetManuallyRedraw(true);
     WristDisplay->SetWindowFocusable(false);
     WristDisplay->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -67,25 +77,25 @@ void AVanguardCharacter::ConfigureWristTerminal()
             WristDisplay->SetMaterial(0, Surface);
         }
         WristDisplay->SetSlateWidget(
-            SNew(SBox).Padding(FMargin(8, 3)).Visibility(EVisibility::HitTestInvisible)
+            SNew(SBox).Padding(FMargin(28, 16)).Visibility(EVisibility::HitTestInvisible)
             [
                 SNew(SVerticalBox)
-                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 2)
+                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12)
                 [
                     SAssignNew(DisplayHeading, STextBlock)
-                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 22))
-                    .ColorAndOpacity(FLinearColor(0.45f, 0.88f, 0.77f))
+                    .Font(FCoreStyle::GetDefaultFontStyle("Mono", 31))
+                    .ColorAndOpacity(InstrumentLabel)
                 ]
-                + SVerticalBox::Slot().AutoHeight()
+                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)
                 [
                     SAssignNew(DisplayPrimary, STextBlock)
-                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 36))
-                    .ColorAndOpacity(FLinearColor(0.38f, 0.72f, 0.56f))
+                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 56))
+                    .ColorAndOpacity(InstrumentValue)
                 ]
                 + SVerticalBox::Slot().AutoHeight()
                 [
                     SAssignNew(DisplayBody, STextBlock)
-                    .Font(FCoreStyle::GetDefaultFontStyle("Regular", 23))
+                    .Font(FCoreStyle::GetDefaultFontStyle("Regular", 36))
                     .ColorAndOpacity(FLinearColor(0.86f, 0.93f, 0.85f))
                 ]
             ]);
@@ -208,6 +218,9 @@ void AVanguardCharacter::UpdateWristTerminal(const UVanguardRouteStateComponent&
         WristPrimary = MoveTemp(Primary);
         WristReadout = MoveTemp(Body);
         DisplayHeading->SetText(FText::FromString(WristHeading));
+        const bool bFlareStatus = *Page == SuitPage::Status && Reading.Forecast && Reading.Forecast->FlareActive;
+        DisplayHeading->SetColorAndOpacity(bFlareStatus ? FlareWarning : InstrumentLabel);
+        DisplayPrimary->SetColorAndOpacity(bFlareStatus ? FlareWarning : InstrumentValue);
         DisplayPrimary->SetVisibility(WristPrimary.IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible);
         DisplayPrimary->SetText(FText::FromString(WristPrimary));
         DisplayBody->SetText(FText::FromString(WristReadout));
