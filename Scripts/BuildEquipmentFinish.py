@@ -83,6 +83,7 @@ else:
     mat = tools.create_asset(name, folder, ue.Material, ue.MaterialFactoryNew())
 mat.set_editor_property("two_sided", True)
 edit.set_material_usage(mat, ue.MaterialUsage.MATUSAGE_SKELETAL_MESH)
+edit.set_material_usage(mat, ue.MaterialUsage.MATUSAGE_NANITE)
 
 
 def node(cls, x, y):
