@@ -205,8 +205,10 @@ if ($Scenario -eq 'Travel') {
     }
 } elseif ($Scenario -eq 'FosTechGallery') {
     $expected = if ($GalleryNanite -eq 'On') { 13 } else { 0 }
+    $flag = [int]($GalleryNanite -eq 'On')
+    $meshRows = @($log -match "FosTech mesh=\S+ built=$flag eligible=$flag proxy=$flag auditedSlots=\d+ materialErrors=0$")
     $begin = $log -match "FosTech\.SampleBegin meshes=13 nanite=$expected$"
-    if (@($begin).Count -ne 1 -or !($log -match 'FosTech\.SampleEnd$') -or
+    if ($meshRows.Count -ne 13 -or @($begin).Count -ne 1 -or !($log -match 'FosTech\.SampleEnd$') -or
         ($log -match 'missing bUsedWithNanite=True') -or !(Test-Path "$dir/Saved/Screenshots/Windows/FosTech-Gallery.png")) {
         throw "Gallery did not render all 13 assets on the requested path ($GalleryNanite) in $dir"
     }
