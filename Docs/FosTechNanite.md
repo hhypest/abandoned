@@ -37,6 +37,10 @@ Win64 Development, UE 5.7.4, Vulkan SM6, Windows 11 26300, Core i5-14400F, 32 Г
 
 ![Большой куб, оптика и терминал в масштабе 1:1](Images/FosTech-Nanite-Crops.png)
 
+## Игровая проверка
+
+В итоговом пакете прошли Dev20, StationAirlock, StationAirlockMissingSupply, VulkanExitControl, EntryCourse, WristTerminal, DoorClamp и Portals. В контрольном пакете отдельно повторён WristTerminal. На обоих вариантах проверка зарегистрировала светящиеся строки во всех четырёх игровых кадрах: статус, поднятая рука при наклоне камеры на 45°, вспышка и архив. [Наручный терминал от первого лица, фрагмент кадра 1:1](Images/FosTech-Nanite-Wrist.png) · [Проверки, хеши пакета и журналов](Measurements/A11-NaniteHandoff.json)
+
 ## Воспроизведение
 
 1. Получите ассеты Git LFS. В UE 5.7.4 соберите Win64 Development с `BuildCookRun -platform=Win64 -clientconfig=Development -build -cook -stage -pak -package -archive` и отдельным `-archivedirectory` для B.
