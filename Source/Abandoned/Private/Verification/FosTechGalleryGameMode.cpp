@@ -15,6 +15,7 @@
 #include "NaniteSceneProxy.h"
 #include "StaticMeshSceneProxyDesc.h"
 #include "ProfilingDebugging/CsvProfiler.h"
+#include "World/FosTech.h"
 
 namespace
 {
@@ -23,18 +24,18 @@ DEFINE_LOG_CATEGORY_STATIC(LogFosTechGallery, Log, All);
 // In reading order, rows of 5, 5 and 3. Separate both plate parts so the base is visible.
 struct FExhibit
 {
-    const TCHAR* Model;
-    const TCHAR* Mesh;
+    const TCHAR* Path;
     double Tilt;
 };
 constexpr FExhibit Collection[] = {
-    {TEXT("DEV-01A"), TEXT("DEV-01A"), 18}, {TEXT("DEV-01B"), TEXT("DEV-01B"), 18},
-    {TEXT("DEV-02"), TEXT("PlateBase"), 52}, {TEXT("DEV-02"), TEXT("PlateTop"), 52},
-    {TEXT("DEV-03"), TEXT("DEV-03"), 16}, {TEXT("DEV-04"), TEXT("DEV-04"), 16},
-    {TEXT("DEV-05"), TEXT("DEV-05"), 18}, {TEXT("DEV-06"), TEXT("DEV-06"), 18},
-    {TEXT("DEV-07"), TEXT("DEV-07"), 16}, {TEXT("DEV-12"), TEXT("DEV-12"), 8},
-    {TEXT("DEV-13"), TEXT("DEV-13"), 8}, {TEXT("EQP-01"), TEXT("EQP-01"), 6},
-    {TEXT("EQP-05"), TEXT("EQP-05"), 14}
+    {Abandoned::FosTech::SmallCube, 18}, {Abandoned::FosTech::LargeCube, 18},
+    {Abandoned::FosTech::PlateBase, 52}, {Abandoned::FosTech::PlateTop, 52},
+    {Abandoned::FosTech::Button, 16}, {Abandoned::FosTech::Switch, 16},
+    {Abandoned::FosTech::Emitter, 18}, {Abandoned::FosTech::Receiver, 18},
+    {Abandoned::FosTech::Relay, 16}, {Abandoned::FosTech::Frame, 8},
+    {Abandoned::FosTech::Leaf, 8},
+    {TEXT("/Game/Abandoned/Meshy/EQP_01/EQP-01/StaticMeshes/EQP-01.EQP-01"), 6},
+    {TEXT("/Game/Abandoned/Meshy/EQP_05/EQP-05/StaticMeshes/EQP-05.EQP-05"), 14}
 };
 
 UStaticMeshComponent* Install(UWorld& World, UStaticMesh& Mesh, const FTransform& Transform)
@@ -112,11 +113,8 @@ void AFosTechGalleryGameMode::BeginPlay()
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(Collection); ++Index)
     {
         const FExhibit& Entry = Collection[Index];
-        const FString Folder = FString(Entry.Model).Replace(TEXT("-"), TEXT("_"));
-        const FString Path = FString::Printf(TEXT("/Game/Abandoned/Meshy/%s/%s/StaticMeshes/%s.%s"),
-            *Folder, Entry.Model, Entry.Mesh, Entry.Mesh);
-        UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *Path);
-        if (!Mesh) { return Fail(*Path); }
+        UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, Entry.Path);
+        if (!Mesh) { return Fail(Entry.Path); }
         const FBox Bounds = Mesh->GetBoundingBox();
         const FQuat Angle = FRotator(0, 16, Entry.Tilt).Quaternion();
         const FVector RotatedSize = Bounds.TransformBy(FTransform(Angle)).GetSize();
@@ -127,7 +125,7 @@ void AFosTechGalleryGameMode::BeginPlay()
         const FVector Center((Index % 5 - 0.5 * (Columns - 1)) * 172.0, 0.0, 300.0 + (1 - Row) * 157.0);
         const FTransform Placement(Angle, Center - Angle.RotateVector(Bounds.GetCenter() * Scale), FVector(Scale));
         UStaticMeshComponent* Exhibit = Install(World, *Mesh, Placement);
-        if (!Exhibit) { return Fail(*Path); }
+        if (!Exhibit) { return Fail(Entry.Path); }
         Exhibits.Add(Exhibit);
     }
 }

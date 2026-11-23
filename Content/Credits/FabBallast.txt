@@ -1,0 +1,8 @@
+Sci-Fi Cube by Mint Chips 3D
+https://www.fab.com/listings/0c72f523-ff3c-4db6-b87b-79e685f30ebf
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Abandoned uses this work for the 5 kg and 10 kg ballast cubes (DEV-01A and DEV-01B).
+Adaptations: game-scale placement, Nanite build, resized 2K textures, packed
+roughness/metalness/specular channels, and separate paint tints for the two sizes.

@@ -1,6 +1,6 @@
-device,role,meshy_task_id,source_bytes,glb_sha256,source_triangles,ue_lod0_triangles,embedded_maps_px,unreal_folder,distribution
-DEV-01A,small cube,01a1ffc6-83a3-73b2-88e0-a25c153c2511,52784572,25dd036cedc8f03c7145192e867ab0e1d1300b018718dfcd5066ae49c7d361d5,390227,390227,4096x4096 / 4096x4096 / 4096x4096,/Game/Abandoned/Meshy/DEV_01A,CC BY 4.0
-DEV-01B,large cube,f5c35258-42a0-458c-8378-30ce2acdc598,40252936,fdb356ed40ecf64cdf361ba41ff9a3b8d97a5e0a6deb4b656158bb43f690c2d8,62555,62555,4096x4096 / 4096x4096 / 4096x4096,/Game/Abandoned/Meshy/DEV_01B,CC BY 4.0
+device,role,meshy_task_id,source_bytes,source_sha256,source_triangles,ue_lod0_triangles,game_maps_px,unreal_folder,distribution
+DEV-01A,small cube,,186454354,b1f9488b54ca44e3dbc7165f252ab93bb5874664298c57669fa8a3934a7c587f,668,668,2048x2048,/Game/Abandoned/Fab/Ballast/Small,CC BY 4.0
+DEV-01B,large cube,,186454354,b1f9488b54ca44e3dbc7165f252ab93bb5874664298c57669fa8a3934a7c587f,668,668,2048x2048,/Game/Abandoned/Fab/Ballast/Large,CC BY 4.0
 DEV-02,pressure plate,01a1ffd5-f0d1-72b9-8400-24cddd49df7e,47964256,5ace9643fb32dffd23f1d29180296325ef1fb4ae8156725fda40ce9aac06e048,20770,21264,4096x4096 / 4096x4096 / 4096x4096,/Game/Abandoned/Meshy/DEV_02,CC BY 4.0
 DEV-03,wall pushbutton,a8401d19-cd87-445a-843a-2fff8d988d37,25245556,8903b3ea9523047d0a2a5f12729f4eb8c33d8a6a4d831e5c69389dc27a8ef116,20620,20620,4096x4096 / 4096x4096 / 4096x4096,/Game/Abandoned/Meshy/DEV_03,CC BY 4.0
 DEV-04,manual switch,e7b99fd1-c6f3-4d13-9b31-80b16ef83fd6,42536432,0cd8ae46ba68a438b4885c19db54fbe5a6c69027774f0a309c5cb00ed953e41e,20383,20383,4096x4096 / 4096x4096 / 4096x4096,/Game/Abandoned/Meshy/DEV_04,CC BY 4.0

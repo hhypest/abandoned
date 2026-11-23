@@ -25,6 +25,8 @@ inventory = Path(__file__).resolve().parents[1] / "Docs" / "AssetInventory.csv"
 with inventory.open(encoding="utf-8") as file:
     devices = list(csv.DictReader(file))
 for row in devices:
+    if not row["meshy_task_id"]:
+        continue  # Fab assets have their own importer.
     if row["device"] == "EQP-00":
         continue  # The first-person body uses its own skeletal import pipeline.
     if not row["unreal_folder"]:
@@ -33,7 +35,7 @@ for row in devices:
     if "-MeshyEquipmentOnly" in unreal.SystemLibrary.get_command_line().split() and not code.startswith("EQP-"):
         continue
     source = root / "MeshySources" / f"{code}.glb"
-    if hashlib.sha256(source.read_bytes()).hexdigest() != row["glb_sha256"]:
+    if hashlib.sha256(source.read_bytes()).hexdigest() != row["source_sha256"]:
         raise ValueError(f"Unexpected source revision: {source.name}")
     if code == "DEV-02":
         split = root / "MeshySources" / "Assembly" / source.name
@@ -78,17 +80,5 @@ for row in devices:
             or len(textures) != len(gltf["images"]) or not all(m.get_material(0) for m in static_meshes)):
         raise RuntimeError(f"{code}: {count}/{triangles} triangles, {len(textures)}/{len(gltf['images'])} textures")
     for mesh in static_meshes:
-        if code == "DEV-01B":
-            # Fit the admitted mesh to the 80 cm gameplay cube, keeping its source height.
-            # These are the unscaled X, Y and Z half-extents of the SHA-checked model.
-            target = unreal.Vector(85.403160 / 95.139954, 85.403160 / 72.825459, 1)
-            editor = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
-            build = editor.get_lod_build_settings(mesh, 0)
-            scale = build.build_scale3d
-            if max(abs(scale.x - target.x), abs(scale.y - target.y), abs(scale.z - target.z)) > 0.00001:
-                build.build_scale3d = target
-                editor.set_lod_build_settings(mesh, 0, build)
-                if not assets.save_loaded_asset(mesh):
-                    raise RuntimeError(f"Could not save the DEV-01B cube proportions: {mesh.get_path_name()}")
         configure_nanite(mesh, True)
         unreal.log(f"MESHY_DEVICE {code} {mesh.get_path_name()} source_triangles={mesh.get_static_mesh_description(0).get_triangle_count()} {mesh.get_bounds()}")

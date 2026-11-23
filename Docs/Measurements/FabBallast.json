@@ -1,0 +1,315 @@
+{
+  "date": "2026-11-24",
+  "engine": "UE 5.7.4 Win64 Development",
+  "gpu": "RTX 4070 Ti SUPER",
+  "rhi": "VULKAN_SM6",
+  "display": "High 1920x1080 100%",
+  "hzb": 1,
+  "queryBuffer": 1,
+  "method": "Per display mode: Control-Fab-Fab-Control; 300 frames starting 120 after second Weight travel command per process; nearest-rank p95/p99 pooled over 600 frames. VRAM is peak per-process WDDM dedicated memory across the complete route.",
+  "packages": {
+    "Control": {
+      "exeSHA256": "FB3CBEEEBF52F7F9555D8DD6556953CF794C1F3B7EE6FB0AA757404F958CA377",
+      "containers": [
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.pak",
+          "Bytes": 10579923,
+          "Sha256": "D619DB47210A6BFA94C704075CB87B819B96A980609B0076E199F4D05E61CC6E"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.ucas",
+          "Bytes": 627716464,
+          "Sha256": "2444E7E839778B904582FE8D4BF6D576FCC58E92E7C26D889E34E9B984084260"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.utoc",
+          "Bytes": 319672,
+          "Sha256": "52DAA73F572CB30BFB5258A3F610C0309427A2D4BA57EC409DA1759BC0393C44"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/global.ucas",
+          "Bytes": 2649600,
+          "Sha256": "53E22542E69814BD61B1BF21B35E0DA9A57C409512A8721CA5C720182B57E5CF"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/global.utoc",
+          "Bytes": 686,
+          "Sha256": "299CE45546379E9308F639B30D08FD2EA475479647900704882AE8935332C3D9"
+        }
+      ],
+      "verification": "20261123-215407-ca79b5efbda943eebe5699f5725e342b",
+      "scenarios": {
+        "EntryCourse": "Passed",
+        "EntryCourseAlternate": "Passed",
+        "EntryCheckpoint": "Passed",
+        "DoorClamp": "Passed",
+        "Portals": "Passed",
+        "WristTerminal": "Passed"
+      },
+      "automatedStairsReadyToStationRefillWallSeconds": 17.738,
+      "legacyBallastPackageCount": 10,
+      "fabBallastPackageCount": 0,
+      "wristVerification": "20261123-220705-450fa4a7a10742c0be3e811c1c6366f5",
+      "routeCaptureSha256": {
+        "Entry-Stairs": "97af8c4ddd8f684676f40b4f4d8ede089c6b37c901007dc13ec5e87e85df2469",
+        "Entry-Button": "58344190355b5e7a9ed61c429ae6c29ee78b4efacc16874b83a0a36f6d9b9789",
+        "Entry-Weight": "0a8c7b5f43f1b4876d5d28a66836bcf9663cd3fe9343995db337bd4536b091bb",
+        "Vanguard-Climb-Handhold": "948487bcf33870b1f2dfae2e5017a2ab015286f763b12156f926503122bf4646",
+        "Vanguard-Station": "04fd75a164c1931a5e9ee3b39e28de513bf2d89d1fd84ecdba85587773c3d99e",
+        "Wrist-Terminal-Status": "abbaa0636f1b478ea3c15af090fd4e7ea9a1e1fed98b9eaa5d88e8ce50e69e23"
+      }
+    },
+    "Fab": {
+      "exeSHA256": "FDA2A6FBC82C53BAB4A0E9CB49ABEED18E3A905C4DB6EE245D5EDE3C69275EA3",
+      "containers": [
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.pak",
+          "Bytes": 10579923,
+          "Sha256": "56E2BC5E274F27D4A64CE1BC118362D88ACF0ECCA9BBB0B6358E0020EAF9B1B6"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.ucas",
+          "Bytes": 560333088,
+          "Sha256": "1F14CC4690B4D13848CEFB2175A1A0DEC9D62E2CA38FAA7229E823002DB283C0"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/Abandoned-Windows.utoc",
+          "Bytes": 295571,
+          "Sha256": "08C4D619B83EF5C6D4DA30439595FD3B2C0A03A2F235B6B2E84623345EAE4C8F"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/global.ucas",
+          "Bytes": 2649600,
+          "Sha256": "53E22542E69814BD61B1BF21B35E0DA9A57C409512A8721CA5C720182B57E5CF"
+        },
+        {
+          "Path": "Abandoned/Content/Paks/global.utoc",
+          "Bytes": 686,
+          "Sha256": "299CE45546379E9308F639B30D08FD2EA475479647900704882AE8935332C3D9"
+        }
+      ],
+      "verification": "20261123-220030-c8d19dbc292d4998986fec371d12a6a5",
+      "scenarios": {
+        "EntryCourse": "Passed",
+        "EntryCourseAlternate": "Passed",
+        "EntryCheckpoint": "Passed",
+        "DoorClamp": "Passed",
+        "Portals": "Passed",
+        "WristTerminal": "Passed"
+      },
+      "automatedStairsReadyToStationRefillWallSeconds": 18.518,
+      "legacyBallastPackageCount": 0,
+      "fabBallastPackageCount": 8,
+      "wristVerification": "20261123-220721-1655e733f4044f18a8de65229a9ddd52",
+      "routeCaptureSha256": {
+        "Entry-Stairs": "aae9ac947363f1b52b33b1ba617922f300cc8e21ba3101511146ee5a041edf06",
+        "Entry-Button": "59937430e339893e727bd87bbbe27cbe063c0f25f0fd5c1cd2a5f875a4bba1a8",
+        "Entry-Weight": "bd410359203d7475ca3b12ba770653d8bd98da91bc4a3159064e64905479c5c1",
+        "Vanguard-Climb-Handhold": "8cd319de0ab326069ede8f87110322f2e64db24d8ef2a37e9325ea2155554547",
+        "Vanguard-Station": "56f689b7f7d387fe64dcf7064b3fd9c46493d4ac8701def74c74373a592acd46",
+        "Wrist-Terminal-Status": "fdbd74a2ed7e46bb821575263c3c26da9f8f447114469f6d736b0bd5747765e0"
+      }
+    }
+  },
+  "galleryNanite": "20261123-220236-FosTechGallery-7fd110ef78fe49279bd5e61a807cf57e",
+  "doorAndPortal": {
+    "Weight-Opening-020": {
+      "controlSHA256": "6deb2ca12980e656b23daae31d0145620830c39ecd6b487045dfa23281c6c439",
+      "fabSHA256": "b58775b7e23f58faf1def278a20eba4a25f0576ebb718b87945c4f3cae6ce267",
+      "cropXYXY": [
+        720,
+        530,
+        1140,
+        690
+      ],
+      "meanAbsRGB8": 0.9861,
+      "over32Pct": 0.0015
+    },
+    "Weight-Opening-021": {
+      "controlSHA256": "d61854b19601dadc4c8bebf6a433c443f29231e74a6beb733803f0f03733c4dd",
+      "fabSHA256": "e3ce746cef535ef7aeba5c91059d71399a7de2dc1aaaf0d74612e35c3c5a1b40",
+      "cropXYXY": [
+        720,
+        530,
+        1140,
+        690
+      ],
+      "meanAbsRGB8": 1.0007,
+      "over32Pct": 0.0
+    },
+    "Weight-Opening-022": {
+      "controlSHA256": "6f2c958aea7f4c8377a42e07b4fd39b751e99b389319c0501b201761089acbcc",
+      "fabSHA256": "55cf24371cf71f79d117730748bd84c27eaf738cb060e7b2ae7167e46dd8c3b5",
+      "cropXYXY": [
+        720,
+        530,
+        1140,
+        690
+      ],
+      "meanAbsRGB8": 1.0192,
+      "over32Pct": 0.0
+    },
+    "PortalLab-FirstVisible": {
+      "controlSHA256": "ce2812ac395d6b44a671c8d8731c1a86c2dbeda448c85a5550fb31cd797c50cc",
+      "fabSHA256": "eb578ca6e02c7d1e6c11fc1b95f2498d16e80fe3e7c82372884ee7aec5c2f97a",
+      "cropXYXY": null,
+      "meanAbsRGB8": 0.7347,
+      "over32Pct": 0.0
+    },
+    "PortalLab-Active": {
+      "controlSHA256": "05784414abf80a7634be6fd34be837c6f42d9f45d7befcefe0ddbeb93b2c70b9",
+      "fabSHA256": "4ee0ae0b3b4fd2f0675ccd9ab0b49683b1e42252d7c044af585d1f7096f52626",
+      "cropXYXY": null,
+      "meanAbsRGB8": 0.2719,
+      "over32Pct": 0.0
+    }
+  },
+  "runs": [
+    {
+      "mode": "Uncapped",
+      "build": "Control",
+      "run": "20261123-220252-Travel-54482a23ff1c4d86a3e84c50115e15fd",
+      "csvSHA256": "3224d9c3b50263b8ae3cf688ee9bdc2637775f325123ca04c2529a413616894f",
+      "frameP95P99": [
+        6.7895,
+        7.0721
+      ],
+      "peakDedicatedMiB": 3057.19
+    },
+    {
+      "mode": "Uncapped",
+      "build": "Fab",
+      "run": "20261123-220313-Travel-0a672f3329384342829ae7d29ffd484e",
+      "csvSHA256": "1c9a3f7e8d12c1a8dccd1d1ffbc1b85360b1fd36909e507084194a8438d94c29",
+      "frameP95P99": [
+        6.6182,
+        7.0799
+      ],
+      "peakDedicatedMiB": 2969.59
+    },
+    {
+      "mode": "Uncapped",
+      "build": "Fab",
+      "run": "20261123-220333-Travel-5d7586e0cdb346c0a73ff24c1df001f7",
+      "csvSHA256": "9cc3d6f596a8b390be4f8aed9e83e6157f1cb88745b2bd5872dcc75d7732cc1f",
+      "frameP95P99": [
+        6.6466,
+        6.8759
+      ],
+      "peakDedicatedMiB": 2986.29
+    },
+    {
+      "mode": "Uncapped",
+      "build": "Control",
+      "run": "20261123-220352-Travel-0117aa08881c44fdb32a2689036ecd56",
+      "csvSHA256": "bf54558edd4d0cdcccd910f5e677cda32c875b7d49b0b14bf368c7513944f561",
+      "frameP95P99": [
+        6.7688,
+        7.0371
+      ],
+      "peakDedicatedMiB": 3017.2
+    },
+    {
+      "mode": "Stock",
+      "build": "Control",
+      "run": "20261123-220412-Travel-e03fedbb1117466797e640222bba8b0d",
+      "csvSHA256": "db949bc4370f7b77881bd834ac6596bc1769dff645d0e188ae889ab51e13edc5",
+      "frameP95P99": [
+        17.1299,
+        17.7089
+      ],
+      "peakDedicatedMiB": 3015.17
+    },
+    {
+      "mode": "Stock",
+      "build": "Fab",
+      "run": "20261123-220455-Travel-42f173f5e7a04959997e40d0266d53cd",
+      "csvSHA256": "a4753381eee14e1a9f2ce7c6a40a6808a895e3ba7190b2de56613a992ae82960",
+      "frameP95P99": [
+        17.1199,
+        17.3022
+      ],
+      "peakDedicatedMiB": 2994.29
+    },
+    {
+      "mode": "Stock",
+      "build": "Fab",
+      "run": "20261123-220538-Travel-640a7c69243242e7b96f8688920b7a0d",
+      "csvSHA256": "f9ac97e6e7b78977ff0c3e1a2fa95ac03cf437efcee1fb66b4bdcb6c686d29a3",
+      "frameP95P99": [
+        17.0392,
+        17.1961
+      ],
+      "peakDedicatedMiB": 2964.59
+    },
+    {
+      "mode": "Stock",
+      "build": "Control",
+      "run": "20261123-220621-Travel-5089938134424643a4c6aa7cc7846929",
+      "csvSHA256": "ce2b70e4aa4cec6050341a41ad659f3c963246a51d24254096b6334393c6e3e4",
+      "frameP95P99": [
+        17.1583,
+        17.6344
+      ],
+      "peakDedicatedMiB": 3015.2
+    }
+  ],
+  "pooled": {
+    "Uncapped": {
+      "Control": {
+        "frames": 600,
+        "frameP95P99ms": [
+          6.7698,
+          7.0721
+        ],
+        "gpuP95P99ms": [
+          6.4138,
+          6.6426
+        ],
+        "averageFPS": 163.924,
+        "maxFrameMs": 7.7206
+      },
+      "Fab": {
+        "frames": 600,
+        "frameP95P99ms": [
+          6.6304,
+          7.0799
+        ],
+        "gpuP95P99ms": [
+          6.2733,
+          6.503
+        ],
+        "averageFPS": 165.687,
+        "maxFrameMs": 8.1139
+      }
+    },
+    "Stock": {
+      "Control": {
+        "frames": 600,
+        "frameP95P99ms": [
+          17.1485,
+          17.6649
+        ],
+        "gpuP95P99ms": [
+          6.7301,
+          7.2316
+        ],
+        "averageFPS": 60.003,
+        "maxFrameMs": 18.4724
+      },
+      "Fab": {
+        "frames": 600,
+        "frameP95P99ms": [
+          17.1052,
+          17.2921
+        ],
+        "gpuP95P99ms": [
+          6.7427,
+          7.1635
+        ],
+        "averageFPS": 60.011,
+        "maxFrameMs": 17.5472
+      }
+    }
+  }
+}
