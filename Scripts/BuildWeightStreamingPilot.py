@@ -51,10 +51,9 @@ for index, line in enumerate(rows):
     cube.set_actor_label(label)
     cube.set_actor_location(position, False, True)
     cube.set_editor_property("placed_type", getattr(unreal.PuzzleCubeType, match[4].upper()))
-    code = "01A" if match[4] == "Small" else "01B"
-    visual_mesh = unreal.load_asset(f"/Game/Abandoned/Meshy/DEV_{code}/DEV-{code}/StaticMeshes/DEV-{code}")
+    visual_mesh = unreal.load_asset(f"/Game/Abandoned/Fab/Ballast/{match[4]}/SM_Ballast")
     if not visual_mesh:
-        raise RuntimeError(f"Missing ballast mesh DEV-{code}")
+        raise RuntimeError(f"Missing {match[4]} Fab ballast mesh")
     cube.get_component_by_class(unreal.StaticMeshComponent).set_static_mesh(visual_mesh)
     cube.set_editor_property("placed_ballast", True)
 if existing:

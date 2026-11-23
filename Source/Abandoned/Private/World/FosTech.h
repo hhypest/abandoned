@@ -7,8 +7,8 @@ class UStaticMeshComponent;
 
 namespace Abandoned::FosTech
 {
-inline constexpr TCHAR SmallCube[] = TEXT("/Game/Abandoned/Meshy/DEV_01A/DEV-01A/StaticMeshes/DEV-01A.DEV-01A");
-inline constexpr TCHAR LargeCube[] = TEXT("/Game/Abandoned/Meshy/DEV_01B/DEV-01B/StaticMeshes/DEV-01B.DEV-01B");
+inline constexpr TCHAR SmallCube[] = TEXT("/Game/Abandoned/Fab/Ballast/Small/SM_Ballast.SM_Ballast");
+inline constexpr TCHAR LargeCube[] = TEXT("/Game/Abandoned/Fab/Ballast/Large/SM_Ballast.SM_Ballast");
 inline constexpr TCHAR Button[] = TEXT("/Game/Abandoned/Meshy/DEV_03/DEV-03/StaticMeshes/DEV-03.DEV-03");
 inline constexpr TCHAR Switch[] = TEXT("/Game/Abandoned/Meshy/DEV_04/DEV-04/StaticMeshes/DEV-04.DEV-04");
 inline constexpr TCHAR Emitter[] = TEXT("/Game/Abandoned/Meshy/DEV_05/DEV-05/StaticMeshes/DEV-05.DEV-05");
