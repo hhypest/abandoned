@@ -442,6 +442,10 @@ void APortalLabHUD::DrawHUD()
         DrawLine(X, Y - 6, X, Y + 6, FLinearColor::White, 1.0f);
         if (const auto* Player = Cast<APortalLabCharacter>(GetOwningPawn()))
         {
+            if (const APuzzleCube* Cube = Player->GetSightedCube())
+            {
+                DrawText(FString::Printf(TEXT("%.0f кг"), Cube->GetMassKg()), FLinearColor::White, X + 15, Y - 17);
+            }
             if (const TCHAR* Prompt = Player->GetPlacementPrompt())
             {
                 DrawText(Prompt, FLinearColor::White, X + 18.0f, Y + 14.0f);

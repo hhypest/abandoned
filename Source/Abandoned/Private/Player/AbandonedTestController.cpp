@@ -7,8 +7,14 @@
 #include "Engine/World.h"
 #include "GameFramework/GameUserSettings.h"
 #include "InputCoreTypes.h"
-#if !UE_BUILD_SHIPPING
+#include "Expedition/Dev20Actor.h"
+#include "Player/PuzzleCharacter.h"
 #include "Infrastructure/Expedition/UnrealDev20Transfer.h"
+#include "Widgets/SOverlay.h"
+#include "Sound/SoundBase.h"
+#include "Misc/PackageName.h"
+#include "Kismet/GameplayStatics.h"
+#if !UE_BUILD_SHIPPING
 #include "Infrastructure/Expedition/UnrealWorldTravel.h"
 #endif
 #include "Kismet/KismetSystemLibrary.h"
@@ -219,11 +225,103 @@ void AAbandonedTestController::OpenMenu(const FText& Title, FKey ToggleKey, cons
                 ]
             ]
         ];
+    PresentMenu(ResumeButton.ToSharedRef());
+}
+
+void AAbandonedTestController::PresentMenu(const TSharedRef<SWidget>& Focus)
+{
+    ULocalPlayer* LocalPlayer = GetLocalPlayer();
     LocalPlayer->ViewportClient->AddViewportWidgetForPlayer(LocalPlayer, Menu.ToSharedRef(), 10);
     FInputModeUIOnly Input;
-    Input.SetWidgetToFocus(ResumeButton).SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+    Input.SetWidgetToFocus(Focus).SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
     SetInputMode(Input);
     bShowMouseCursor = true;
+}
+
+void AAbandonedTestController::OfferDev20Discard(ADev20Actor& Unit)
+{
+    ULocalPlayer* Local = GetLocalPlayer();
+    if (Menu || !Local || !Local->ViewportClient || !SetPause(true)) { return; }
+    DiscardCandidate = &Unit;
+    TSharedPtr<SButton> Keep;
+    Menu = SNew(SPauseMenu)
+        .OnClose(FSimpleDelegate::CreateUObject(this, &AAbandonedTestController::CloseMenu))
+        [
+            SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+            .BorderBackgroundColor(FLinearColor(0.012f, 0.019f, 0.022f, 0.96f))
+            .HAlign(HAlign_Center).VAlign(VAlign_Center).Padding(24)
+            [
+                SNew(SVerticalBox)
+                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 16)
+                [ SNew(STextBlock).Text(INVTEXT("Выбросить DEV-20?")).Font(FCoreStyle::GetDefaultFontStyle("Bold", 27)) ]
+                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 24)
+                [ SNew(STextBlock).Text(INVTEXT("Без силового узла эвакуация невозможна. История героя закончится.")).WrapTextAt(460) ]
+                + SVerticalBox::Slot().AutoHeight().Padding(0, 4)
+                [ SAssignNew(Keep, SButton).Text(INVTEXT("Оставить в руках")).OnClicked_UObject(this, &AAbandonedTestController::RunMenuAction, EMenuAction::Resume) ]
+                + SVerticalBox::Slot().AutoHeight().Padding(0, 4)
+                [ SNew(SButton).Text(INVTEXT("Выбросить навсегда")).OnClicked_UObject(this, &AAbandonedTestController::ConfirmDev20Discard) ]
+            ]
+        ];
+    PresentMenu(Keep.ToSharedRef());
+}
+
+FReply AAbandonedTestController::ConfirmDev20Discard()
+{
+    APuzzleCharacter* Carrier = Cast<APuzzleCharacter>(GetPawn());
+    ADev20Actor* Unit = DiscardCandidate.Get();
+    auto* Session = Abandoned::Infrastructure::Expedition::Dev20Session(this);
+    if (Session && Session->Transfer.EvacuationLost()) { return FReply::Handled(); }
+    if (!Session || !Unit || !Carrier || !Session->Transfer.AbandonHeldUnit(Carrier->GetHeldDev20() == Unit))
+    {
+        CloseMenu();
+        return FReply::Handled();
+    }
+
+    Carrier->ReleaseHeldObject();
+    Unit->SetActorHiddenInGame(true);
+    Unit->SetActorEnableCollision(false);
+    RemoveMenu();
+    const TCHAR* Cue = TEXT("/Game/AbandonedLocal/Dev20Ending/S_Dev20Ending");
+    USoundBase* Sound = FPackageName::DoesPackageExist(Cue) ? LoadObject<USoundBase>(nullptr, Cue) : nullptr;
+    const double Start = FPlatformTime::Seconds();
+    const auto Elapsed = [Start]() { return FPlatformTime::Seconds() - Start; };
+    TSharedPtr<SButton> Restart;
+    Menu = SNew(SBorder).Padding(36).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+        .BorderBackgroundColor(FLinearColor::Black)
+        [
+            SNew(SOverlay)
+            + SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+            [
+                SNew(SVerticalBox)
+                + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 12)
+                [ SNew(STextBlock).Visibility_Lambda([Elapsed]() { return Elapsed() >= 4.2 ? EVisibility::Visible : EVisibility::Hidden; })
+                    .Text(INVTEXT("Эвакуация сорвана")).Font(FCoreStyle::GetDefaultFontStyle("Bold", 28)) ]
+                + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
+                [ SAssignNew(Restart, SButton).Text(INVTEXT("Вернуться на станцию")).OnClicked_UObject(this, &AAbandonedTestController::RestartDev20Route) ]
+            ]
+            + SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(0, 0, 0, 26)
+            [
+                SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Regular", 21))
+                .Text_Lambda([Elapsed]() {
+                    const double Seconds = Elapsed();
+                    if (Seconds < 0.55) { return INVTEXT("[Шорох кобуры]"); }
+                    if (Seconds < 2.2) { return INVTEXT("Я не смог."); }
+                    if (Seconds < 4.2) { return INVTEXT("[Одиночный выстрел]"); }
+                    return FText::GetEmpty();
+                })
+            ]
+        ];
+    PresentMenu(Restart.ToSharedRef());
+    if (Sound) { UGameplayStatics::PlaySound2D(this, Sound); }
+    UE_LOG(LogTemp, Display, TEXT("DEV-20 deliberately discarded. Evacuation lost."));
+    return FReply::Handled();
+}
+
+FReply AAbandonedTestController::RestartDev20Route()
+{
+    CloseMenu();
+    Abandoned::Infrastructure::Expedition::ReturnToDev20Station(this, Abandoned::Application::Expedition::Dev20Entry::Recovery);
+    return FReply::Handled();
 }
 
 void AAbandonedTestController::RemoveMenu()
@@ -237,6 +335,7 @@ void AAbandonedTestController::RemoveMenu()
         LocalPlayer->ViewportClient->RemoveViewportWidgetForPlayer(LocalPlayer, Menu.ToSharedRef());
     }
     Menu.Reset();
+    DiscardCandidate.Reset();
 }
 
 void AAbandonedTestController::CloseMenu()

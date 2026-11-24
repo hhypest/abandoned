@@ -5,11 +5,15 @@
 #include "AbandonedTestController.generated.h"
 
 class SWidget;
+class ADev20Actor;
 
 UCLASS()
 class AAbandonedTestController final : public APlayerController
 {
     GENERATED_BODY()
+
+public:
+    void OfferDev20Discard(ADev20Actor& Unit);
 
 protected:
     void BeginPlay() override;
@@ -37,5 +41,9 @@ private:
     FText GetFullscreenLabel() const;
     FReply RunMenuAction(EMenuAction Action);
 
+    FReply ConfirmDev20Discard();
+    FReply RestartDev20Route();
+    void PresentMenu(const TSharedRef<SWidget>& Focus);
+    TWeakObjectPtr<ADev20Actor> DiscardCandidate;
     TSharedPtr<SWidget> Menu;
 };

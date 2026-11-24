@@ -7,7 +7,7 @@ param(
     [string]$PackageRoot,
 
     [ValidateSet('StationAirlock', 'StationAirlockMissingSupply', 'PassageAirlock', 'PassageAirlockInvalidDoor', 'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
-                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20VelocityNegative')]
+                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20Discard', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -390,6 +390,14 @@ $scenarios = @{
         ExtraFlag = '-VerifyDev20Recovery'
         Chambers = @('Button')
         Success = $dev20Transit + @('DEV-20: exercising loss outside the Button chamber bounds.', 'DEV-20 recovery verification passed')
+    }
+    Dev20Discard = @{
+        Map = $dev20Map
+        Flag = '-VerifyDev20'
+        ExtraFlag = '-VerifyDev20Discard'
+        CaptureFlag = '-CaptureDev20Ending'
+        Success = @('Discard cancelled with original unit in grip.', 'DEV-20 deliberately discarded. Evacuation lost.',
+                    'DEV-20 ending passed: cancelled, confirmed, restarted with one unit.')
     }
     Dev20VelocityNegative = @{
         Map = $dev20Map

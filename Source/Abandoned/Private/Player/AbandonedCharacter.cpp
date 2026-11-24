@@ -16,6 +16,7 @@
 #include "InputAction.h"
 #include "InputCoreTypes.h"
 #include "InputMappingContext.h"
+#include "Misc/PackageName.h"
 
 using namespace Abandoned::MovementProfile;
 
@@ -81,6 +82,26 @@ void AAbandonedCharacter::PostInitializeComponents()
     {
         SuitBody->FitToWearer(*this);
         WristCasing->SetStaticMesh(WristCasingAsset.LoadSynchronous());
+        if (FPackageName::DoesPackageExist(SidearmAsset.ToSoftObjectPath().GetLongPackageName()))
+        {
+            if (UStaticMesh* SidearmMesh = SidearmAsset.LoadSynchronous(); SidearmMesh && SuitBody->DoesSocketExist(TEXT("pelvis")))
+            {
+                ExpeditionSidearm = NewObject<UStaticMeshComponent>(this, TEXT("ExpeditionSidearm"));
+                ExpeditionSidearm->SetupAttachment(SuitBody, TEXT("pelvis"));
+                ExpeditionSidearm->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                ExpeditionSidearm->SetCanEverAffectNavigation(false);
+                ExpeditionSidearm->SetCastShadow(false);
+                ExpeditionSidearm->SetOnlyOwnerSee(true);
+                ExpeditionSidearm->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::FirstPerson);
+                ExpeditionSidearm->SetStaticMesh(SidearmMesh);
+                ExpeditionSidearm->RegisterComponent();
+                const FVector Belt = SuitBody->GetSocketLocation(TEXT("pelvis")) + GetActorRightVector() * 20.0;
+                const FQuat Rotation = GetActorQuat() * FRotator(-75, 0, 0).Quaternion();
+                const double Scale = 21.0 / FMath::Max(1.0, SidearmMesh->GetBounds().BoxExtent.GetMax() * 2);
+                ExpeditionSidearm->SetWorldTransform(FTransform(Rotation,
+                    Belt - Rotation.RotateVector(SidearmMesh->GetBounds().Origin * Scale), FVector(Scale)));
+            }
+        }
     }
 }
 

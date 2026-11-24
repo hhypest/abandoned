@@ -1,0 +1,13 @@
+Abandoned — expedition equipment and DEV-20 ending
+
+M1911 (FREE) by Xeradev
+https://www.fab.com/listings/77247d26-33a3-4dba-a840-7a7d8c92bb9c
+Non-rigged model adapted for the expedition suit and assigned project material.
+
+200 Free SFX by HomkaSFX (HomkaH)
+https://www.fab.com/listings/6964cf76-d8a5-48de-8846-9c8cb972840c
+Uses part of Full Size 9mm Pistol Holster Draw, Take 1.
+The offscreen impulse layers a processed Slide Lock Release, Take 1, from the same set.
+
+These credits apply to builds that include the corresponding Fab assets.
+Source packages are obtained from the creators through Fab.

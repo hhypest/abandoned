@@ -54,6 +54,10 @@ protected:
     TObjectPtr<UStaticMeshComponent> WristCasing;
 
 private:
+    UPROPERTY(Transient)
+    TObjectPtr<UStaticMeshComponent> ExpeditionSidearm;
+    UPROPERTY(Config)
+    TSoftObjectPtr<UStaticMesh> SidearmAsset;
     UPROPERTY(Config)
     TSoftObjectPtr<UStaticMesh> WristCasingAsset;
     void Look(const FInputActionValue& Value);

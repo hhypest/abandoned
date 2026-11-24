@@ -10,6 +10,12 @@ inline constexpr float Dev20MassKg = 34.0f;
 
 enum class Dev20Stage { Station, Button, Weight };
 
+// The carrier can forfeit evacuation only while the expedition unit is in hand.
+constexpr bool CanAbandonDev20(bool HoldingUnit, bool InTransit, bool EvacuationLost)
+{
+    return HoldingUnit && !InTransit && !EvacuationLost;
+}
+
 constexpr std::optional<Dev20Stage> NextDev20Stage(Dev20Stage From)
 {
     switch (From)

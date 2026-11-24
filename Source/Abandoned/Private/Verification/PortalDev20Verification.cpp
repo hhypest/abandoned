@@ -5,6 +5,8 @@
 #include "Domain/Expedition/Dev20.h"
 #include "Domain/Puzzles/BallastRules.h"
 #include "Engine/World.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Infrastructure/Expedition/UnrealDev20Transfer.h"
 #include "Expedition/Dev20Actor.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
@@ -37,12 +39,14 @@ void UPortalDev20Verification::AttachIfRequested(APortalLabGameMode& Lab, const 
         return;
     }
     auto* Test = NewObject<UPortalDev20Verification>(&Lab);
+    const bool bDiscard = FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20Discard"));
+    Test->PrimaryComponentTick.bTickEvenWhenPaused = bDiscard;
     Test->Layout = &Settings;
     Test->Unit = &Item;
     Test->Console = &ArrivalConsole;
     Test->Blocker = &ExitBlocker;
     Test->bCapture = FParse::Param(FCommandLine::Get(), TEXT("CaptureDev20"));
-    if (bRecoveryArrival && FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20Recovery")))
+    if (bRecoveryArrival && (bDiscard || FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20Recovery"))))
     {
         Test->Phase = EPhase::RecoveryArrival;
     }
@@ -54,6 +58,7 @@ void UPortalDev20Verification::AttachIfRequested(APortalLabGameMode& Lab, const 
 
 void UPortalDev20Verification::Advance(EPhase Next)
 {
+    PhaseStart = FPlatformTime::Seconds();
     Phase = Next;
     Elapsed = 0.0f;
 }
@@ -78,7 +83,9 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
     using Abandoned::Domain::Expedition::Dev20MassKg;
     using Abandoned::Verification::PlacePlayer;
     Elapsed += DeltaSeconds;
-    if (Elapsed > 8.0f)
+    const double RealElapsed = FPlatformTime::Seconds() - PhaseStart;
+    // Menu subtitles follow the real audio clock, including during fixed-step playback.
+    if ((Phase >= EPhase::CancelDiscard ? RealElapsed : Elapsed) > 8.0)
     {
         Fail(TEXT("timed out waiting for the physical route or world travel"));
         return;
@@ -100,6 +107,12 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
         return;
     }
 
+    const auto PressMenuKey = [](const FKey& Key)
+    {
+        const FKeyEvent Event(Key, FModifierKeysState(), 0, false, 0, 0);
+        FSlateApplication::Get().ProcessKeyDownEvent(Event);
+        FSlateApplication::Get().ProcessKeyUpEvent(Event);
+    };
     const FPortalTransitObservation Transit = Lab->GetTransitObservation();
     const auto LookFrom = [&](FVector At, const FVector& Target)
     {
@@ -164,6 +177,12 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
             return;
         }
         UE_LOG(LogPortalDev20Test, Display, TEXT("DEV-20: 34 kg Chaos mass and carry slowdown confirmed."));
+        if (FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20Discard")))
+        {
+            Input.Press(*Controller, EKeys::LeftMouseButton);
+            Advance(EPhase::CancelDiscard);
+            break;
+        }
         PlacePlayer(*Player, ApproachPose);
         if (bPowerLossVerified)
         {
@@ -257,6 +276,51 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
         }
         WalkForward();
         break;
+    case EPhase::CancelDiscard:
+        if (RealElapsed > .35)
+        {
+            if (!GetWorld()->IsPaused()) { Fail(TEXT("discard did not ask for confirmation")); return; }
+            PressMenuKey(EKeys::Escape);
+            Advance(EPhase::RepeatDiscard);
+        }
+        break;
+    case EPhase::RepeatDiscard:
+        if (RealElapsed > .35)
+        {
+            if (GetWorld()->IsPaused() || Player->GetHeldDev20() != Unit.Get()) { Fail(TEXT("cancel lost the unit")); return; }
+            UE_LOG(LogPortalDev20Test, Display, TEXT("Discard cancelled with original unit in grip."));
+            Input.Press(*Controller, EKeys::LeftMouseButton);
+            Advance(EPhase::ConfirmDiscard);
+        }
+        break;
+    case EPhase::ConfirmDiscard:
+        if (RealElapsed > .35)
+        {
+            PressMenuKey(EKeys::Down);
+            PressMenuKey(EKeys::Enter);
+            Advance(EPhase::CheckEnding);
+        }
+        break;
+    case EPhase::CheckEnding:
+        if (RealElapsed > 1.1)
+        {
+            const auto* Session = Abandoned::Infrastructure::Expedition::Dev20Session(this);
+            if (!GetWorld()->IsPaused() || !Session || !Session->Transfer.EvacuationLost() ||
+                Player->GetHeldDev20() || !Unit->IsHidden()) { Fail(TEXT("intentional discard did not end the route")); return; }
+            if (FParse::Param(FCommandLine::Get(), TEXT("CaptureDev20Ending")))
+            {
+                FScreenshotRequest::RequestScreenshot(TEXT("DEV20-LastLine"), true, false);
+            }
+            Advance(EPhase::RestartEnding);
+        }
+        break;
+    case EPhase::RestartEnding:
+        if (RealElapsed > 3.8)
+        {
+            PressMenuKey(EKeys::Enter);
+            SetComponentTickEnabled(false);
+        }
+        break;
     case EPhase::RecoveryArrival:
         if (Elapsed >= 0.25f)
         {
@@ -267,7 +331,14 @@ void UPortalDev20Verification::TickComponent(float DeltaSeconds, ELevelTick Tick
                 Fail(TEXT("recovery from the previous world did not restore one DEV-20 at the cradle"));
                 return;
             }
-            UE_LOG(LogPortalDev20Test, Display, TEXT("DEV-20 recovery verification passed: lost in Button, returned to the station."));
+            if (FParse::Param(FCommandLine::Get(), TEXT("VerifyDev20Discard")))
+            {
+                UE_LOG(LogPortalDev20Test, Display, TEXT("DEV-20 ending passed: cancelled, confirmed, restarted with one unit."));
+            }
+            else
+            {
+                UE_LOG(LogPortalDev20Test, Display, TEXT("DEV-20 recovery verification passed: lost in Button, returned to the station."));
+            }
             SetComponentTickEnabled(false);
             FPlatformMisc::RequestExitWithStatus(false, 0);
         }

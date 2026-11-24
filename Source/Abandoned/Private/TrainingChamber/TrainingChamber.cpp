@@ -516,33 +516,22 @@ void ATrainingChamberHUD::DrawHUD()
     DrawText(Status, bDoorObstructed ? FLinearColor::White : FLinearColor(1.0, 0.68, 0.23), 24.0f, 76.0f);
     if (Layout->UsesParallelPlates())
     {
-        const bool bA = Chamber->IsPlatePressed(0);
-        const bool bB = Chamber->IsPlatePressed(1);
-        DrawText(FString::Printf(TEXT("Switch: %s   |   A: %.0f kg %s   |   B: %.0f kg %s   |   A OR B: %s"),
-            Chamber->IsButtonLatched() ? TEXT("armed") : TEXT("off"),
-            Chamber->GetMeasuredMass(0), bA ? TEXT("live") : TEXT("idle"),
-            Chamber->GetMeasuredMass(1), bB ? TEXT("live") : TEXT("idle"),
-            Chamber->IsParallelRelayPowered() ? TEXT("live") : TEXT("idle")), FLinearColor::White, 24.0f, 101.0f);
+        DrawText(FString::Printf(TEXT("Питание %s   ·   Ветвь А %s   ·   Ветвь Б %s   ·   Реле %s"),
+            Chamber->IsButtonLatched() ? TEXT("вкл.") : TEXT("выкл."),
+            Chamber->IsPlatePressed(0) ? TEXT("замкнута") : TEXT("разомкнута"),
+            Chamber->IsPlatePressed(1) ? TEXT("замкнута") : TEXT("разомкнута"),
+            Chamber->IsParallelRelayPowered() ? TEXT("вкл.") : TEXT("выкл.")), FLinearColor::White, 24, 101);
     }
-    else if (Layout->bRequiresButton)
+    else if (Layout->bRequiresButton || Layout->UsesPlateBalance())
     {
-        DrawText(FString::Printf(TEXT("Circuit: %s   |   Plate: %.0f kg   |   Target: %.0f%s kg"),
-            Chamber->IsButtonLatched() ? TEXT("armed") : TEXT("off"), Chamber->GetMeasuredMass(),
-            Layout->PlateActivationMassKg, Layout->PlateActivationMassKg == Layout->PlateMaximumMassKg ? TEXT("") : TEXT("+")),
-            FLinearColor::White, 24.0f, 101.0f);
-    }
-    if (Layout->UsesPlateBalance())
-    {
-        const TArray<float>& Loads = Chamber->GetPlateLoads();
-        const float Target = Layout->BalanceTotalKg / Layout->GetPlateCount();
-        DrawText(FString::Printf(TEXT("Target: %.0f kg on each plate"), Target), FLinearColor::White, 24.0f, 103.0f);
-        for (int32 Index = 0; Index < Loads.Num(); ++Index)
-        {
-            const TCHAR* State = FMath::IsNearlyEqual(Loads[Index], Target, 0.01f) ? TEXT("ready")
-                : Loads[Index] < Target ? TEXT("too light") : TEXT("too heavy");
-            DrawText(FString::Printf(TEXT("Plate %d: %.0f kg  |  %s"), Index + 1, Loads[Index], State),
-                FLinearColor::White, 24.0f, 126.0f + 21.0f * Index);
-        }
+        const FString Goal = Layout->UsesPlateBalance()
+            ? FString::Printf(TEXT("На каждой плите должно быть %.0f кг"), Layout->BalanceTotalKg / Layout->GetPlateCount())
+            : FString::Printf(TEXT("Питание %s   ·   Нагрузка %s"),
+                Chamber->IsButtonLatched() ? TEXT("вкл.") : TEXT("выкл."),
+                *(Layout->PlateActivationMassKg == Layout->PlateMaximumMassKg
+                    ? FString::Printf(TEXT("%.0f кг"), Layout->PlateActivationMassKg)
+                    : FString::Printf(TEXT("%.0f–%.0f кг"), Layout->PlateActivationMassKg, Layout->PlateMaximumMassKg)));
+        DrawText(Goal, FLinearColor::White, 24, 101);
     }
     if (const auto Issue = Chamber->GetCheckpointIssue(); Issue != Abandoned::Application::Expedition::CheckpointIssue::None)
     {
@@ -565,6 +554,10 @@ void ATrainingChamberHUD::DrawHUD()
     const auto& Hints = Chamber->GetHints();
     const bool bShowHintPage = Hints.Page() > 0 && Player->CanReadHintTerminal();
     const TCHAR* Prompt = bShowHintPage ? nullptr : Player->GetPlacementPrompt();
+    if (const APuzzleCube* Cube = bShowHintPage ? nullptr : Player->GetSightedCube())
+    {
+        DrawText(FString::Printf(TEXT("%.0f кг"), Cube->GetMassKg()), FLinearColor::White, CenterX + 15, CenterY - 17);
+    }
     if (Prompt)
     {
         float PromptWidth = 0.0f;

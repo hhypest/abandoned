@@ -14,6 +14,7 @@
 #include "Infrastructure/Puzzles/PuzzleInteractionSettings.h"
 #include "Infrastructure/Puzzles/UnrealSlidingDoor.h"
 #include "Puzzles/PuzzleCube.h"
+#include "Player/AbandonedTestController.h"
 
 namespace
 {
@@ -49,11 +50,20 @@ UPrimitiveComponent* APuzzleCharacter::TraceInteractable() const
     return Hit.GetComponent();
 }
 
+const APuzzleCube* APuzzleCharacter::GetSightedCube() const
+{
+    const FVector Origin = Camera->GetComponentLocation();
+    FHitResult Hit;
+    GetWorld()->LineTraceSingleByChannel(Hit, Origin, Origin + GetViewRotation().Vector() * 10000,
+        ECC_Visibility, FCollisionQueryParams(SCENE_QUERY_STAT(BallastReadout), false, this));
+    return Cast<APuzzleCube>(Hit.GetActor());
+}
+
 const TCHAR* APuzzleCharacter::GetPlacementPrompt() const
 {
     if (GetHeldDev20())
     {
-        return TEXT("[E] Set down DEV-20");
+        return TEXT("[E] Поставить DEV-20   [ЛКМ] Выбросить…");
     }
     if (GetHeldCube())
     {
@@ -74,7 +84,7 @@ const TCHAR* APuzzleCharacter::GetPlacementPrompt() const
         const auto* Devices = Cast<IPuzzleDeviceCommands>(GetWorld()->GetAuthGameMode());
         return Target && Devices ? Devices->DevicePrompt(*Target) : nullptr;
     }
-    return Cube->GetMassKg() == 5.0f ? TEXT("[E] Pick up small cube (5 kg)") : TEXT("[E] Pick up large cube (10 kg)");
+    return Cube->GetMassKg() == 5.0f ? TEXT("[E] Поднять малый куб") : TEXT("[E] Поднять большой куб");
 }
 
 void APuzzleCharacter::Interact()
@@ -148,6 +158,14 @@ void APuzzleCharacter::ReleaseHeldObject()
 
 void APuzzleCharacter::ThrowHeldObject()
 {
+    if (ADev20Actor* Unit = GetHeldDev20())
+    {
+        if (auto* Local = Cast<AAbandonedTestController>(GetController()))
+        {
+            Local->OfferDev20Discard(*Unit);
+        }
+        return;
+    }
     Grip->Throw(GetVelocity(), GetViewRotation().Vector() * GetDefault<UPuzzleInteractionSettings>()->GetThrowImpulse());
     Placement->UpdatePreview(GetHeldCube(), Camera->GetComponentLocation(), InteractionRayEnd());
 }
