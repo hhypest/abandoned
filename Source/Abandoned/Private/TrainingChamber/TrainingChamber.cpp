@@ -463,7 +463,7 @@ const TCHAR* ATrainingChamberGameMode::DevicePrompt(const UPrimitiveComponent& T
 {
     if (&Target == Devices->HintTerminal)
     {
-        return TEXT("[E] Read hint terminal");
+        return TEXT("[E] Прочитать подсказку");
     }
     if (&Target == Devices->Button)
     {
@@ -562,8 +562,16 @@ void ATrainingChamberHUD::DrawHUD()
     {
         float PromptWidth = 0.0f;
         float PromptHeight = 0.0f;
-        GetTextSize(Prompt, PromptWidth, PromptHeight);
-        DrawText(Prompt, FLinearColor::White, CenterX - PromptWidth * 0.5f, CenterY + 22.0f);
+        const bool bTerminalPrompt = !Layout->HintProjectionMaterial.IsNull() && Player->CanReadHintTerminal();
+        const float Scale = bTerminalPrompt ? FMath::Clamp(Canvas->ClipY / 640.0f, 1.2f, 1.7f) : 1.0f;
+        GetTextSize(Prompt, PromptWidth, PromptHeight, nullptr, Scale);
+        const float X = CenterX - PromptWidth * 0.5f;
+        const float Y = bTerminalPrompt ? Canvas->ClipY * 0.82f : CenterY + 22.0f;
+        if (bTerminalPrompt)
+        {
+            DrawRect(FLinearColor(0.015f, 0.023f, 0.028f, 0.9f), X - 8, Y - 4, PromptWidth + 16, PromptHeight + 8);
+        }
+        DrawText(Prompt, FLinearColor::White, X, Y, nullptr, Scale);
     }
     if (bShowHintPage)
     {

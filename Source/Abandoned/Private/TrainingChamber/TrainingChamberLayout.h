@@ -66,6 +66,9 @@ public:
     FSceneBlock HintTerminal;
 
     UPROPERTY(Config)
+    TSoftObjectPtr<UMaterialInterface> HintProjectionMaterial;
+
+    UPROPERTY(Config)
     TArray<FString> HintPages;
 
     UPROPERTY(Config)
