@@ -105,6 +105,9 @@ public:
     TArray<FSceneBlock> MantleLedges;
 
     UPROPERTY(Config)
+    TArray<FSceneBlock> Cladding;
+
+    UPROPERTY(Config)
     FSceneBlock Door;
 
     UPROPERTY(Config)

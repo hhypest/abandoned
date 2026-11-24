@@ -304,7 +304,7 @@ FReply AAbandonedTestController::ConfirmDev20Discard()
                 SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Regular", 21))
                 .Text_Lambda([Elapsed]() {
                     const double Seconds = Elapsed();
-                    if (Seconds < 0.55) { return INVTEXT("[Шорох кобуры]"); }
+                    if (Seconds < 0.55) { return FText::GetEmpty(); }
                     if (Seconds < 2.2) { return INVTEXT("Я не смог."); }
                     if (Seconds < 4.2) { return INVTEXT("[Одиночный выстрел]"); }
                     return FText::GetEmpty();

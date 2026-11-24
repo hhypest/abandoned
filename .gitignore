@@ -15,6 +15,9 @@ Saved/
 # Local inputs, build output and credentials
 /AssetSource/
 /Content/AbandonedLocal/
+/Content/MW_Pistol_SK/
+/Content/SM_Concrete_07/
+/Content/M1911/
 /Artifacts/
 .env
 .env.*

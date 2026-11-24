@@ -152,6 +152,7 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
         for (auto& Block : Placed->Room) { Block.Center += Offset; }
         for (auto& Light : Placed->Lights) { Light.Position += Offset; }
         for (auto& Ledge : Placed->MantleLedges) { Ledge.Center += Offset; }
+        for (auto& Panel : Placed->Cladding) { Panel.Center += Offset; }
         // Optional local artwork can be absent from the public cook. Use the configured fallback in that case.
         for (auto& Finish : Placed->Finishes) { if (!Finish.Material.IsValid()) { Finish.Material.Reset(); } }
         if (!Placed->FrameMesh.IsValid()) { Placed->FrameMesh.Reset(); }
@@ -232,6 +233,22 @@ void AVanguardSegment::Prepare(VanguardDestination Destination, FString& ErrorMe
     }
     else
     {
+        for (const FSceneBlock& Panel : Passage->Cladding)
+        {
+            const auto* Finish = Layout->Finishes.FindByPredicate([&Panel](const FSceneFinish& Entry)
+            {
+                return Entry.Name == Panel.Finish;
+            });
+            if (Finish && Finish->Material.IsValid() && Panel.IsValid() && !Panel.bCollision)
+            {
+                if (!SpawnBlock(Panel, EComponentMobility::Static).Visual)
+                {
+                    ErrorMessage = TEXT("Could not create passage cladding.");
+                    return;
+                }
+                UE_LOG(LogVanguardRoute, Display, TEXT("Passage cladding placed: %s."), *Panel.Finish.ToString());
+            }
+        }
         if (Passage->bEnableMantle)
         {
             for (const auto& Ledge : Passage->MantleLedges)
