@@ -24,7 +24,7 @@ public:
     void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
-    enum class EPhase { Inspect, Power, Take, CheckGrip, Approach, Interrupted, BlockedExit, Launch, Cross, Depart, RecoveryArrival };
+    enum class EPhase { Inspect, Power, Take, CheckGrip, Approach, Interrupted, BlockedExit, Launch, Cross, Depart, RecoveryArrival, CancelDiscard, RepeatDiscard, ConfirmDiscard, CheckEnding, RestartEnding };
     void Advance(EPhase Next);
     void Fail(const TCHAR* Reason);
 
@@ -34,6 +34,7 @@ private:
     TWeakObjectPtr<APuzzleCube> Blocker;
     FVerificationKeyPress Input;
     EPhase Phase = EPhase::Inspect;
+    double PhaseStart = 0.0;
     float Elapsed = 0.0f;
     int32 BlockedBeforeApproach = 0;
     bool bPowerLossVerified = false;

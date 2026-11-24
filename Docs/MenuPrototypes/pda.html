@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ФосТех · Сетчатка и КПК</title>
+<style>
+*{box-sizing:border-box} [hidden]{display:none!important}
+:root{color-scheme:dark;font:clamp(16px,1.48vw,28px)/1.4 "Bahnschrift","Segoe UI",sans-serif}
+body{margin:0;background:#10191b;color:#f7f9f6} main{min-height:100vh;position:relative;overflow:hidden}
+.world{position:absolute;inset:0;background:linear-gradient(0deg,#091313a9,transparent 48%),url('../Images/A07-CampaignExit-Station.png') 50% 74%/140% auto no-repeat}
+body[data-scene=flare] .world{background:linear-gradient(100deg,#071012aa,transparent 75%),url('passage.webp') center/cover}
+.telemetry{position:absolute;bottom:12%;left:5.4%;display:flex;gap:1.5rem;padding:.55rem 1rem;border-left:2px solid #d4e6dfb0;background:#071010dc}
+small{display:block;font-size:.62rem;letter-spacing:.12em;color:#ccd8d4;text-transform:uppercase}
+strong{font-weight:550;font-size:1.58rem;font-variant-numeric:tabular-nums} em{font-size:.7rem;font-style:normal;margin-left:.2em}
+.reticle{position:absolute;top:50%;left:50%;width:4px;height:4px;background:white;box-shadow:0 0 4px #111}
+.alert{position:absolute;top:14%;left:5.4%;padding:.65rem 1.1rem;background:#210e12ed;border-left:4px solid #ff6c67}
+.alert small{color:#ff9791}.alert b{display:block;font-size:1.22rem;font-weight:550}
+.subtitle{position:absolute;bottom:4%;width:100%;text-align:center}.subtitle span{background:#101417ec;padding:.25rem .6rem}
+.hint{position:absolute;bottom:12%;right:5.4%;font-size:.75rem;background:#111b1bf0;padding:.4rem .75rem}
+.pda{position:absolute;inset:0;background:#101a1d;color:#f1f4ee;padding:6vh 7vw;display:flex;flex-direction:column}
+header,footer{display:flex;align-items:center;justify-content:space-between;gap:1rem}header{border-bottom:1px solid #4e6060;padding-bottom:1rem}
+.brand{font-size:1.25rem;font-weight:700;letter-spacing:.09em}
+button{font:inherit;color:inherit;background:transparent;border:0;cursor:pointer}button:focus-visible{outline:2px solid #d2f1df;outline-offset:2px}
+nav button{font-size:.8rem;padding:.35rem 1rem}nav button[aria-pressed=true]{background:#dce7df;color:#172123}
+.columns{flex:1;display:grid;grid-template-columns:34% 1fr;gap:5%;margin-top:5vh;min-height:0}
+h1{font-weight:550;font-size:2.1rem;margin:0 0 3vh}h2{font-size:1.65rem;font-weight:500;margin:.5em 0}p{line-height:1.5;max-width:38em}
+.records button{display:block;width:100%;border-bottom:1px solid #465456;text-align:left;padding:.7rem 0;font-size:.94rem}
+.records [aria-current=true]{border-left:3px solid #e9f9f1;padding-left:.5rem}
+.records small{font-size:.52rem;letter-spacing:.07em}.new{color:#9ce9b1}
+footer{border-top:1px solid #4e6060;padding-top:1rem;font-size:.75rem;color:#c6d3cf}
+</style>
+<main>
+<div class="world"></div><div class="reticle"></div>
+<div class="telemetry"><div><small>Баллон O₂</small><strong>184</strong><em>бар</em></div><div><small>Фон</small><strong id="rate"></strong><em>мкЗв/ч</em></div><div><small>Доза</small><strong id="dose"></strong><em>Зв</em></div></div>
+<div class="alert" hidden><small>Опасность · Вспышка</small><b>Найдите укрытие</b></div>
+<div class="subtitle" hidden><span>[Предупредительный сигнал дозиметра]</span></div>
+<button class="hint" type="button">Tab · КПК</button>
+<section class="pda" hidden aria-label="КПК"><header><span class="brand">ФОСТЕХ</span><nav><button id="archive">Архив</button><button id="system">Система</button></nav><small>КПК экспедиции</small></header>
+<div class="columns" id="archivePage"><aside><h1>Архив</h1><div class="records"></div></aside><article><small id="source"></small><h2 id="title"></h2><p id="body"></p></article></div>
+<div class="columns" id="systemPage" hidden><aside><h1>Система</h1></aside><article><p>Сохранить игру</p><p>Загрузить игру</p><p>Настройки</p><p>Выйти из игры</p></article></div>
+<footer><span>Q / E · Вкладки</span><span>PgUp / PgDn · Записи</span><button id="close">Tab · Убрать КПК</button></footer></section>
+</main>
+<script>
+const find=s=>document.querySelector(s);
+const records=[
+ ['Дозиметр','Прогноз вспышек','Связь с внешним дозиметром установлена. При вспышке укройтесь в нише. Следите за фоном на проекции.'],
+ ['Станция «Авангард»','Заправка баллона','Подача кислорода завершена. Давление в баллоне восстановлено.'],
+ ['Шлюз станции','Дезактивация','Цикл очистки скафандра завершён.']];
+let scene=new URLSearchParams(location.search).get('scene') || 'calm';
+let room=scene==='flare'?'flare':'calm', active=0, system=false;
+const read=new Set([0,2]);
+function paint(){
+ document.body.dataset.scene=room;
+ find('.alert').hidden=find('.subtitle').hidden=room!=='flare';
+ find('#rate').textContent=room==='flare'?'8 400':'0,12';find('#dose').textContent=room==='flare'?'0,0032':'0,0031';
+ find('.pda').hidden=scene!=='archive';find('.hint').hidden=scene==='archive';
+ find('#archivePage').hidden=system;find('#systemPage').hidden=!system;
+ find('#archive').setAttribute('aria-pressed',!system);find('#system').setAttribute('aria-pressed',system);
+ const list=find('.records');list.replaceChildren();
+ records.forEach((entry,i)=>{const button=document.createElement('button'),state=document.createElement('small');
+ state.textContent=read.has(i)?'Прочитано':'Новая запись';state.className=read.has(i)?'':'new';
+ button.append(state,entry[1]);button.setAttribute('aria-current',active===i);button.onclick=()=>select(i);list.append(button)});
+ [find('#source').textContent,find('#title').textContent,find('#body').textContent]=records[active];
+}
+function select(i){active=Math.max(0,Math.min(records.length-1,i));read.add(active);paint()}
+function toggle(){scene=scene==='archive'?room:'archive';system=false;paint()}
+find('.hint').onclick=find('#close').onclick=toggle;find('#archive').onclick=()=>{system=false;paint()};find('#system').onclick=()=>{system=true;paint()};
+document.addEventListener('keydown',event=>{if(event.repeat)return;
+ if(event.key==='Tab'){event.preventDefault();toggle();return}
+ if(scene==='archive'){if(event.code==='KeyQ'||event.code==='KeyE'){system=!system;paint()}
+ if(!system&&['PageDown','PageUp'].includes(event.key)){event.preventDefault();select(active+(event.key==='PageDown'?1:-1))}}});
+paint();
+</script></html>

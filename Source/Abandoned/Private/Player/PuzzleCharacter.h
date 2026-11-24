@@ -21,6 +21,7 @@ public:
     APuzzleCube* GetHeldCube() const;
     ADev20Actor* GetHeldDev20() const;
     const TCHAR* GetPlacementPrompt() const;
+    const APuzzleCube* GetSightedCube() const;
     const UCubePlacementComponent& GetPlacementPreview() const { return *Placement; }
     bool GrabBody(UBoxComponent& Body, float MassKg);
     void ReleaseHeldObject();

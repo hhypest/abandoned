@@ -536,6 +536,17 @@ void TestDev20Transfer()
     CHECK(Transfer.Depart(Stage::Button, true) == Stage::Weight);
     CHECK(Transfer.Arrive(Stage::Weight));
     CHECK(!Transfer.Depart(Stage::Weight, true));
+    CHECK(!Transfer.AbandonHeldUnit(false));
+    CHECK(Transfer.AbandonHeldUnit(true));
+    CHECK(!Transfer.AbandonHeldUnit(true));
+    CHECK(Transfer.EvacuationLost());
+    Transfer.RecoverAtStation();
+    CHECK(!Transfer.EvacuationLost());
+    CHECK(Transfer.AbandonHeldUnit(true));
+    CHECK(!Transfer.Depart(Stage::Station, true));
+    Transfer.RecoverAtStation();
+    CHECK(Transfer.Depart(Stage::Station, true) == Stage::Button);
+    CHECK(!Transfer.AbandonHeldUnit(true));
 }
 
 void TestPlateBalance()
