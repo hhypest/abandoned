@@ -1,0 +1,6 @@
+Hologram Shader by SERLO, from the owner's Fab library
+https://www.fab.com/listings/cfb64bbf-70e6-42db-9cab-7be76f796445
+
+The optional Stairs terminal uses a local child material of MI_Hologram_1.
+The project adjusts the palette, pattern motion and distortion for the hint sign.
+The vendor material and textures remain in the owner's local project.

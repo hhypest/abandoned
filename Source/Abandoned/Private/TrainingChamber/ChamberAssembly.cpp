@@ -14,6 +14,7 @@
 #include "World/FosTech.h"
 #include "World/SceneAssembly.h"
 #include "Misc/CommandLine.h"
+#include "Misc/PackageName.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogChamberAssembly, Log, All);
 namespace
@@ -370,14 +371,38 @@ void AChamberAssembly::Build(const UTrainingChamberLayout& Settings, UMaterialIn
         HintTerminal = Parts.Collision;
         Abandoned::Scene::SetFinish(Parts, Terminal, Finishes);
         AActor* TerminalActor = HintTerminal->GetOwner();
+        const double FaceX = Terminal.Size.X * 0.5;
+        bool bProjected = false;
+        const auto& Projection = Layout->HintProjectionMaterial;
+        if (!Projection.IsNull() && FPackageName::DoesPackageExist(Projection.ToSoftObjectPath().GetLongPackageName()))
+        {
+            if (UMaterialInterface* Material = Projection.LoadSynchronous())
+            {
+                auto* Field = NewObject<UStaticMeshComponent>(TerminalActor, TEXT("HintProjection"));
+                TerminalActor->AddInstanceComponent(Field);
+                Field->SetupAttachment(HintTerminal);
+                Field->SetMobility(EComponentMobility::Static);
+                Field->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                Field->SetCanEverAffectNavigation(false);
+                Field->SetCastShadow(false);
+                Field->SetStaticMesh(Mesh);
+                Field->SetMaterial(0, Material);
+                Field->SetRelativeLocation(FVector(FaceX + 4.0, 0, -Terminal.Size.Z * 0.24));
+                const FVector FieldSize(0.6, Terminal.Size.Y * 0.74, Terminal.Size.Z * 0.16);
+                Field->SetRelativeScale3D(FieldSize / 100.0);
+                Field->RegisterComponent();
+                bProjected = true;
+                UE_LOG(LogChamberAssembly, Display, TEXT("Hint projection uses %s."), *Material->GetPathName());
+            }
+        }
         auto* Label = NewObject<UTextRenderComponent>(TerminalActor);
         TerminalActor->AddInstanceComponent(Label);
         Label->SetupAttachment(HintTerminal);
-        Label->SetRelativeLocation(FVector(Terminal.Size.X * 0.5 + 1.0, 0.0, 0.0));
+        Label->SetRelativeLocation(FVector(FaceX + (bProjected ? 5.0 : 1.0), 0.0, 0.0));
         Label->SetHorizontalAlignment(EHTA_Center);
         Label->SetVerticalAlignment(EVRTA_TextCenter);
-        Label->SetWorldSize(10.0f);
-        Label->SetText(NSLOCTEXT("ChamberHints", "TerminalLabel", "HINTS"));
+        Label->SetWorldSize(bProjected ? 22.0f : 10.0f);
+        Label->SetText(bProjected ? INVTEXT("?") : NSLOCTEXT("ChamberHints", "TerminalLabel", "HINTS"));
         Label->RegisterComponent();
     }
 
