@@ -7,7 +7,7 @@ param(
     [string]$PackageRoot,
 
     [ValidateSet('StationAirlock', 'StationAirlockMissingSupply', 'PassageAirlock', 'PassageAirlockInvalidDoor', 'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
-                 'Training', 'TrainingNegative', 'FabCubeGrip', 'CustomMannyGrip', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20Discard', 'Dev20VelocityNegative')]
+                 'Training', 'TrainingNegative', 'FabCubeGrip', 'CustomMannyGrip', 'CustomMannyLedge', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20Discard', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -415,6 +415,9 @@ $scenarios.FabCubeGrip.Success += @('55 cm cube, left palm', '55 cm cube, right 
 $scenarios.CustomMannyGrip = $scenarios.FabCubeGrip.Clone()
 $scenarios.CustomMannyGrip.ExtraFlag = '-CustomMannyFit'
 $scenarios.CustomMannyGrip.Success += 'Custom Manny fitting: /Game/AbandonedLocal/CustomMannyV2/CustomPawn'
+$scenarios.CustomMannyLedge = $scenarios.VanguardRoute.Clone()
+$scenarios.CustomMannyLedge.ExtraFlag = '-CustomMannyFit'
+$scenarios.CustomMannyLedge.Success += @('Custom Manny fitting:', 'Custom Manny ledge pose: 30 joints', 'Passage handhold verified', 'Custom Manny ledge: both wrists restored, tablet holstered and reopened after landing.')
 $scenarios.WorldLifetime = New-WorldLifetimeScenario $entry
 
 function Invoke-Scenario($name, $definition, $profile) {

@@ -51,10 +51,15 @@ void SetupVisual(UPrimitiveComponent& Part)
 }
 }
 
+bool UBeltTablet::HasCasingAsset() const
+{
+    return !TabletAsset.IsNull() && FPackageName::DoesPackageExist(TabletAsset.ToSoftObjectPath().GetLongPackageName());
+}
+
 void UBeltTablet::Equip(UFosTechBody& Body)
 {
     if (!Body.IsCustomManny() || !Body.HasCubeGripPose()) { return; }
-    if (TabletAsset.IsNull() || !FPackageName::DoesPackageExist(TabletAsset.ToSoftObjectPath().GetLongPackageName())) { return; }
+    if (!HasCasingAsset()) { return; }
     UStaticMesh* Mesh = TabletAsset.LoadSynchronous();
     if (!Mesh || Mesh->GetBounds().BoxExtent.Z <= 0) { return; }
     Casing = NewObject<UStaticMeshComponent>(GetOwner(), TEXT("RuggedTabletCasing"));
@@ -208,10 +213,7 @@ void UBeltTablet::ReportFit(const UFosTechBody& Body, bool bCrouched) const
     if (!bShowing) { return; }
     for (int32 Side = 0; Side < 2; ++Side)
     {
-        // LOD 0 triangles 36654 and 38831 are rigidly weighted to the corresponding wrist.
-        const auto Wrist = Body.GetSocketTransform(Side == 0 ? TEXT("Left-wrist") : TEXT("Right-wrist"));
-        const FVector Pad = Frame.InverseTransformPosition(Wrist.TransformPosition(
-            FVector(Side == 0 ? -0.030309 : 0.030309, -0.05555, -0.032653)));
+        const FVector Pad = Frame.InverseTransformPosition(Body.MannyPalmContact(Side));
         UE_LOG(LogTemp, Display, TEXT("Tablet grip: side=%d pad_cm=(%.2f,%.2f,%.2f) edge_cm=%.2f"),
             Side, Pad.X, Pad.Y, Pad.Z, (Side == 0 ? Pad.Y : -Pad.Y) - Width / 2);
     }

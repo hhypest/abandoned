@@ -1,6 +1,6 @@
 60 Finger Poses by Attaku
 https://www.fab.com/listings/270419de-d3d7-4a7e-ae95-fc7781fe56ba
-The EQP-00 and Custom Manny V2 cube grips each use pose 45 retargeted to their own skeleton.
+The EQP-00 and Custom Manny V2 cube grips each use pose 45 retargeted to their own skeleton. Custom Manny V2 uses pose 03 on the passage ledge.
 
 G4A Gaming Labs - Custom Manny V2 by G4A Gaming Labs
 https://www.fab.com/listings/ea644010-f0d1-4a39-bb01-75cf8cec1b1e

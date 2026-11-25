@@ -23,7 +23,7 @@ private:
     enum class EPhase
     {
         Approach, ReleaseTap, WaitForLanding, DuckRunUp, DuckJump, DuckLanding, InspectCrouch,
-        PlaceBlocker, BlockedHold, Hold, PullUp, WaitForTop, Done
+        PlaceBlocker, BlockedHold, Hold, WaitForReader, PullUp, WaitForTop, ReopenTablet, StowAfterLanding, Done
     };
     void ReleaseTestInputsAndBlocker();
 
@@ -39,6 +39,8 @@ private:
     bool bCapturedApproach = false;
     bool bSawHandhold = false;
     bool bVerifiedHandhold = false;
+    FTransform RestWrist[2];
+    FVerificationKeyPress TabletKey;
     FVerificationKeyPress JumpKey;
     FVerificationKeyPress CrouchKey;
     TWeakObjectPtr<AActor> TestBlocker;

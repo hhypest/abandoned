@@ -1,11 +1,15 @@
-"""Transfer Fab finger pose 45 to the selected local character's reference frames."""
+"""Transfer the cube or ledge finger pose to the selected local character's reference frames."""
 import unreal
 
 assets = unreal.EditorAssetLibrary
 custom = unreal.SystemLibrary.parse_param(unreal.SystemLibrary.get_command_line(), "CustomMannyFit")
 mesh_path = ("/Game/AbandonedLocal/CustomMannyV2/CustomPawn" if custom else
              "/Game/Abandoned/Meshy/EQP_00/SK_EQP00/SkeletalMeshes/SK_EQP00")
-clip = assets.load_asset("/Game/Attaku/FingerPoses/Animations/60_Pose_animations/UE5_Finger_pose_45")
+ledge = unreal.SystemLibrary.parse_param(unreal.SystemLibrary.get_command_line(), "PrepareLedgePose")
+if ledge and not custom:
+    raise ValueError("The ledge pose requires -CustomMannyFit")
+number = 3 if ledge else 45
+clip = assets.load_asset(f"/Game/Attaku/FingerPoses/Animations/60_Pose_animations/UE5_Finger_pose_{number}")
 mesh = assets.load_asset(mesh_path)
 if not isinstance(clip, unreal.AnimSequence) or not isinstance(mesh, unreal.SkeletalMesh):
     raise RuntimeError(f"Install 60 Finger Poses for UE 5.7 and prepare {mesh_path}.")
@@ -48,7 +52,7 @@ for side, wrist in (("l", "Left-wrist"), ("r", "Right-wrist")):
             rotations[dest] = (target.get_ref_bone_pose(dest, local).rotation * basis * delta * basis.inversed()).normalized()
 
 folder = "/Game/AbandonedLocal/CubeGrip"
-name = "DA_CustomManny_Pose45" if custom else "DA_EQP00_Pose45"
+name = f"DA_CustomManny_Pose{number:02d}" if custom else "DA_EQP00_Pose45"
 path = f"{folder}/{name}"
 if assets.does_asset_exist(path):
     output = assets.load_asset(path)
