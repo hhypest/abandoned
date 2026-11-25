@@ -415,6 +415,7 @@ void ATrainingChamberGameMode::ReturnCube(ATrainingChamberCharacter& Player, int
 
 void ATrainingChamberGameMode::ResetChamber(ATrainingChamberCharacter& Player)
 {
+    Player.HolsterTablet();
     Devices->DoorDrive->ReleaseClamp();
     if (bDev20Run)
     {
@@ -492,7 +493,7 @@ void ATrainingChamberHUD::DrawHUD()
     Super::DrawHUD();
     const ATrainingChamberCharacter* Player = Cast<ATrainingChamberCharacter>(GetOwningPawn());
     const ATrainingChamberGameMode* Chamber = GetWorld()->GetAuthGameMode<ATrainingChamberGameMode>();
-    if (!Player || !Chamber)
+    if (!Player || !Chamber || Player->IsReadingTablet())
     {
         return;
     }
@@ -502,7 +503,7 @@ void ATrainingChamberHUD::DrawHUD()
     const TCHAR* Controls = IsValid(Chamber->GetHintTerminal())
         ? TEXT("WASD / mouse   Space jump   E interact   LMB throw   R reset   Esc pause   |   HINTS at entrance")
         : TEXT("WASD / mouse   Space jump   E pick up / place   LMB throw   R reset   Esc pause");
-    DrawText(Controls, FLinearColor::White, 24.0f, 52.0f);
+    DrawText(Player->HasTablet() ? FString(Controls) + TEXT("   |   Tab  КПК") : FString(Controls), FLinearColor::White, 24.0f, 52.0f);
     const bool bDoorObstructed = Chamber->HasClampedObject() && !Chamber->HasReachedExit();
     const FString Status = Chamber->HasChamberLoadFailed() ? TEXT("Next chamber unavailable. Press R to retry.") : Chamber->HasReachedExit()
         ? (Layout->UsesPlateBalance() ? TEXT("Balance chamber complete") : TEXT("Entry course complete")) :

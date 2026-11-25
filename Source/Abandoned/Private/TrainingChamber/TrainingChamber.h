@@ -14,6 +14,7 @@
 #include "TrainingChamber.generated.h"
 
 class ATrainingChamberCharacter;
+class UBeltTablet;
 class ADev20Actor;
 class APuzzleCube;
 class UBoxComponent;
@@ -116,10 +117,28 @@ class ATrainingChamberCharacter final : public APuzzleCharacter
     GENERATED_BODY()
 
 public:
+    ATrainingChamberCharacter();
     bool CanReadHintTerminal() const;
+    bool IsReadingTablet() const;
+    bool HasTablet() const;
+    UFUNCTION(Exec, meta=(DevelopmentOnly))
+    void InspectBeltTablet(int32 SideView = 0);
 
 private:
     friend class ATrainingChamberGameMode;
+    void PostInitializeComponents() override;
+    void BindAdditionalInput(UEnhancedInputComponent& Input) override;
+    void Tick(float DeltaSeconds) override;
+    void UnPossessed() override;
+    void Interact() override;
+    void ToggleTablet();
+    void HolsterTablet();
+    UPROPERTY()
+    TObjectPtr<UBeltTablet> Tablet;
+#if WITH_DEV_AUTOMATION_TESTS
+    void CalcCamera(float DeltaTime, FMinimalViewInfo& View) override;
+    bool bFitSideView = false;
+#endif
 };
 
 UCLASS()

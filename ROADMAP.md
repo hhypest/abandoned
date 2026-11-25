@@ -6,6 +6,8 @@ Abandoned — одиночная физическая головоломка о�
 
 ## Состояние проекта
 
+26 ноября [PR #105](https://github.com/hhypest/abandoned/pull/105) вошёл в `main` коммитом `3152895`. Хват обоих кубов на Custom Manny V2 прошёл игровой маршрут. [Кадры и измерения](Docs/CubeGripFit.md#хват-на-custom-manny-v2) · [Поясной КПК на этом же корпусе](Docs/BeltTabletFit.md)
+
 26 ноября [PR #104](https://github.com/hhypest/abandoned/pull/104) вошёл в `main` коммитом `1c5bb7f`. Двуручный хват позой 45 прошёл игровой маршрут на EQP-00. В том же PR проверен вид вниз на выбранном корпусе Custom Manny V2. [Хват на обоих скелетах и игровые кадры](Docs/CubeGripFit.md)
 
 25 ноября [PR #103](https://github.com/hhypest/abandoned/pull/103) вошёл в `main` коммитом `909ee7b`. В нём зафиксированы четыре контрольные позы EQP-00 и исходные клипы Fab. Для следующей модели персонажа владелец выбрал Custom Manny V2. [Примерка корпуса и двуручного хвата](Docs/CubeGripFit.md)

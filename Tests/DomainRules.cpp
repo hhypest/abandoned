@@ -612,6 +612,14 @@ void TestSuitTerminal()
     CHECK(Terminal.ArchiveIndex() == 0);
     Terminal.Close();
     CHECK(!Terminal.Page());
+    Terminal.OpenArchive();
+    CHECK(Terminal.Page() == SuitPage::Archive && Terminal.ArchiveIndex() == 0);
+    SuitSession Session;
+    Session.RestoreRecords(Archive);
+    CHECK(!Session.WasRead(SuitRecord::ForecastSynchronized));
+    Session.MarkRead(SuitRecord::ForecastSynchronized);
+    CHECK(Session.WasRead(SuitRecord::ForecastSynchronized));
+    CHECK(!Session.WasRead(SuitRecord::Decontaminated) && Session.Records().Size() == 2);
 
     RadiationExposure Exposure({4.5, 3.0, 2.0, 35.0, 3.0});
     RadiationDose Dose;
