@@ -22,6 +22,7 @@ public:
     bool HasCubeGripPose() const { return !CubeFingers.IsEmpty(); }
     bool IsCustomManny() const { return Neck != INDEX_NONE; }
     void PoseCube(const UBoxComponent* Box);
+    void PoseTablet(const FTransform& Frame, double HalfWidth, float Weight);
     void PoseArms(const FTransform& Eye, float RaiseWeight, const FVector* Handholds,
         const FQuat& GripOrientation, float GripWeight);
 

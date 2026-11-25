@@ -177,6 +177,7 @@ bool ATrainingChamberGameMode::EnterNextChamber(ATrainingChamberCharacter& Playe
     }
     if (!IsValid(IncomingChamber) || !IncomingChamber->IsStreamedRoomReady()) { return false; }
     if (!Player.TeleportTo(IncomingChamber->Layout->Spawn, FRotator::ZeroRotator)) { return false; }
+    Player.HolsterTablet();
     Player.ReleaseHeldObject();
     Player.GetCharacterMovement()->StopMovementImmediately();
     Player.GetCharacterMovement()->SetMovementMode(MOVE_Falling);

@@ -18,16 +18,21 @@ public:
         return Index < Count ? std::optional{Records[Index]} : std::nullopt;
     }
 
-    void Reveal(SuitRecord Record)
+    bool Contains(SuitRecord Record) const
     {
         for (std::size_t Index = 0; Index < Count; ++Index)
         {
             if (Records[Index] == Record)
             {
-                return;
+                return true;
             }
         }
-        if (Count < Records.size())
+        return false;
+    }
+
+    void Reveal(SuitRecord Record)
+    {
+        if (!Contains(Record) && Count < Records.size())
         {
             Records[Count++] = Record;
         }

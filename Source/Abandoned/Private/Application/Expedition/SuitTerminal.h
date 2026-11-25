@@ -44,6 +44,7 @@ public:
     }
 
     void Close() { Current.reset(); }
+    void OpenArchive() { Current = SuitPage::Archive; RecordIndex = 0; }
 
     void NextPage()
     {

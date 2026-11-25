@@ -6,7 +6,7 @@
 
 Для Retro Futuristic Soldier от Red Mallet Studio Launcher предложил только UE 5.8. В поставке 68 файлов `.uasset` и одна карта. Редактор 5.7.4 отказался загружать и `SKM_Soldier_Manny`, и `MM_Idle`. Среди несовместимых версий сериализации у меша — `UE5-Main` 123 при поддерживаемой 121 и `UE5-Release` 68 при поддерживаемой 61. В карточке единственный формат — Unreal Engine. Пакет сохранён локально вне `Content`. Для игровой примерки нужен скелетный меш и текстуры в обменном формате либо пакет для 5.7. [Retro Futuristic Soldier](https://www.fab.com/listings/e31b91f0-da8a-408c-a3fc-2831bd73400c)
 
-Для корпуса поясного КПК владелец выбрал **Rugged Tablet 0.1** от xiaofeiArt. Карточка содержит FBX, OBJ и Blender. Выбор корпуса зафиксирован. Привязка к поясу, положение в руке и открытие голографического архива ещё требуют игровой примерки. [Rugged Tablet 0.1](https://www.fab.com/listings/fc879ff2-dbae-4e44-8920-5212b1b27e09)
+Для корпуса поясного КПК владелец выбрал **Rugged Tablet 0.1** от xiaofeiArt. Карточка содержит FBX, OBJ и Blender. Корпус примерен на Custom Manny V2. [Положение на поясе, хват и голографический архив](BeltTabletFit.md). [Rugged Tablet 0.1](https://www.fab.com/listings/fc879ff2-dbae-4e44-8920-5212b1b27e09)
 
 ## Четыре контрольных кадра EQP-00
 

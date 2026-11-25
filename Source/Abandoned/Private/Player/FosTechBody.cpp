@@ -318,6 +318,32 @@ void UFosTechBody::PoseCube(const UBoxComponent* Box)
     bHoldingPose = Box != nullptr;
 }
 
+void UFosTechBody::PoseTablet(const FTransform& Frame, double HalfWidth, float Weight)
+{
+    if (!IsCustomManny()) { return; }
+    Stance(Weight);
+    for (int32 Side = 0; Side < 2 && Weight > 0.f; ++Side)
+    {
+        const double Sign = Side == 0 ? 1.0 : -1.0;
+        const FVector Normal = Frame.GetUnitAxis(EAxis::Y) * Sign;
+        const FVector Edge = Frame.TransformPosition(FVector(0, Sign * HalfWidth, 0));
+        const FVector Along = (Frame.GetUnitAxis(EAxis::Z) * .75 - Frame.GetUnitAxis(EAxis::X) * .66).GetSafeNormal();
+        const FQuat Rotation = FRotationMatrix::MakeFromXZ(Along, Normal).ToQuat();
+        const int32 Clavicle = Side == 0 ? LeftClavicle : RightClavicle;
+        FTransform Shoulder = Current(Clavicle);
+        Shoulder.SetRotation(FQuat(FVector::UpVector, FMath::DegreesToRadians(Sign * 35.0 * Weight)) * Shoulder.GetRotation());
+        SetComponentPose(Clavicle, Shoulder);
+        const double HalfHand = .5 * FVector::Distance(Current(Fingers[Side][1][0]).GetLocation(), Current(Arms[Side].End).GetLocation());
+        PlacePalm(Side, Edge + (Normal * 3.86545 + Along * HalfHand) * GetComponentScale().Z, Rotation, Weight);
+    }
+    for (const auto& Pair : CubeFingers)
+    {
+        auto& Bone = BoneSpaceTransforms[Pair.Key];
+        Bone.SetRotation(FQuat::Slerp(Bone.GetRotation(), Pair.Value, Weight));
+    }
+    RefreshBoneTransforms();
+}
+
 void UFosTechBody::Grip(int32 Side, const FVector& Palm, const FQuat& Orientation, float Weight)
 {
     PlacePalm(Side, Palm + FVector::UpVector * 2.0, Orientation, Weight);

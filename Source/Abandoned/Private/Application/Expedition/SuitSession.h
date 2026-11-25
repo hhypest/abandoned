@@ -40,6 +40,8 @@ public:
     float OxygenPercent() const { return Supply.Percent(); }
     const Domain::Expedition::RadiationDose& RadiationDose() const { return Dose; }
     const Domain::Expedition::SuitArchive& Records() const { return Archive; }
+    bool WasRead(Domain::Expedition::SuitRecord Record) const { return Viewed.Contains(Record); }
+    void MarkRead(Domain::Expedition::SuitRecord Record) { Viewed.Reveal(Record); }
     void RestoreRecords(const Domain::Expedition::SuitArchive& Saved)
     {
         for (std::size_t Index = 0; Index < Saved.Size(); ++Index)
@@ -64,6 +66,7 @@ private:
     Domain::Expedition::SuitSupply Supply;
     Domain::Expedition::RadiationDose Dose;
     Domain::Expedition::SuitArchive Archive;
+    Domain::Expedition::SuitArchive Viewed;
     bool FlashlightOn = false;
 };
 }
