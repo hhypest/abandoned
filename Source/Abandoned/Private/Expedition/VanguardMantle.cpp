@@ -4,6 +4,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Player/FosTechBody.h"
+#include "Player/BeltTablet.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 namespace
@@ -11,7 +12,7 @@ namespace
 constexpr double ReachSeconds = 0.12;
 constexpr double ReleaseStartSeconds = 0.27;
 constexpr double ReleaseEndSeconds = 0.51;
-constexpr float GripLightFraction = 0.001f;
+constexpr float CloseUpLightFraction = 0.001f;
 }
 
 void AVanguardCharacter::UpdateSuitPose(float DeltaSeconds)
@@ -22,11 +23,14 @@ void AVanguardCharacter::UpdateSuitPose(float DeltaSeconds)
     const float GripWeight = ActiveMantleHandhold ? static_cast<float>(MantleSeconds < ReleaseStartSeconds
         ? FMath::SmoothStep(0.0, ReachSeconds, MantleSeconds)
         : 1.0 - FMath::SmoothStep(ReleaseStartSeconds, ReleaseEndSeconds, MantleSeconds)) : 0.f;
-    const float Flashlight = GetDefault<UVanguardFlashlightSettings>()->IntensityLumens;
-    ShoulderLight->SetIntensity(Flashlight * FMath::Lerp(1.f, GripLightFraction, GripWeight));
     const FTransform Eye(GetViewRotation(), Camera->GetComponentLocation());
     SuitBody->PoseArms(Eye, WristRaiseWeight, ActiveMantleHandhold ? ActiveMantleHandhold->Edge : nullptr,
         ActiveMantleHandhold ? ActiveMantleHandhold->Orientation : FQuat::Identity, GripWeight);
+    BeltTablet->Update(*SuitBody, Eye, DeltaSeconds);
+    // Keep the close-up casing and the projection below the lamp's bloom threshold.
+    const float CloseUp = FMath::Max(GripWeight, BeltTablet->RaisedFraction());
+    const float Flashlight = GetDefault<UVanguardFlashlightSettings>()->IntensityLumens;
+    ShoulderLight->SetIntensity(Flashlight * FMath::Lerp(1.f, CloseUpLightFraction, CloseUp));
 }
 
 void AVanguardCharacter::Jump()

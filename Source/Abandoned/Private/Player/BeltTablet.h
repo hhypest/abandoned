@@ -14,15 +14,18 @@ class UBeltTablet final : public USceneComponent
 {
     GENERATED_BODY()
 public:
+    bool HasCasingAsset() const;
     void Equip(UFosTechBody& Body);
     bool IsEquipped() const { return Casing != nullptr; }
     bool InUse() const { return bRaised || Travel > 0.f; }
+    float RaisedFraction() const { return Travel; }
     bool IsReading() const { return bShowing; }
     void Toggle();
     void Browse(bool Forward);
     void Holster(UFosTechBody& Body);
     void Update(UFosTechBody& Body, const FTransform& Eye, float DeltaSeconds);
 #if WITH_DEV_AUTOMATION_TESTS
+    bool IsOnBelt(const UFosTechBody& Body) const { return IsEquipped() && !InUse() && GetComponentTransform().Equals(BeltFrame(Body), 0.001); }
     void ReportFit(const UFosTechBody& Body, bool bCrouched) const;
 #endif
 

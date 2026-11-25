@@ -6,6 +6,8 @@ Abandoned — одиночная физическая головоломка о�
 
 ## Состояние проекта
 
+26 ноября [PR #106](https://github.com/hhypest/abandoned/pull/106) вошёл в `main` коммитом `456cb1c`. В режиме примерки Custom Manny V2 во входных камерах доступен поясной Rugged Tablet 0.1 с архивом по Tab. [Кадры и проверка КПК](Docs/BeltTabletFit.md)
+
 26 ноября [PR #105](https://github.com/hhypest/abandoned/pull/105) вошёл в `main` коммитом `3152895`. Хват обоих кубов на Custom Manny V2 прошёл игровой маршрут. [Кадры и измерения](Docs/CubeGripFit.md#хват-на-custom-manny-v2) · [Поясной КПК на этом же корпусе](Docs/BeltTabletFit.md)
 
 26 ноября [PR #104](https://github.com/hhypest/abandoned/pull/104) вошёл в `main` коммитом `1c5bb7f`. Двуручный хват позой 45 прошёл игровой маршрут на EQP-00. В том же PR проверен вид вниз на выбранном корпусе Custom Manny V2. [Хват на обоих скелетах и игровые кадры](Docs/CubeGripFit.md)

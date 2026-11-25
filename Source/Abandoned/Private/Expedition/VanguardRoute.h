@@ -137,6 +137,11 @@ private:
     friend class UVanguardFallVerification;
 #endif
     void ResetRadiation();
+    void PostInitializeComponents() override;
+    bool SupportsCustomSuitFit() const override;
+    void ToggleBeltTablet();
+    UPROPERTY()
+    TObjectPtr<class UBeltTablet> BeltTablet;
     void CreateWristTerminal();
     void ConfigureWristTerminal();
     void BindWristTerminalInput(UEnhancedInputComponent& Input);

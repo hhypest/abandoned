@@ -19,9 +19,13 @@ public:
     FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
     void FitToWearer(const ACharacter& Wearer, bool bAllowCustomSuit);
     void SetStance(const ACharacter& Wearer);
+    bool HasLedgeFitAssets() const;
     bool HasCubeGripPose() const { return !CubeFingers.IsEmpty(); }
     bool IsCustomManny() const { return Neck != INDEX_NONE; }
     void PoseCube(const UBoxComponent* Box);
+#if WITH_DEV_AUTOMATION_TESTS
+    FVector MannyPalmContact(int32 Hand) const;
+#endif
     void PoseTablet(const FTransform& Frame, double HalfWidth, float Weight);
     void PoseArms(const FTransform& Eye, float RaiseWeight, const FVector* Handholds,
         const FQuat& GripOrientation, float GripWeight);
@@ -49,7 +53,10 @@ private:
     TSoftObjectPtr<USkeletalMesh> CustomSuitAsset;
     UPROPERTY(Config)
     TSoftObjectPtr<UCubeGripPose> CustomGripAsset;
+    UPROPERTY(Config)
+    TSoftObjectPtr<UCubeGripPose> LedgeGripAsset;
     TMap<int32, FQuat> CubeFingers;
+    TMap<int32, FQuat> LedgeFingers;
     bool bHoldingPose = false;
     TArray<FTransform> Reference;
     FLimb Arms[2];

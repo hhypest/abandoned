@@ -7,6 +7,7 @@
 #include "GameFramework/Character.h"
 #include "Player/MovementProfile.h"
 #include "TwoBoneIK.h"
+#include "Misc/PackageName.h"
 
 UFosTechBody::UFosTechBody()
 {
@@ -34,9 +35,19 @@ FBoxSphereBounds UFosTechBody::CalcBounds(const FTransform& LocalToWorld) const
     return BoundsInWorld;
 }
 
+bool UFosTechBody::HasLedgeFitAssets() const
+{
+    const auto Available = [](const FSoftObjectPath& Path)
+    {
+        return !Path.IsNull() && FPackageName::DoesPackageExist(Path.GetLongPackageName());
+    };
+    return Available(CustomSuitAsset.ToSoftObjectPath()) && Available(CustomGripAsset.ToSoftObjectPath()) &&
+        Available(LedgeGripAsset.ToSoftObjectPath());
+}
+
 void UFosTechBody::FitToWearer(const ACharacter& Wearer, bool bAllowCustomSuit)
 {
-    // Keep the expedition wrist mount and the EQP-00 grip trial on their authored rig.
+    // The EQP-00 grip trial uses its own reference skeleton.
     const bool bGripFit = bAllowCustomSuit && FParse::Param(FCommandLine::Get(), TEXT("FabCubeGrip"));
     const bool bCustomFit = bAllowCustomSuit && !bGripFit && FParse::Param(FCommandLine::Get(), TEXT("CustomMannyFit"));
     USkeletalMesh* Custom = bCustomFit ? CustomSuitAsset.LoadSynchronous() : nullptr;
@@ -104,21 +115,27 @@ void UFosTechBody::FitToWearer(const ACharacter& Wearer, bool bAllowCustomSuit)
     SetRelativeScale3D(FVector(CollarHeight / FMath::Max(1.0, Height)));
     if (Custom) { UE_LOG(LogTemp, Display, TEXT("Custom Manny fitting: %s"), *Asset->GetPathName()); }
     SetStance(Wearer);
-    if (bGripFit || Custom)
+    const auto LoadFingers = [&Skeleton](const TSoftObjectPtr<UCubeGripPose>& Asset, TMap<int32, FQuat>& FingersOut)
     {
-        if (const UCubeGripPose* Pose = (Custom ? CustomGripAsset : CubeGripAsset).LoadSynchronous())
+        if (const UCubeGripPose* Pose = Asset.LoadSynchronous())
         {
             for (const auto& Pair : Pose->FingerRotations)
             {
                 const int32 Index = Skeleton.FindBoneIndex(Pair.Key);
-                if (Index != INDEX_NONE && Pair.Value.IsNormalized()) { CubeFingers.Add(Index, Pair.Value); }
+                if (Index != INDEX_NONE && Pair.Value.IsNormalized()) { FingersOut.Add(Index, Pair.Value); }
             }
         }
-        if (CubeFingers.Num() != 30)
+        if (FingersOut.Num() != 30)
         {
-            CubeFingers.Empty();
-            UE_LOG(LogTemp, Warning, TEXT("Cube grip requires 30 matching finger rotations from PrepareCubeGrip.py"));
+            FingersOut.Empty();
+            UE_LOG(LogTemp, Warning, TEXT("Grip pose %s requires 30 matching finger rotations"), *Asset.ToString());
         }
+    };
+    if (bGripFit || Custom) { LoadFingers(Custom ? CustomGripAsset : CubeGripAsset, CubeFingers); }
+    if (Custom && !LedgeGripAsset.IsNull() && FPackageName::DoesPackageExist(LedgeGripAsset.ToSoftObjectPath().GetLongPackageName()))
+    {
+        LoadFingers(LedgeGripAsset, LedgeFingers);
+        UE_LOG(LogTemp, Display, TEXT("Custom Manny ledge pose: %d joints"), LedgeFingers.Num());
     }
 }
 
@@ -318,6 +335,15 @@ void UFosTechBody::PoseCube(const UBoxComponent* Box)
     bHoldingPose = Box != nullptr;
 }
 
+#if WITH_DEV_AUTOMATION_TESTS
+FVector UFosTechBody::MannyPalmContact(int32 Hand) const
+{
+    // Skin points on LOD 0 triangles 36654 and 38831, in wrist bone space.
+    return GetSocketTransform(Hand == 0 ? TEXT("Left-wrist") : TEXT("Right-wrist")).TransformPosition(
+        FVector(Hand == 0 ? -0.030309 : 0.030309, -0.05555, -0.032653));
+}
+#endif
+
 void UFosTechBody::PoseTablet(const FTransform& Frame, double HalfWidth, float Weight)
 {
     if (!IsCustomManny()) { return; }
@@ -346,7 +372,13 @@ void UFosTechBody::PoseTablet(const FTransform& Frame, double HalfWidth, float W
 
 void UFosTechBody::Grip(int32 Side, const FVector& Palm, const FQuat& Orientation, float Weight)
 {
-    PlacePalm(Side, Palm + FVector::UpVector * 2.0, Orientation, Weight);
+    FVector Knuckle = Palm + FVector::UpVector * 2.0;
+    if (IsCustomManny())
+    {
+        const double HalfHand = .5 * FVector::Distance(Current(Fingers[Side][1][0]).GetLocation(), Current(Arms[Side].End).GetLocation());
+        Knuckle = Palm + (Orientation.GetForwardVector() * HalfHand + Orientation.GetUpVector() * 3.86545) * GetComponentScale().Z;
+    }
+    PlacePalm(Side, Knuckle, Orientation, Weight);
     const FTransform& Mesh = GetComponentTransform();
 
     // Lay each finger pad on the top surface. Preserve phalanx lengths and lateral spread.
@@ -385,11 +417,32 @@ void UFosTechBody::PoseArms(const FTransform& Eye, float RaiseWeight, const FVec
         // capsule can rise early, while the wearer still hangs from the fixed handholds.
         FTransform Hip = Current(Pelvis);
         Hip.AddToTranslation(FVector::DownVector * (28.0 * GripWeight / GetComponentScale().Z));
+        if (IsCustomManny())
+        {
+            // Let the hips hang below the camera while the shoulders reach over the rim.
+            Hip.AddToTranslation(FVector::DownVector * (14.0 * GripWeight / GetComponentScale().Z));
+            for (const auto& Pair : LedgeFingers)
+            {
+                auto& Bone = BoneSpaceTransforms[Pair.Key];
+                Bone.SetRotation(FQuat::Slerp(Bone.GetRotation(), Pair.Value, GripWeight));
+            }
+        }
         SetComponentPose(Pelvis, Hip);
         FTransform Torso = Current(Spine);
         const FVector Right = GetRelativeRotation().UnrotateVector(FVector::RightVector);
         Torso.SetRotation(FQuat(Right, FMath::DegreesToRadians(10.0) * GripWeight) * Torso.GetRotation());
         SetComponentPose(Spine, Torso);
+        if (IsCustomManny())
+        {
+            for (int Side = 0; Side < 2; ++Side)
+            {
+                const int32 Clavicle = Side == 0 ? LeftClavicle : RightClavicle;
+                FTransform Shoulder = Current(Clavicle);
+                const double Yaw = (Side == 0 ? 40.0 : -40.0) * GripWeight;
+                Shoulder.SetRotation(FQuat(FVector::UpVector, FMath::DegreesToRadians(Yaw)) * Shoulder.GetRotation());
+                SetComponentPose(Clavicle, Shoulder);
+            }
+        }
         Grip(0, Handholds[0], GripOrientation, GripWeight);
         Grip(1, Handholds[1], GripOrientation, GripWeight);
     }

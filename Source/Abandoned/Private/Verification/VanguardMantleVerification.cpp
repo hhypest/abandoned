@@ -15,6 +15,8 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformMisc.h"
 #include "InputCoreTypes.h"
+#include "Player/BeltTablet.h"
+#include "Player/FosTechBody.h"
 #include "World/Blockout.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogMantleVerification, Log, All);
@@ -34,6 +36,7 @@ void UVanguardMantleVerification::ReleaseTestInputsAndBlocker()
 {
     JumpKey.Release();
     CrouchKey.Release();
+    TabletKey.Release();
     if (AActor* Blocker = TestBlocker.Get())
     {
         Blocker->Destroy();
@@ -51,6 +54,7 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
 {
     if (Phase == EPhase::Done)
     {
+        TabletKey.Release();
         return true;
     }
     const auto Fail = [this, &Player](const TCHAR* Why)
@@ -76,6 +80,10 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
         return Fail(TEXT("a visible non-colliding EQP-00 body is required"));
     }
 
+    const bool bManny = Body->DoesSocketExist(TEXT("Hips"));
+    const FName PelvisBone = bManny ? TEXT("Hips") : TEXT("pelvis");
+    const FName Feet[] = {bManny ? TEXT("Left-ankle") : TEXT("foot_l"), bManny ? TEXT("Right-ankle") : TEXT("foot_r")};
+    const FName Wrists[] = {TEXT("Left-wrist"), TEXT("Right-wrist")};
     switch (Phase)
     {
     case EPhase::Approach:
@@ -90,7 +98,11 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
         }
         if (bGrounded && Player.CanMantle() && Location.X >= Front - 35.0)
         {
-            StandingLegHeight = Body->GetSocketLocation(TEXT("pelvis")).Z - Body->GetSocketLocation(TEXT("foot_l")).Z;
+            if (bManny)
+            {
+                for (int Hand = 0; Hand < 2; ++Hand) { RestWrist[Hand] = Body->GetSocketTransform(Wrists[Hand], RTS_ParentBoneSpace); }
+            }
+            StandingLegHeight = Body->GetSocketLocation(PelvisBone).Z - Body->GetSocketLocation(Feet[0]).Z;
             JumpKey.Press(*PC, EKeys::SpaceBar);
             Phase = EPhase::ReleaseTap;
         }
@@ -153,18 +165,18 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
         if (Elapsed >= 0.35f)
         {
             const double Floor = Location.Z - Player.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-            const double Pelvis = Body->GetSocketLocation(TEXT("pelvis")).Z;
-            for (const FName Foot : {FName(TEXT("foot_l")), FName(TEXT("foot_r"))})
+            const double Pelvis = Body->GetSocketLocation(PelvisBone).Z;
+            for (const FName Foot : Feet)
             {
                 const double Ankle = Body->GetSocketLocation(Foot).Z;
                 if (!Player.bIsCrouched || !bGrounded || Ankle < Floor || Ankle > Floor + 20.0 ||
                     StandingLegHeight - (Pelvis - Ankle) < 20.0)
                 {
-                    UE_LOG(LogMantleVerification, Error, TEXT("EQP-00 crouch floor %.1f ankle %.1f pelvis %.1f standing span %.1f."), Floor, Ankle, Pelvis, StandingLegHeight);
+                    UE_LOG(LogMantleVerification, Error, TEXT("Suit crouch floor %.1f ankle %.1f pelvis %.1f standing span %.1f."), Floor, Ankle, Pelvis, StandingLegHeight);
                     return Fail(TEXT("grounded crouch must bend both legs while keeping the boots at the floor"));
                 }
             }
-            UE_LOG(LogMantleVerification, Display, TEXT("EQP-00 grounded crouch: pelvis %.1f cm above floor, standing pelvis-ankle span %.1f cm."), Pelvis - Floor, StandingLegHeight);
+            UE_LOG(LogMantleVerification, Display, TEXT("Suit grounded crouch: pelvis %.1f cm above floor, standing pelvis-ankle span %.1f cm."), Pelvis - Floor, StandingLegHeight);
             CrouchKey.Release();
             Phase = EPhase::PlaceBlocker;
         }
@@ -201,6 +213,12 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
     case EPhase::Hold:
         if (bGrounded && Player.CanMantle())
         {
+            if (bManny)
+            {
+                TabletKey.Press(*PC, EKeys::Tab);
+                Phase = EPhase::WaitForReader;
+                break;
+            }
             Player.ToggleWristTerminal();
             if (!Player.IsWristTerminalOpen())
             {
@@ -210,10 +228,18 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
             Phase = EPhase::PullUp;
         }
         break;
+    case EPhase::WaitForReader:
+        TabletKey.Release();
+        if (Player.BeltTablet->IsReading())
+        {
+            JumpKey.Press(*PC, EKeys::SpaceBar);
+            Phase = EPhase::PullUp;
+        }
+        break;
     case EPhase::PullUp:
         if (Player.IsMantling())
         {
-            if (Player.IsWristTerminalOpen() || Player.WristDisplay->IsVisible())
+            if (Player.IsWristTerminalOpen() || Player.WristDisplay->IsVisible() || Player.BeltTablet->InUse())
             {
                 return Fail(TEXT("the wrist terminal did not lower for the climb"));
             }
@@ -238,39 +264,43 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
             const auto& Handhold = *Player.ActiveMantleHandhold;
             for (int Hand = 0; Hand < 2; ++Hand)
             {
-                const FName Contact = Hand == 0 ? FName(TEXT("middle_01_l")) : FName(TEXT("middle_01_r"));
-                const FVector Knuckle = Body->GetSocketLocation(Contact);
-                // The proximal knuckle sits above the palm surface that touches the ledge.
-                const FVector Target = Handhold.Edge[Hand] + FVector(0, 0, 2);
-                const double Error = FVector::Distance(Knuckle, Target);
-                if (Body->GetBoneIndex(Contact) == INDEX_NONE || Error > 3.0)
+                const FName Contact = bManny ? Wrists[Hand] : FName(Hand == 0 ? TEXT("middle_01_l") : TEXT("middle_01_r"));
+                const FVector Actual = bManny ? Player.SuitBody->MannyPalmContact(Hand) : Body->GetSocketLocation(Contact);
+                const FVector Target = bManny ? Handhold.Edge[Hand] : Handhold.Edge[Hand] + FVector(0, 0, 2);
+                const double Error = FVector::Distance(Actual, Target);
+                if (Body->GetBoneIndex(Contact) == INDEX_NONE || Error > (bManny ? 0.5 : 3.0))
                 {
-                    UE_LOG(LogMantleVerification, Error, TEXT("EQP-00 %s missed the ledge by %.2f cm (target %s, actual %s)."),
-                        *Contact.ToString(), Error, *Target.ToCompactString(), *Knuckle.ToCompactString());
-                    return Fail(TEXT("both EQP-00 palms must stay on the physical ledge"));
+                    UE_LOG(LogMantleVerification, Error, TEXT("%s missed the ledge by %.2f cm (target %s, actual %s)."),
+                        *Contact.ToString(), Error, *Target.ToCompactString(), *Actual.ToCompactString());
+                    return Fail(TEXT("both palms must stay on the physical ledge"));
                 }
-                for (const FName Distal : {Hand == 0 ? FName(TEXT("index_03_l")) : FName(TEXT("index_03_r")),
-                    Hand == 0 ? FName(TEXT("middle_03_l")) : FName(TEXT("middle_03_r"))})
+                const FName Distals[] = {
+                    bManny ? (Hand == 0 ? TEXT("IndexFinger3_L") : TEXT("IndexFinger3_R")) : (Hand == 0 ? TEXT("index_03_l") : TEXT("index_03_r")),
+                    bManny ? (Hand == 0 ? TEXT("MiddleFinger3_L") : TEXT("MiddleFinger3_R")) : (Hand == 0 ? TEXT("middle_03_l") : TEXT("middle_03_r"))};
+                for (const FName Distal : Distals)
                 {
-                    const double Height = Body->GetSocketLocation(Distal).Z - Top;
-                    if (Body->GetBoneIndex(Distal) == INDEX_NONE || Height < 0.2 || Height > 3.0)
+                    const FVector Tip = Body->GetSocketLocation(Distal);
+                    const double Height = Tip.Z - Top;
+                    if (Body->GetBoneIndex(Distal) == INDEX_NONE || Height < 0.2 || Height > 3.0 ||
+                        (bManny && FVector::DotProduct(Tip - Target, Handhold.Orientation.GetForwardVector()) <= 0.0))
                     {
-                        UE_LOG(LogMantleVerification, Error, TEXT("EQP-00 %s distal joint height %.2f cm."), *Distal.ToString(), Height);
+                        UE_LOG(LogMantleVerification, Error, TEXT("%s distal joint height %.2f cm."), *Distal.ToString(), Height);
                         return Fail(TEXT("finger pads must rest above the ledge"));
                     }
                 }
                 MaxContactError = FMath::Max(MaxContactError, Error);
             }
+            if (bManny && !Player.BeltTablet->IsOnBelt(*Player.SuitBody))
+            {
+                return Fail(TEXT("tablet detached from the belt during the handhold"));
+            }
             if (!bSawHandhold)
             {
-                if (bCapture)
-                {
-                    FScreenshotRequest::RequestScreenshot(TEXT("Vanguard-Climb-Handhold"), false, false);
-                }
                 bSawHandhold = true;
             }
-            else if (Player.MantleSeconds >= 0.20)
+            else if (!bVerifiedHandhold && Player.MantleSeconds >= 0.20)
             {
+                if (bCapture) { FScreenshotRequest::RequestScreenshot(TEXT("Vanguard-Climb-Handhold"), false, false); }
                 bVerifiedHandhold = true;
             }
         }
@@ -286,8 +316,48 @@ bool UVanguardMantleVerification::CheckStep(AVanguardCharacter& Player, float De
                 FScreenshotRequest::RequestScreenshot(TEXT("Vanguard-Climb-Top"), false, false);
             }
             PC->SetControlRotation(FRotator::ZeroRotator);
-            UE_LOG(LogMantleVerification, Display, TEXT("Passage handhold verified: both EQP-00 hands fixed to the ledge, max error %.2f cm."), MaxContactError);
+            UE_LOG(LogMantleVerification, Display, TEXT("Passage handhold verified: both hands fixed to the ledge, max error %.2f cm."), MaxContactError);
             UE_LOG(LogMantleVerification, Display, TEXT("Passage climb verified: held Space and landed on top."));
+            if (bManny)
+            {
+                for (int Hand = 0; Hand < 2; ++Hand)
+                {
+                    if (!Body->GetSocketTransform(Wrists[Hand], RTS_ParentBoneSpace).Equals(RestWrist[Hand], 0.001))
+                    {
+                        return Fail(TEXT("the wrists did not return to their standing pose"));
+                    }
+                }
+                if (!Player.BeltTablet->IsOnBelt(*Player.SuitBody)) { return Fail(TEXT("tablet missed its belt after landing")); }
+                TabletKey.Press(*PC, EKeys::Tab);
+                Elapsed = 0.f;
+                Phase = EPhase::ReopenTablet;
+            }
+            else { Phase = EPhase::Done; }
+        }
+        break;
+    case EPhase::ReopenTablet:
+        TabletKey.Release();
+        if (Player.BeltTablet->IsReading() && Elapsed >= 1.f)
+        {
+            if (!Player.IsFlashlightOn() || Player.ShoulderLight->Intensity >= FullLamp)
+            {
+                return Fail(TEXT("close-up tablet lighting missing after landing"));
+            }
+            if (bCapture) { FScreenshotRequest::RequestScreenshot(TEXT("Vanguard-Climb-Archive"), false, false); }
+            TabletKey.Press(*PC, EKeys::Tab);
+            Phase = EPhase::StowAfterLanding;
+        }
+        break;
+    case EPhase::StowAfterLanding:
+        TabletKey.Release();
+        if (!Player.BeltTablet->InUse())
+        {
+            if (!Player.BeltTablet->IsOnBelt(*Player.SuitBody) || !Player.IsFlashlightOn() ||
+                !FMath::IsNearlyEqual(Player.ShoulderLight->Intensity, FullLamp))
+            {
+                return Fail(TEXT("tablet or shoulder light failed to return to the travel state"));
+            }
+            UE_LOG(LogMantleVerification, Display, TEXT("Custom Manny ledge: both wrists restored, tablet holstered and reopened after landing."));
             Phase = EPhase::Done;
         }
         break;
