@@ -18,7 +18,7 @@ public:
     bool TryGrab(UBoxComponent& Body, float MassKg);
     bool Transit(const FTransform& Through);
     void Throw(const FVector& Velocity, const FVector& Impulse);
-    void UpdateHold(const FVector& Origin, const FRotator& View, double HoldDistance, double Reach);
+    void UpdateHold(const FVector& Origin, const FRotator& View, double HoldDistance, double Reach, double MinimumDistance);
     void ReleaseComponent() override;
 
 private:

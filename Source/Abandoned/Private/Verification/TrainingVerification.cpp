@@ -12,6 +12,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Player/MovementProfile.h"
+#include "Player/FosTechBody.h"
 #include "Puzzles/PuzzleCube.h"
 #include "TrainingChamber/TrainingChamber.h"
 #include "TrainingChamber/TrainingChamberLayout.h"
@@ -41,6 +42,7 @@ void UTrainingVerification::Attach(ATrainingChamberGameMode& Chamber, const TArr
     const TArray<FTrainingPressurePlate>& Plates)
 {
     auto* Scenario = NewObject<UTrainingVerification>(&Chamber);
+    Scenario->bGripTrial = FParse::Param(FCommandLine::Get(), TEXT("FabCubeGrip"));
     const auto* Layout = Chamber.GetLayout();
     if (!Layout || Layout->CubeSpawns.Num() != 3 || Ballast.Num() != 3 || Plates.Num() != 1)
     {
@@ -64,7 +66,46 @@ void UTrainingVerification::Advance(EPhase Next, const TCHAR* Message)
 {
     UE_LOG(LogTrainingVerification, Display, TEXT("Verification: %s"), Message);
     Elapsed = 0.0;
+    PalmSamples = 0;
     Phase = Next;
+}
+
+bool UTrainingVerification::VerifyPalms(const ATrainingChamberCharacter& Player, const UBoxComponent& Box)
+{
+    const auto* Body = Cast<UFosTechBody>(Player.GetSuitBody());
+    if (!Body || !Body->HasCubeGripPose())
+    {
+        Fail(TEXT("the retargeted Fab finger pose was not loaded"));
+        return false;
+    }
+    const FVector Extent = Box.GetUnscaledBoxExtent();
+    for (int32 Side = 0; Side < 2; ++Side)
+    {
+        const FVector Knuckle = Body->GetSocketLocation(Side ? TEXT("middle_01_r") : TEXT("middle_01_l"));
+        const FVector Wrist = Body->GetSocketLocation(Side ? TEXT("hand_r") : TEXT("hand_l"));
+        const FVector Palm = Box.GetComponentTransform().InverseTransformPosition((Knuckle + Wrist) / 2.0);
+        // Independent LOD 0 triangle endpoints on the visible strip, normalized to the half extent.
+        const double Y = Side ? Palm.Y : -Palm.Y;
+        const FVector2D Start(-0.929289 * Extent.X, 0.668429 * Extent.Y);
+        const FVector2D End(-0.668429 * Extent.X, 0.929289 * Extent.Y);
+        const FVector2D Tangent = (End - Start).GetSafeNormal();
+        const FVector2D Offset = FVector2D(Palm.X, Y) - Start;
+        const double Along = FVector2D::DotProduct(Offset, Tangent);
+        const double SurfaceDistance = FVector2D::DotProduct(Offset, FVector2D(-Tangent.Y, Tangent.X));
+        if (PalmSamples == 0 || PalmSamples == 11)
+        {
+            UE_LOG(LogTrainingVerification, Display, TEXT("Fab grip %.0f cm cube, %s palm %s, distance to bevel %.2f cm"),
+                2 * Extent.X, Side ? TEXT("right") : TEXT("left"), *Palm.ToCompactString(), SurfaceDistance);
+        }
+        // The bones run inside the glove; allow its 2 cm pad plus 1 cm of physics lag.
+        if (SurfaceDistance < 0.0 || SurfaceDistance > 3.0 ||
+            Along < 0.0 || Along > (End - Start).Size() || FMath::Abs(Palm.Z) > 0.470145 * Extent.Z)
+        {
+            Fail(TEXT("palm missed the cube face"));
+            return false;
+        }
+    }
+    return ++PalmSamples >= 12;
 }
 
 void UTrainingVerification::StopMouseInput()
@@ -146,6 +187,12 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
     case EPhase::Initial:
         if (Elapsed >= 0.35f)
         {
+            if (bGripTrial)
+            {
+                const auto* Body = Player.GetSuitBody();
+                RestWrist[0] = Body->GetSocketTransform(TEXT("hand_l"), RTS_Component).GetLocation();
+                RestWrist[1] = Body->GetSocketTransform(TEXT("hand_r"), RTS_Component).GetLocation();
+            }
             if (Chamber.IsPlatePressed() || Door->GetComponentLocation() != Layout->Door.Center)
             {
                 Fail(TEXT("Door must start closed"));
@@ -256,9 +303,9 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
             Fail(TEXT("The held cube must stay in the grip and leave the plate unpowered"));
             return;
         }
-        if (FVector::DistSquared2D(Cube->GetComponentLocation(), Layout->Plate.Center) < FMath::Square(16.0) &&
-            Cube->GetComponentLocation().Z > Layout->GetPlateTop() + Small.GetHalfSize() &&
-            Cube->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(30.0))
+        if ((bGripTrial || (FVector::DistSquared2D(Cube->GetComponentLocation(), Layout->Plate.Center) < FMath::Square(16.0) &&
+            Cube->GetComponentLocation().Z > Layout->GetPlateTop() + Small.GetHalfSize())) &&
+            Cube->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(30.0) && (!bGripTrial || Elapsed > 0.8))
         {
             if (!Player.GetPlacementPreview().IsVisible() || Player.GetPlacementPreview().IsPreviewBlocked() ||
                 Player.GetPlacementPreview().GetPreviewSupport() != Chamber.GetPlate() ||
@@ -267,6 +314,7 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
                 Fail(TEXT("Expected a collision-free placement ghost on the plate"));
                 return;
             }
+            if (bGripTrial && !VerifyPalms(Player, *Cube)) { return; }
             if (!bCapturedGhost && FParse::Param(FCommandLine::Get(), TEXT("CapturePlacementGhost")))
             {
                 FScreenshotRequest::RequestScreenshot(TEXT("PlacementGhost"), false, false);
@@ -343,6 +391,16 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
         }
         break;
     case EPhase::CheckThrowReset:
+        if (bGripTrial)
+        {
+            const auto* Body = Player.GetSuitBody();
+            if (!Body->GetSocketTransform(TEXT("hand_l"), RTS_Component).GetLocation().Equals(RestWrist[0], 0.1) ||
+                !Body->GetSocketTransform(TEXT("hand_r"), RTS_Component).GetLocation().Equals(RestWrist[1], 0.1))
+            {
+                Fail(TEXT("the throw and reset did not restore both wrists"));
+                return;
+            }
+        }
         if (Chamber.HasReachedExit() || Player.GetHeldCube() || FVector::DistSquared(SmallStart, Cube->GetComponentLocation()) > 1.0)
         {
             Fail(TEXT("Reset did not restore the initial chamber state"));
@@ -374,7 +432,7 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
         }
         break;
     case EPhase::CarryToStack:
-        if (FVector::DistSquared2D(Small.GetActorLocation(), Large.GetActorLocation()) < FMath::Square(14.0) &&
+        if ((bGripTrial ? Elapsed > 0.8 : FVector::DistSquared2D(Small.GetActorLocation(), Large.GetActorLocation()) < FMath::Square(14.0)) &&
             Cube->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(25.0))
         {
             if (!Player.GetPlacementPreview().IsVisible() || Player.GetPlacementPreview().IsPreviewBlocked() ||
@@ -384,6 +442,7 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
                 return;
             }
             ExpectedPlacement = Player.GetPlacementPreview().GetComponentLocation();
+            if (bGripTrial && !VerifyPalms(Player, *Cube)) { return; }
             Input.Press(Controller, EKeys::E);
             Advance(EPhase::CheckStack, TEXT("Placing the small cube on the large cube."));
         }
@@ -444,6 +503,11 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
         {
             Fail(TEXT("Picking up the lower block did not release its upper block"));
             return;
+        }
+        if (bGripTrial)
+        {
+            if (Elapsed < 0.9 || Large.GetBody()->GetPhysicsLinearVelocity().SizeSquared() > FMath::Square(25.0)) { break; }
+            if (!VerifyPalms(Player, *Large.GetBody())) { return; }
         }
         Input.Press(Controller, EKeys::R);
         Advance(EPhase::FinalReset, TEXT("Upper cube detached and resumed physics. Resetting the stand."));

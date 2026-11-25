@@ -108,7 +108,7 @@ void UObjectCarryComponent::Throw(const FVector& Velocity, const FVector& Impuls
     }
 }
 
-void UObjectCarryComponent::UpdateHold(const FVector& Origin, const FRotator& View, double HoldDistance, double Reach)
+void UObjectCarryComponent::UpdateHold(const FVector& Origin, const FRotator& View, double HoldDistance, double Reach, double MinimumDistance)
 {
     const UBoxComponent* Body = HeldBody();
     if (!Body)
@@ -125,7 +125,7 @@ void UObjectCarryComponent::UpdateHold(const FVector& Origin, const FRotator& Vi
     const FVector Direction = View.Vector();
     const bool bWall = GetWorld()->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * HoldDistance, ECC_Visibility, Query);
     const double Distance = bWall ? FMath::Clamp(Hit.Distance - Body->GetScaledBoxExtent().GetMax(), 0.0, HoldDistance) : HoldDistance;
-    if (Distance < 75.0 || FVector::DistSquared(Origin, Body->GetComponentLocation()) > FMath::Square(2.0 * Reach))
+    if (Distance < MinimumDistance || FVector::DistSquared(Origin, Body->GetComponentLocation()) > FMath::Square(2.0 * Reach))
     {
         ReleaseComponent();
         return;

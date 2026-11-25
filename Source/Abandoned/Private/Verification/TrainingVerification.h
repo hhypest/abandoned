@@ -5,6 +5,7 @@
 #include "TrainingVerification.generated.h"
 
 class APuzzleCube;
+class UBoxComponent;
 class ATrainingChamberCharacter;
 class ATrainingChamberGameMode;
 class UPointLightComponent;
@@ -36,6 +37,7 @@ private:
     void Advance(EPhase Next, const TCHAR* Message);
     void Fail(const TCHAR* Reason);
     void StopMouseInput();
+    bool VerifyPalms(const ATrainingChamberCharacter& Player, const UBoxComponent& Box);
 
     EPhase Phase = EPhase::Initial;
     double Elapsed = 0.0;
@@ -48,5 +50,8 @@ private:
     FVector ExpectedPlacement = FVector::ZeroVector;
     FVector OnPlate = FVector::ZeroVector;
     bool bCapturedGhost = false;
+    bool bGripTrial = false;
+    int32 PalmSamples = 0;
+    FVector RestWrist[2];
 #endif
 };

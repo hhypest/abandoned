@@ -15,6 +15,7 @@
 #include "Infrastructure/Puzzles/UnrealSlidingDoor.h"
 #include "Puzzles/PuzzleCube.h"
 #include "Player/AbandonedTestController.h"
+#include "Player/FosTechBody.h"
 
 namespace
 {
@@ -173,7 +174,22 @@ void APuzzleCharacter::ThrowHeldObject()
 void APuzzleCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    Grip->UpdateHold(Camera->GetComponentLocation(), GetViewRotation(), HoldDistanceCm, Reach);
+    FVector Origin = Camera->GetComponentLocation();
+    double Distance = HoldDistanceCm;
+    double MinimumDistance = 75.0;
+    FRotator CarryView = GetViewRotation();
+    const APuzzleCube* Cube = GetHeldCube();
+    if (Cube && SuitBody->HasCubeGripPose())
+    {
+        // A downward glance should not send the cube through the wearer's legs.
+        Origin = GetActorLocation() + FVector::UpVector * (Camera->GetRelativeLocation().Z - 35.0);
+        CarryView.Pitch = FMath::Clamp(CarryView.GetNormalized().Pitch, -12.0, 8.0);
+        Distance = 33.0 + Cube->GetHalfSize();
+        MinimumDistance = 30.0 + Cube->GetHalfSize();
+        Placement->AimDistance = HoldDistanceCm;
+    }
+    Grip->UpdateHold(Origin, CarryView, Distance, Reach, MinimumDistance);
+    SuitBody->PoseCube(GetHeldCube() ? GetHeldBody() : nullptr);
     Placement->UpdatePreview(GetHeldCube(), Camera->GetComponentLocation(), InteractionRayEnd());
 }
 

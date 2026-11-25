@@ -1,6 +1,8 @@
 #include "Player/FosTechBody.h"
 
 #include "Components/CapsuleComponent.h"
+#include "Components/BoxComponent.h"
+#include "Player/CubeGripPose.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Character.h"
 #include "Player/MovementProfile.h"
@@ -32,24 +34,30 @@ FBoxSphereBounds UFosTechBody::CalcBounds(const FTransform& LocalToWorld) const
     return BoundsInWorld;
 }
 
-void UFosTechBody::FitToWearer(const ACharacter& Wearer)
+void UFosTechBody::FitToWearer(const ACharacter& Wearer, bool bAllowCustomSuit)
 {
-    USkeletalMesh* Asset = BodyAsset.LoadSynchronous();
+    // Keep the expedition wrist mount and the EQP-00 grip trial on their authored rig.
+    const bool bGripFit = bAllowCustomSuit && FParse::Param(FCommandLine::Get(), TEXT("FabCubeGrip"));
+    const bool bCustomFit = bAllowCustomSuit && !bGripFit && FParse::Param(FCommandLine::Get(), TEXT("CustomMannyFit"));
+    USkeletalMesh* Custom = bCustomFit ? CustomSuitAsset.LoadSynchronous() : nullptr;
+    USkeletalMesh* Asset = Custom ? Custom : BodyAsset.LoadSynchronous();
     if (!ensureMsgf(Asset, TEXT("Missing EQP-00 skeletal mesh"))) { return; }
     SetSkinnedAssetAndUpdate(Asset);
     const FReferenceSkeleton& Skeleton = Asset->GetRefSkeleton();
     const auto Named = [&Skeleton](const TCHAR* Name) { return Skeleton.FindBoneIndex(FName(Name)); };
-    Pelvis = Named(TEXT("pelvis"));
+    const auto Rig = [&Named, Custom](const TCHAR* Eqp, const TCHAR* Manny) { return Named(Custom ? Manny : Eqp); };
+    Pelvis = Rig(TEXT("pelvis"), TEXT("Hips"));
+    Spine = Rig(TEXT("spine"), TEXT("Spine"));
     Terminal = Named(TEXT("terminal_l"));
-    Spine = Named(TEXT("spine"));
-    LeftClavicle = Named(TEXT("clavicle_l"));
-    Arms[0] = {Named(TEXT("upperarm_l")), Named(TEXT("lowerarm_l")), Named(TEXT("hand_l"))};
-    Arms[1] = {Named(TEXT("upperarm_r")), Named(TEXT("lowerarm_r")), Named(TEXT("hand_r"))};
-    Legs[0] = {Named(TEXT("thigh_l")), Named(TEXT("calf_l")), Named(TEXT("foot_l"))};
-    Legs[1] = {Named(TEXT("thigh_r")), Named(TEXT("calf_r")), Named(TEXT("foot_r"))};
+    Neck = Custom ? Named(TEXT("Neck")) : INDEX_NONE;
+    LeftClavicle = Rig(TEXT("clavicle_l"), TEXT("Left-shoulder"));
+    Arms[0] = {Rig(TEXT("upperarm_l"), TEXT("Left-arm")), Rig(TEXT("lowerarm_l"), TEXT("Left-elbow")), Rig(TEXT("hand_l"), TEXT("Left-wrist"))};
+    Arms[1] = {Rig(TEXT("upperarm_r"), TEXT("Right-arm")), Rig(TEXT("lowerarm_r"), TEXT("Right-elbow")), Rig(TEXT("hand_r"), TEXT("Right-wrist"))};
+    Legs[0] = {Rig(TEXT("thigh_l"), TEXT("Left-leg")), Rig(TEXT("calf_l"), TEXT("Left-knee")), Rig(TEXT("foot_l"), TEXT("Left-ankle"))};
+    Legs[1] = {Rig(TEXT("thigh_r"), TEXT("Right-leg")), Rig(TEXT("calf_r"), TEXT("Right-knee")), Rig(TEXT("foot_r"), TEXT("Right-ankle"))};
     static const TCHAR* FingerNames[] = {TEXT("index"), TEXT("middle"), TEXT("ring"), TEXT("pinky")};
     bool bFingersReady = true;
-    for (int32 Side = 0; Side < 2; ++Side)
+    for (int32 Side = 0; !Custom && Side < 2; ++Side)
     {
         for (int32 Digit = 0; Digit < 4; ++Digit)
         {
@@ -64,7 +72,7 @@ void UFosTechBody::FitToWearer(const ACharacter& Wearer)
     const auto Valid = [](const FLimb& Limb) {
         return Limb.Upper != INDEX_NONE && Limb.Lower != INDEX_NONE && Limb.End != INDEX_NONE;
     };
-    if (!ensureMsgf(Pelvis != INDEX_NONE && Spine != INDEX_NONE && LeftClavicle != INDEX_NONE && Terminal != INDEX_NONE && Valid(Arms[0]) && Valid(Arms[1]) &&
+    if (!ensureMsgf(Pelvis != INDEX_NONE && Spine != INDEX_NONE && LeftClavicle != INDEX_NONE && (Custom ? Neck : Terminal) != INDEX_NONE && Valid(Arms[0]) && Valid(Arms[1]) &&
         Valid(Legs[0]) && Valid(Legs[1]) && bFingersReady,
         TEXT("Incomplete EQP-00 skeleton")))
     {
@@ -83,8 +91,26 @@ void UFosTechBody::FitToWearer(const ACharacter& Wearer)
     SetRelativeRotation(FRotator(0.0, -Forward.Rotation().Yaw, 0.0));
     const FBoxSphereBounds MeshBounds = Asset->GetImportedBounds();
     const double CollarHeight = Abandoned::MovementProfile::StandingHalfHeight + Abandoned::MovementProfile::CameraHeight - 6.0;
-    SetRelativeScale3D(FVector(CollarHeight / (2.0 * MeshBounds.BoxExtent.Z)));
+    const double Height = Custom ? Reference[Neck].GetLocation().Z - (MeshBounds.Origin.Z - MeshBounds.BoxExtent.Z) : 2.0 * MeshBounds.BoxExtent.Z;
+    SetRelativeScale3D(FVector(CollarHeight / FMath::Max(1.0, Height)));
+    if (Custom) { UE_LOG(LogTemp, Display, TEXT("Custom Manny fitting: %s"), *Asset->GetPathName()); }
     SetStance(Wearer);
+    if (bGripFit)
+    {
+        if (const UCubeGripPose* Pose = CubeGripAsset.LoadSynchronous())
+        {
+            for (const auto& Pair : Pose->FingerRotations)
+            {
+                const int32 Index = Skeleton.FindBoneIndex(Pair.Key);
+                if (Index != INDEX_NONE && Pair.Value.IsNormalized()) { CubeFingers.Add(Index, Pair.Value); }
+            }
+        }
+        if (CubeFingers.Num() != 30)
+        {
+            CubeFingers.Empty();
+            UE_LOG(LogTemp, Warning, TEXT("FabCubeGrip requires the 30 EQP-00 finger rotations from PrepareCubeGrip.py"));
+        }
+    }
 }
 
 FTransform UFosTechBody::Current(int32 Index) const
@@ -101,7 +127,7 @@ FTransform UFosTechBody::Current(int32 Index) const
 void UFosTechBody::SetComponentPose(int32 Index, const FTransform& Transform)
 {
     const int32 Parent = GetSkinnedAsset()->GetRefSkeleton().GetParentIndex(Index);
-    BoneSpaceTransforms[Index] = Transform.GetRelativeTransform(Current(Parent));
+    BoneSpaceTransforms[Index] = Parent == INDEX_NONE ? Transform : Transform.GetRelativeTransform(Current(Parent));
 }
 
 void UFosTechBody::SolveLimb(const FLimb& Limb, const FVector& Target, const FVector& Pole, const FQuat& EndRotation)
@@ -135,6 +161,7 @@ void UFosTechBody::SetStance(const ACharacter& Wearer)
 void UFosTechBody::Stance(float ReadingWeight)
 {
     BoneSpaceTransforms = GetSkinnedAsset()->GetRefSkeleton().GetRefBonePose();
+    if (Neck != INDEX_NONE) { BoneSpaceTransforms[Neck].SetScale3D(FVector::ZeroVector); }
     if (FMath::IsNearlyZero(PelvisDrop)) { return; }
     FTransform Hip = Current(Pelvis);
     const FVector Forward = GetRelativeRotation().UnrotateVector(FVector::ForwardVector);
@@ -219,7 +246,7 @@ void UFosTechBody::RaiseWrist(const FTransform& Eye, float Weight)
     Blend(Arm.Lower, RestLower);
 }
 
-void UFosTechBody::Grip(int32 Side, const FVector& Palm, const FQuat& Orientation, float Weight)
+void UFosTechBody::PlacePalm(int32 Side, const FVector& KnuckleWorld, const FQuat& Orientation, float Weight)
 {
     const FLimb& Arm = Arms[Side];
     const FTransform& Mesh = GetComponentTransform();
@@ -231,11 +258,46 @@ void UFosTechBody::Grip(int32 Side, const FVector& Palm, const FQuat& Orientatio
     if (FVector::DotProduct(Dorsal, Outward) < 0.0) { Dorsal = -Dorsal; }
     const FQuat HandBasis = FRotationMatrix::MakeFromXZ(AlongHand, Dorsal).ToQuat();
     const FQuat GripTurn = Mesh.InverseTransformRotation(Orientation) * HandBasis.Inverse();
-    const FVector Knuckle = Mesh.InverseTransformPosition(Palm + FVector::UpVector * 2.0);
+    const FVector Knuckle = Mesh.InverseTransformPosition(KnuckleWorld);
     const FVector WristGoal = Knuckle - GripTurn.RotateVector(AlongHand);
     const FVector Pole = Current(Arm.Upper).GetLocation() + Outward * 40.0 - FVector::UpVector * 38.0;
     SolveLimb(Arm, FMath::Lerp(Wrist.GetLocation(), WristGoal, Weight), Pole,
         FQuat::Slerp(Wrist.GetRotation(), GripTurn * Wrist.GetRotation(), Weight));
+}
+
+void UFosTechBody::PoseCube(const UBoxComponent* Box)
+{
+    if (!HasCubeGripPose() || (!Box && !bHoldingPose)) { return; }
+    Stance();
+    if (Box)
+    {
+        // Lean from the waist so the shoulders follow the load with the feet planted.
+        FTransform Torso = Current(Spine);
+        const FVector Right = GetRelativeRotation().UnrotateVector(FVector::RightVector);
+        Torso.SetRotation(FQuat(Right, FMath::DegreesToRadians(20.0)) * Torso.GetRotation());
+        SetComponentPose(Spine, Torso);
+        const FTransform Frame = Box->GetComponentTransform();
+        const FVector Extent = Box->GetUnscaledBoxExtent();
+        for (int32 Side = 0; Side < 2; ++Side)
+        {
+            const double Sign = Side == 0 ? -1.0 : 1.0;
+            // The visible front bevels lie at -x +/- y = 1.59772 in half-size units.
+            // Place the palm on their metal strips inside the box collision corners.
+            const FVector Normal = Frame.TransformVectorNoScale(FVector(-1.0, Sign, 0.0).GetSafeNormal());
+            const FVector Point = Frame.TransformPosition(FVector(-0.79886 * Extent.X, 0.79886 * Extent.Y * Sign, 0.25 * Extent.Z));
+            const FQuat Orientation = FRotationMatrix::MakeFromXZ(Frame.GetUnitAxis(EAxis::Z), Normal).ToQuat();
+            PlacePalm(Side, Point + Normal * 2.0, Orientation, 1.f);
+        }
+        for (const auto& Pair : CubeFingers) { BoneSpaceTransforms[Pair.Key].SetRotation(Pair.Value); }
+    }
+    RefreshBoneTransforms();
+    bHoldingPose = Box != nullptr;
+}
+
+void UFosTechBody::Grip(int32 Side, const FVector& Palm, const FQuat& Orientation, float Weight)
+{
+    PlacePalm(Side, Palm + FVector::UpVector * 2.0, Orientation, Weight);
+    const FTransform& Mesh = GetComponentTransform();
 
     // Lay each finger pad on the top surface. Preserve phalanx lengths and lateral spread.
     const FVector Surface = Mesh.InverseTransformPosition(Palm);
