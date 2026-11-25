@@ -60,10 +60,13 @@ for row, suffix in enumerate(textures):
     for channel, prop in channels[suffix]:
         if not materials.connect_material_property(sample, channel, prop):
             raise RuntimeError(f"Could not connect {suffix}.{channel}")
+material.set_editor_property("used_with_skeletal_mesh", True)
 materials.recompile_material(material)
-slots = mesh.materials
-slots[0].material_interface = material
-mesh.materials = slots
+slot = mesh.materials[0]
+slot.set_editor_property("material_interface", material)
+mesh.set_editor_property("materials", [slot])
+if mesh.materials[0].material_interface != material:
+    raise RuntimeError("CustomPawn did not bind its first-person material")
 if not all(assets.save_loaded_asset(asset, False) for asset in (material, mesh)):
     raise RuntimeError("Could not save CustomPawn material or mesh")
 unreal.log(f"CUSTOM_MANNY_READY {mesh.get_path_name()} bones={len(mesh.skeleton.get_reference_pose().get_bone_names())}")

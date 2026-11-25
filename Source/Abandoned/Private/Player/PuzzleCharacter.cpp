@@ -186,6 +186,11 @@ void APuzzleCharacter::Tick(float DeltaSeconds)
         CarryView.Pitch = FMath::Clamp(CarryView.GetNormalized().Pitch, -12.0, 8.0);
         Distance = 33.0 + Cube->GetHalfSize();
         MinimumDistance = 30.0 + Cube->GetHalfSize();
+        if (SuitBody->IsCustomManny())
+        {
+            // Lower the larger load below the eye line while keeping the near face clear of the capsule.
+            Origin.Z -= 0.8 * FMath::Max(0.0, Cube->GetHalfSize() - 27.5);
+        }
         Placement->AimDistance = HoldDistanceCm;
     }
     Grip->UpdateHold(Origin, CarryView, Distance, Reach, MinimumDistance);

@@ -43,6 +43,12 @@ void UTrainingVerification::Attach(ATrainingChamberGameMode& Chamber, const TArr
 {
     auto* Scenario = NewObject<UTrainingVerification>(&Chamber);
     Scenario->bGripTrial = FParse::Param(FCommandLine::Get(), TEXT("FabCubeGrip"));
+    if (!Scenario->bGripTrial && FParse::Param(FCommandLine::Get(), TEXT("CustomMannyFit")))
+    {
+        Scenario->bGripTrial = true;
+        Scenario->WristNames[0] = TEXT("Left-wrist");
+        Scenario->WristNames[1] = TEXT("Right-wrist");
+    }
     const auto* Layout = Chamber.GetLayout();
     if (!Layout || Layout->CubeSpawns.Num() != 3 || Ballast.Num() != 3 || Plates.Num() != 1)
     {
@@ -81,9 +87,19 @@ bool UTrainingVerification::VerifyPalms(const ATrainingChamberCharacter& Player,
     const FVector Extent = Box.GetUnscaledBoxExtent();
     for (int32 Side = 0; Side < 2; ++Side)
     {
-        const FVector Knuckle = Body->GetSocketLocation(Side ? TEXT("middle_01_r") : TEXT("middle_01_l"));
-        const FVector Wrist = Body->GetSocketLocation(Side ? TEXT("hand_r") : TEXT("hand_l"));
-        const FVector Palm = Box.GetComponentTransform().InverseTransformPosition((Knuckle + Wrist) / 2.0);
+        const FTransform Wrist = Body->GetSocketTransform(WristNames[Side]);
+        FVector Sample;
+        if (Body->IsCustomManny())
+        {
+            // LOD 0 palm surface, triangles 36654/38831. All six vertices are 100% wrist-weighted.
+            const FVector SkinPoint(Side == 0 ? -0.030309 : 0.030309, -0.055550, -0.032653);
+            Sample = Wrist.TransformPosition(SkinPoint);
+        }
+        else
+        {
+            Sample = (Body->GetSocketLocation(Side ? TEXT("middle_01_r") : TEXT("middle_01_l")) + Wrist.GetLocation()) / 2.0;
+        }
+        const FVector Palm = Box.GetComponentTransform().InverseTransformPosition(Sample);
         // Independent LOD 0 triangle endpoints on the visible strip, normalized to the half extent.
         const double Y = Side ? Palm.Y : -Palm.Y;
         const FVector2D Start(-0.929289 * Extent.X, 0.668429 * Extent.Y);
@@ -97,8 +113,9 @@ bool UTrainingVerification::VerifyPalms(const ATrainingChamberCharacter& Player,
             UE_LOG(LogTrainingVerification, Display, TEXT("Fab grip %.0f cm cube, %s palm %s, distance to bevel %.2f cm"),
                 2 * Extent.X, Side ? TEXT("right") : TEXT("left"), *Palm.ToCompactString(), SurfaceDistance);
         }
-        // The bones run inside the glove; allow its 2 cm pad plus 1 cm of physics lag.
-        if (SurfaceDistance < 0.0 || SurfaceDistance > 3.0 ||
+        // Manny measures the skin itself; EQP-00 uses the center line inside its glove.
+        const bool bMiss = Body->IsCustomManny() ? FMath::Abs(SurfaceDistance) > 0.5 : SurfaceDistance < 0.0 || SurfaceDistance > 3.0;
+        if (bMiss ||
             Along < 0.0 || Along > (End - Start).Size() || FMath::Abs(Palm.Z) > 0.470145 * Extent.Z)
         {
             Fail(TEXT("palm missed the cube face"));
@@ -190,8 +207,8 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
             if (bGripTrial)
             {
                 const auto* Body = Player.GetSuitBody();
-                RestWrist[0] = Body->GetSocketTransform(TEXT("hand_l"), RTS_Component).GetLocation();
-                RestWrist[1] = Body->GetSocketTransform(TEXT("hand_r"), RTS_Component).GetLocation();
+                RestWrist[0] = Body->GetSocketTransform(WristNames[0], RTS_Component).GetLocation();
+                RestWrist[1] = Body->GetSocketTransform(WristNames[1], RTS_Component).GetLocation();
             }
             if (Chamber.IsPlatePressed() || Door->GetComponentLocation() != Layout->Door.Center)
             {
@@ -394,8 +411,8 @@ void UTrainingVerification::Verify(const ATrainingChamberGameMode& Chamber, ATra
         if (bGripTrial)
         {
             const auto* Body = Player.GetSuitBody();
-            if (!Body->GetSocketTransform(TEXT("hand_l"), RTS_Component).GetLocation().Equals(RestWrist[0], 0.1) ||
-                !Body->GetSocketTransform(TEXT("hand_r"), RTS_Component).GetLocation().Equals(RestWrist[1], 0.1))
+            if (!Body->GetSocketTransform(WristNames[0], RTS_Component).GetLocation().Equals(RestWrist[0], 0.1) ||
+                !Body->GetSocketTransform(WristNames[1], RTS_Component).GetLocation().Equals(RestWrist[1], 0.1))
             {
                 Fail(TEXT("the throw and reset did not restore both wrists"));
                 return;
