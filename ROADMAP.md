@@ -6,9 +6,11 @@ Abandoned — одиночная физическая головоломка о�
 
 ## Состояние проекта
 
+24 ноября 2026 г. [PR #102](https://github.com/hhypest/abandoned/pull/102) вошёл в `main` коммитом `bff4a59`. В Stairs появился пилот голографической подсказки. Для поясного КПК выбран Rugged Tablet 0.1. Примерка Retro Futuristic Soldier в игре ждёт совместимого меша для UE 5.7.4. [Четыре контрольных кадра и результаты проверки анимаций](Docs/SoldierFit.md)
+
 22 ноября 2026 г. [PR #98](https://github.com/hhypest/abandoned/pull/98) вошёл в `main` коммитом `02164af`. В Win64 Vulkan SM6 включён HZB при буфере запросов в один кадр. В пересобранном пакете на RTX 4070 Ti SUPER p95/p99 кадра в Weight без лимита составили 6,83/7,20 мс, средняя частота при штатном лимите — 60,01 к/с. Проверены резкие развороты, первый вид через портал и кадры 20–22 открытия двери. [Условия и результаты](Docs/WeightHZB.md)
 
-Финал DEV-20 и три эскиза интерфейса вошли в main через [PR #100](https://github.com/hhypest/abandoned/pull/100). Следующая примерка использует установленный Concrete 07 перед дверью перехода и Modern Pistols SFX в концовке. [План замены](Docs/FabReplacementPlan.md)
+Финал DEV-20 и три эскиза интерфейса вошли в main через [PR #100](https://github.com/hhypest/abandoned/pull/100). [PR #101](https://github.com/hhypest/abandoned/pull/101) добавил пробный стык Concrete 07 перед дверью перехода и Modern Pistols SFX в концовке. [План замены](Docs/FabReplacementPlan.md)
 
 Первый цикл замены балласта из личной библиотеки Fab вошёл в main через [PR #99](https://github.com/hhypest/abandoned/pull/99). [Состав и проверка сборки](Docs/FabBallast.md)
 
