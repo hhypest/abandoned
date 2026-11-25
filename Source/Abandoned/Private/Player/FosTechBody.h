@@ -20,6 +20,7 @@ public:
     void FitToWearer(const ACharacter& Wearer, bool bAllowCustomSuit);
     void SetStance(const ACharacter& Wearer);
     bool HasCubeGripPose() const { return !CubeFingers.IsEmpty(); }
+    bool IsCustomManny() const { return Neck != INDEX_NONE; }
     void PoseCube(const UBoxComponent* Box);
     void PoseArms(const FTransform& Eye, float RaiseWeight, const FVector* Handholds,
         const FQuat& GripOrientation, float GripWeight);
@@ -45,6 +46,8 @@ private:
     TSoftObjectPtr<UCubeGripPose> CubeGripAsset;
     UPROPERTY(Config)
     TSoftObjectPtr<USkeletalMesh> CustomSuitAsset;
+    UPROPERTY(Config)
+    TSoftObjectPtr<UCubeGripPose> CustomGripAsset;
     TMap<int32, FQuat> CubeFingers;
     bool bHoldingPose = false;
     TArray<FTransform> Reference;
@@ -56,6 +59,7 @@ private:
     int32 Spine = INDEX_NONE;
     int32 Neck = INDEX_NONE;
     int32 LeftClavicle = INDEX_NONE;
+    int32 RightClavicle = INDEX_NONE;
     int32 Terminal = INDEX_NONE;
     double PelvisDrop = 0.0;
     bool bArmPoseActive = false;

@@ -52,6 +52,7 @@ private:
     bool bCapturedGhost = false;
     bool bGripTrial = false;
     int32 PalmSamples = 0;
+    FName WristNames[2] = {TEXT("hand_l"), TEXT("hand_r")};
     FVector RestWrist[2];
 #endif
 };
