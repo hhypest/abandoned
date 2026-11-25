@@ -28,6 +28,7 @@ public:
     bool TransitHeldBody(const FTransform& Through);
 
 protected:
+    bool SupportsCustomSuitFit() const override { return true; }
     void BindAdditionalInput(UEnhancedInputComponent& Input) override;
     void Tick(float DeltaSeconds) override;
     void UnPossessed() override;

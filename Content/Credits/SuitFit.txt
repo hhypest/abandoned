@@ -1,0 +1,8 @@
+60 Finger Poses by Attaku
+https://www.fab.com/listings/270419de-d3d7-4a7e-ae95-fc7781fe56ba
+Optional EQP-00 grip uses the finger rotations of pose 45 retargeted to the project skeleton.
+
+G4A Gaming Labs - Custom Manny V2 by G4A Gaming Labs
+https://www.fab.com/listings/ea644010-f0d1-4a39-bb01-75cf8cec1b1e
+Optional first-person fitting uses CustomPawn and its original four texture maps.
+Fab Standard License. Source files and derived Unreal assets are stored locally.

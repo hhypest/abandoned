@@ -80,8 +80,8 @@ void AAbandonedCharacter::PostInitializeComponents()
     Super::PostInitializeComponents();
     if (GetWorld()->IsGameWorld())
     {
-        SuitBody->FitToWearer(*this);
-        WristCasing->SetStaticMesh(WristCasingAsset.LoadSynchronous());
+        SuitBody->FitToWearer(*this, SupportsCustomSuitFit());
+        if (SuitBody->DoesSocketExist(TEXT("terminal_l"))) { WristCasing->SetStaticMesh(WristCasingAsset.LoadSynchronous()); }
         if (FPackageName::DoesPackageExist(SidearmAsset.ToSoftObjectPath().GetLongPackageName()))
         {
             if (UStaticMesh* SidearmMesh = SidearmAsset.LoadSynchronous(); SidearmMesh && SuitBody->DoesSocketExist(TEXT("pelvis")))

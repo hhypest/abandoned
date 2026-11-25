@@ -63,6 +63,7 @@ const UBoxComponent* UCubePlacementComponent::GetPreviewSupport() const
 bool UCubePlacementComponent::FindPlacement(const APuzzleCube& Cube, FVector ViewStart, FVector ViewEnd, FPlacement& Placement) const
 {
     const FVector Current = Cube.GetActorLocation();
+    const FVector Probe = AimDistance.IsSet() ? ViewStart + (ViewEnd - ViewStart).GetSafeNormal() * AimDistance.GetValue() : Current;
     const double Half = Cube.GetHalfSize();
     FCollisionQueryParams TraceQuery(SCENE_QUERY_STAT(CubePlacementSurface), false, GetOwner());
     TraceQuery.AddIgnoredActor(&Cube);
@@ -80,7 +81,8 @@ bool UCubePlacementComponent::FindPlacement(const APuzzleCube& Cube, FVector Vie
         }
         const FVector SurfaceCenter = Surface->GetComponentLocation();
         const FVector Target = SurfaceCenter + FVector(0.0, 0.0, Surface->GetScaledBoxExtent().Z + Half + SnapGap);
-        if (Current.Z < Target.Z - 8.0 || FVector::DistSquared(Current, Target) > FMath::Square(SnapRange))
+        if (Probe.Z < Target.Z - 8.0 || FVector::DistSquared(Probe, Target) > FMath::Square(SnapRange) ||
+            (AimDistance.IsSet() && FVector::DistSquared(Current, Target) > FMath::Square(AimDistance.GetValue())))
         {
             return false;
         }
@@ -134,7 +136,7 @@ bool UCubePlacementComponent::FindPlacement(const APuzzleCube& Cube, FVector Vie
     {
         return true;
     }
-    return GetWorld()->LineTraceSingleByChannel(Hit, Current, Current - FVector(0.0, 0.0, Half + SnapRange),
+    return GetWorld()->LineTraceSingleByChannel(Hit, Probe, Probe - FVector(0.0, 0.0, Half + SnapRange),
         ECC_Visibility, TraceQuery) && TrySurface(Hit);
 }
 

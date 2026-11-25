@@ -7,7 +7,7 @@ param(
     [string]$PackageRoot,
 
     [ValidateSet('StationAirlock', 'StationAirlockMissingSupply', 'PassageAirlock', 'PassageAirlockInvalidDoor', 'BalanceAirlock', 'BalanceAirlockMissingPlate', 'ButtonAirlock', 'ButtonAirlockIncomplete', 'WeightStreaming', 'WeightAirlock', 'EntryCourse', 'EntryCourseAlternate', 'EntryCheckpoint', 'EntryWeightNegative', 'Radiation', 'RadiationNegative', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals', 'WorldLifetime', 'VulkanExitControl', 'VulkanTravelControl',
-                 'Training', 'TrainingNegative', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20Discard', 'Dev20VelocityNegative')]
+                 'Training', 'TrainingNegative', 'FabCubeGrip', 'ChamberHints', 'ChamberHintsNegative', 'PlateBalance', 'PlateBalanceNegative', 'ParallelCircuit', 'ParallelCircuitNegative', 'Optics', 'FreeReflector', 'Gravity', 'VanguardRoute', 'VanguardRouteNegative', 'VanguardOxygenRecovery', 'VanguardFalls', 'VanguardFallsAudio', 'Dev20', 'Dev20Recovery', 'Dev20Discard', 'Dev20VelocityNegative')]
     [string[]]$Scenario = @('EntryCourse', 'WristTerminal', 'WristTerminalNegative', 'DoorClamp', 'Portals'),
 
     [ValidateSet(60, 120)]
@@ -409,6 +409,9 @@ $scenarios = @{
 }
 
 . (Join-Path $PSScriptRoot 'WorldLifetime.ps1')
+$scenarios.FabCubeGrip = $scenarios.Training.Clone()
+$scenarios.FabCubeGrip.ExtraFlag = '-FabCubeGrip'
+$scenarios.FabCubeGrip.Success += @('55 cm cube, left palm', '55 cm cube, right palm', '80 cm cube, left palm', '80 cm cube, right palm')
 $scenarios.WorldLifetime = New-WorldLifetimeScenario $entry
 
 function Invoke-Scenario($name, $definition, $profile) {

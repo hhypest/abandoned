@@ -36,6 +36,7 @@ protected:
     void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
 
     virtual void BindAdditionalInput(UEnhancedInputComponent&) {}
+    virtual bool SupportsCustomSuitFit() const { return false; }
     void SetMovementLoad(float MassKg);
     void SetGroundSpeedScale(float Scale);
     UInputAction* MapAction(const FKey& Key, EInputActionValueType Type = EInputActionValueType::Boolean);
